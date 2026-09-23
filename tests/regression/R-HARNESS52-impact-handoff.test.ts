@@ -103,7 +103,18 @@ describe('R-HARNESS52 · 影响人工入口交接协议', () => {
       sourceOutlineNodeId: null,
     })).toThrow('作者确认项')
     expect(resolveImpactHandoffModuleV2({ action: 'review-source-record', table: 'unknownTable' })).toBe('fact-library')
-    expect(resolveImpactHandoffModuleV2({ action: 'review-source-record', table: 'powerSystems' })).toBe('power-system')
-    expect(resolveImpactHandoffModuleV2({ action: 'review-source-record', table: 'cultivationSystems' })).toBe('power-system')
+    expect(resolveImpactHandoffModuleV2({ action: 'review-source-record', table: 'powerSystems' })).toBe('worldview-origin')
+    expect(resolveImpactHandoffModuleV2({ action: 'review-source-record', table: 'cultivationSystems' })).toBe('worldview-origin')
   })
+})
+
+
+it('keeps valid old power handoff receipts readable without rewriting their identity', () => {
+  for (const table of ['powerSystems', 'cultivationSystems']) {
+    const current = buildImpactHandoffV2({ plan: plan({ action: 'review-source-record', table }), itemId: 'impact-remediation:fact:1', decision: 'needs-manual-action', reviewRunId: 8, reviewReceiptHash: HASH, sourceOutlineNodeId: 11 })
+    expect(current.targetModule).toBe('worldview-origin')
+    const legacy = { ...current, targetModule: 'power-system' }
+    expect(parseImpactHandoffV2(encodeURIComponent(JSON.stringify(legacy)))).toEqual(legacy)
+    expect(parseImpactHandoffV2(encodeURIComponent(JSON.stringify({ ...legacy, table: 'characters' })))).toBeNull()
+  }
 })

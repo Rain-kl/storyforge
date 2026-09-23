@@ -1,3 +1,4 @@
+import { canonicalPowerModule } from '../../workspace/module-alias'
 import { db } from '../../db/schema'
 import type { WorkspaceScope } from '../../types'
 import {
@@ -41,7 +42,7 @@ export async function resolveCurrentImpactHandoffTargetV2(input: {
   handoff: ImpactHandoffV2
 }): Promise<CurrentImpactHandoffTargetV2 | null> {
   const { handoff, scope } = input
-  if (resolveImpactHandoffModuleV2(handoff) !== handoff.targetModule) return null
+  if (resolveImpactHandoffModuleV2(handoff) !== canonicalPowerModule(handoff.targetModule)) return null
 
   if (handoff.action === 'review-source') {
     if (handoff.targetRecordId == null || handoff.targetRecordId !== handoff.sourceOutlineNodeId) return null

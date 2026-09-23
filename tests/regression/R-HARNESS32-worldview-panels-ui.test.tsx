@@ -167,6 +167,22 @@ afterEach(async () => {
 })
 
 describe('R-HARNESS32 · 三个世界基座面板统一进入主 Agent Harness', () => {
+  it('候选自动打开力量页后，保存屏障通过才允许返回原 URL 的世界来源页', async () => {
+    mocks.copilot.pendingCandidates = [candidate('powerHierarchy', '力量体系')]
+    let activate: (() => void) | undefined
+    const origin = await renderPanel(WorldviewOriginPanel, {
+      initialField: 'origin',
+      onFieldChange: (_field: string, commit: () => void) => { activate = commit },
+    })
+    const powerButton = origin.querySelector<HTMLButtonElement>('button[aria-label="力量体系"]')!
+    const originButton = origin.querySelector<HTMLButtonElement>('button[aria-label="世界来源"]')!
+    expect(powerButton.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => originButton.click())
+    expect(powerButton.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => activate!())
+    expect(originButton.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('世界起源、自然环境和人文环境都提交固定单字段 Skill 请求', async () => {
     const origin = await renderPanel(WorldviewOriginPanel)
     await act(async () => generateButton(origin).click())

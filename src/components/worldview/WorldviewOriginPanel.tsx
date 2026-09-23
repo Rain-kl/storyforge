@@ -11,6 +11,7 @@ import WorldviewOriginSidebar, {
   WORLDVIEW_ORIGIN_FIELDS,
   type WorldviewOriginFieldKey,
 } from './WorldviewOriginSidebar'
+import PowerSystemDetails from './PowerSystemDetails'
 import CultivationSystemsPanel from './CultivationSystemsPanel'
 import type { Project, DivineDesign } from '../../lib/types'
 import type { WorldviewAgentField } from '../../lib/agent/worldview-field-copilot'
@@ -31,12 +32,15 @@ export const WORLDVIEW_ORIGIN_AGENT_FIELDS = Object.values(AGENT_FIELD_BY_ORIGIN
 interface Props {
   project: Project
   initialWorldviewId?: number | null
+  initialField?: WorldviewOriginFieldKey
+  onFieldChange?: (field: WorldviewOriginFieldKey, activate: () => void) => void
+  initialPowerTarget?: { table: 'powerSystems' | 'cultivationSystems'; recordId: number } | null
 }
 
 // ── 主面板 ─────────────────────────────────────────────────────
 
 /** v3 §2.1 — 世界观.世界起源（三个子模块） */
-export default function WorldviewOriginPanel({ project, initialWorldviewId }: Props) {
+export default function WorldviewOriginPanel({ project, initialWorldviewId, initialField, onFieldChange, initialPowerTarget }: Props) {
   const { worldview, saveWorldview, loadAll } = useWorldviewStore()
   const activeGroupId = useWorldGroupStore(s => s.activeGroupId)
   const copilot = useMasterCopilot({
@@ -44,7 +48,7 @@ export default function WorldviewOriginPanel({ project, initialWorldviewId }: Pr
     worldGroupId: project.enableMultiWorld ? activeGroupId : null,
   })
 
-  const [active, setActive] = useState<WorldviewOriginFieldKey>('origin')
+  const [active, setActive] = useState<WorldviewOriginFieldKey>(initialPowerTarget ? 'power' : initialField ?? 'origin')
   const [worldOrigin, setWorldOrigin] = useState('')
   const [powerHierarchy, setPowerHierarchy] = useState('')
   const [divineDesign, setDivineDesign] = useState<DivineDesign>({
@@ -56,6 +60,11 @@ export default function WorldviewOriginPanel({ project, initialWorldviewId }: Pr
   const [runningField, setRunningField] = useState<WorldviewAgentField | null>(null)
   useInitialRecordTarget(initialWorldviewId, worldview?.id === initialWorldviewId)
 
+  const powerTargetKey = initialPowerTarget ? `${initialPowerTarget.table}:${initialPowerTarget.recordId}` : null
+  useEffect(() => {
+    setActive(powerTargetKey ? 'power' : initialField ?? 'origin')
+  }, [initialField, powerTargetKey])
+
   // 多世界模式下按当前世界组加载，单世界传 null 走原逻辑
   useEffect(() => {
     loadAll(project.id!, project.enableMultiWorld ? activeGroupId : null)
@@ -63,10 +72,9 @@ export default function WorldviewOriginPanel({ project, initialWorldviewId }: Pr
 
   // 同步 store -> 本地 state
   useEffect(() => {
-    if (!worldview) return
-    setWorldOrigin(worldview.worldOrigin || '')
-    setPowerHierarchy(worldview.powerHierarchy || '')
-    setDivineDesign(worldview.divineDesign || {
+    setWorldOrigin(worldview?.worldOrigin || '')
+    setPowerHierarchy(worldview?.powerHierarchy || '')
+    setDivineDesign(worldview?.divineDesign || {
       hasDivinity: false, divineRank: '', divineNames: '', divineRules: '',
     })
   }, [worldview])
@@ -131,7 +139,11 @@ export default function WorldviewOriginPanel({ project, initialWorldviewId }: Pr
           active={active}
           streamingKeys={streamingKeys}
           pendingKeys={pendingKeys}
-          onSelect={setActive}
+          onSelect={field => {
+            const activate = () => setActive(field)
+            if (onFieldChange) onFieldChange(field, activate)
+            else activate()
+          }}
         />
 
         {/* ── 右侧：所有字段同时渲染，hidden 控制显示 ── */}
@@ -176,7 +188,8 @@ export default function WorldviewOriginPanel({ project, initialWorldviewId }: Pr
                 await loadAll(project.id!, project.enableMultiWorld ? activeGroupId : null)
               }}
             />
-            <CultivationSystemsPanel project={project} />
+            <PowerSystemDetails project={project} initialRecordId={initialPowerTarget?.table === 'powerSystems' ? initialPowerTarget.recordId : null}/>
+            <CultivationSystemsPanel project={project} initialSystemId={initialPowerTarget?.table === 'cultivationSystems' ? initialPowerTarget.recordId : null}/>
             <div className="mt-6">
               <h3 className="text-sm font-semibold text-text-primary mb-1">📚 力量层级 · 具体词条</h3>
               <p className="text-xs text-text-muted mb-3">在上面写完力量体系「全貌」后，这里把各等级/层级逐条登记，可自定义字段、打重要度星级，并进入 AI 生成上下文。</p>

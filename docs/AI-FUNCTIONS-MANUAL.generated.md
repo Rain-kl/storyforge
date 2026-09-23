@@ -168,7 +168,7 @@
 | `storyCore` | 故事核心 | project | L1 | 4000 |
 | `activeNarrativeBlueprint` | 当前选定叙事蓝图 | project | L1 | 5000 |
 | `characterDrivenPlan` | 角色驱动方案 | project | L1 | 5000 |
-| `powerSystem` | 力量体系 | world | L2 | 4000 |
+| `powerSystem` | 力量规则与修炼路径 | world | L2 | 4000 |
 | `codex` | 设定词条 | world | L2 | 6000 |
 | `characters` | 角色档案 | world | L2 | 8000 |
 | `targetCharacter` | 本次目标角色完整设定 | world | L0 | 8000 |
@@ -404,7 +404,7 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 - `src/lib/agent/story-arc-copilot.ts:1639 · chat`
 - `src/lib/agent/story-core-copilot.ts:557 · chat`
 - `src/lib/agent/storyline-progress-copilot.ts:366 · chat`
-- `src/lib/agent/worldview-field-copilot.ts:890 · chat`
+- `src/lib/agent/worldview-field-copilot.ts:903 · chat`
 - `src/lib/character-interaction/harness.ts:404 · chat`
 - `src/lib/comic/durable-production.ts:270 · chat`
 - `src/lib/evals/agent-harness/story-arc-main-path-browser.ts:98 · chat`
@@ -466,4 +466,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `a8684b97`
+生成时间基准:commit `659e4f96`

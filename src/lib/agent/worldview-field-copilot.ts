@@ -16,7 +16,7 @@ import {
   type WorldviewGeneratableField,
 } from '../registry/field-registry'
 import type { AdoptResult, AssembleContextResult } from '../registry/types'
-import type { AIConfig, ChatMessage, DivineDesign, NaturalResources, Worldview } from '../types'
+import type { AIConfig, ChatMessage, DivineDesign, NaturalResources, Worldview, PowerSystem } from '../types'
 import type { WorkspaceScope } from '../types/world-ownership'
 import {
   readOwnedRows,
@@ -741,6 +741,18 @@ export async function prepareWorldviewFieldCopilot(
     && before.ragDocumentId
     ? `worldview-field:${before.ragDocumentId}:field:${targetField}`
     : undefined
+  // The unified power editor's saved rule details are hard input constraints,
+  // not optional search hits. Read through Gateway so provenance and stale
+  // checks include their exact contents while the only write remains the overview.
+  const powerDetails = gatewayRequired && targetField === 'powerHierarchy'
+    ? (await readOwnedRows<PowerSystem>(scope!, 'powerSystems', { owner: 'world' }))
+      .filter(row => (row.worldGroupId ?? null) === worldGroupId
+        && [row.name, row.description, row.levels, row.rules].some(value => value?.trim()))
+    : []
+  const powerDetailKeys = powerDetails.map(row => {
+    if (!row.ragDocumentId) throw new Error('力量规则明细缺少来源标识，不能安全生成。')
+    return `worldview-field:${row.ragDocumentId}`
+  })
   const contextGatewayExecution = gatewayRequired
     ? await executeContextGatewayV1({
         skill,
@@ -751,8 +763,9 @@ export async function prepareWorldviewFieldCopilot(
           `${WORLDVIEW_AGENT_FIELD_LABELS[targetField]} ${resolveWorldviewFieldModeV1(request)}`,
           request,
         ].join('\n'),
+        mandatoryResourceKeys: [...(targetResourceKey ? [targetResourceKey] : []), ...powerDetailKeys],
+        mandatoryFullResourceKeys: powerDetailKeys,
         ...(targetResourceKey ? {
-          mandatoryResourceKeys: [targetResourceKey],
           mandatoryOriginalResourceKeys: [targetResourceKey],
           targetResourceKeys: [targetResourceKey],
         } : {}),
