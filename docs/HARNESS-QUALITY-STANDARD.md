@@ -1,6 +1,6 @@
 # StoryForge Agent 与 Harness 质量标准
 
-> 版本：1.3.0 · 生效：2026-09-10 · 权威层级：L1
+> 版本：1.4.0 · 生效：2026-09-28 · 权威层级：L1
 > 适用于分步骤长篇、节点、短篇、改编、世界引擎创作和上层产品生产/运行中的正式模型调用。
 
 ## 1. 目标与非目标
@@ -123,6 +123,10 @@ Context Gateway 应先给 Agent “能读什么”的目录，再根据任务、
 - `S3 产品执行`由具体产品完成 S3.1 生产、S3.2 验收、S3.3 发布、S3.4 运行与演化；每个 run 只在 SourcePlan 锁定的世界版本与权限内渐进读取并保存不可变 Context Manifest，发布时聚合为 ProductSourceManifest。runtime 后续读取归 session/run 证据，不修改旧 release。
 
 Harness 不统一时长、章节、结局或演化触发字段；它只执行产品已经定义的 Run Contract。任何长时或开放式体验仍须由一系列有限、可停止、可保存、可恢复的 durable run 组成，不能用一个永不结束的模型调用实现。运行绑定 ProductRelease，结果不得写回世界引擎。
+
+生产时 AI 与运行时 AI 使用不同授权边界。允许运行时模型参与的产品必须冻结 Runtime AI Contract：可读 release/session 来源、可写私域状态、禁止边界、工具闭集、预算/时延、provider 能力、失败/离线降级、持久化、审计、回滚和存档兼容。模型不能扩大 SourcePlan、修改 WorldRelease/ProductRelease 或接管确定性状态机。
+
+Harness receipt 只能证明相应 run 和控制流完成，不能自行提升作品的验收成熟度。`engineering-playable`、`creator-accepted`、`player-validated` 和 `distribution-ready` 必须引用各自所需的自动、创作者、独立玩家和权利/分发证据；自动 verifier、generator 自评或已知路线通关不能替代真人体验。
 
 ## 12. 验收证据
 
