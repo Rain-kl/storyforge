@@ -6,7 +6,6 @@ import {
   Check,
   ChevronRight,
   CircleDot,
-  Compass,
   Gem,
   GitBranch,
   History,
@@ -16,14 +15,12 @@ import {
   Minimize2,
   Map,
   PackageOpen,
-  Plus,
   Save,
   ScrollText,
   Send,
   Settings2,
   Sparkles,
   Square,
-  Trash2,
   Users,
   WandSparkles,
   X,
@@ -45,14 +42,13 @@ import {
   adventureRequirementSatisfied,
 } from '../../lib/adventure/runtime'
 import { verifyProductMediaRuntimeUrlsV1 } from '../../lib/product-production/media-runtime-verifier'
-import { createReleaseProductMediaResolver } from '../../lib/product-production/media-resolver'
 import {
   createProductProgressiveMediaRequestLedgerV1,
   textAdventureSceneMediaAssetKeysV1,
 } from '../../lib/product-production/first-interactive-resources'
 import { recordProductMediaRuntimeMeasurementV1 } from '../../lib/product-production/quality-receipts'
-import { currentPlayerReleases } from '../../lib/text-game/player-library'
-import type { AdventureProductRuntimePackageV1, Project, WorkspaceScope } from '../../lib/types'
+import AdventureLibrary from './AdventureLibrary'
+import type { Project, WorkspaceScope } from '../../lib/types'
 import { useAdventureGamePlayerStore, selectAdventureActions } from '../../stores/adventure-game-player'
 import { useAIConfigStore } from '../../stores/ai-config'
 import { useDialog } from '../shared/Dialog'
@@ -171,19 +167,6 @@ function currentBrowserEnvironment() {
   }
 }
 
-function adventureNpcCount(manifest: AdventureProductRuntimePackageV1): number {
-  const player = resolveAdventurePlayerIdentity(manifest)
-  const talkableKeys = new Set(manifest.adventure.actions.flatMap(action => (
-    action.kind === 'talk' && action.interaction && isAdventureActionPlayerVisible(manifest, action)
-      ? [action.interaction.participantKey] : []
-  )))
-  return manifest.interaction.profiles.filter(profile => (
-    talkableKeys.has(profile.participantKey)
-    && profile.participantKey !== player?.participantKey
-    && !profile.characterKey.startsWith('generated:')
-    && !/^产品角色\s*\d+$/u.test(profile.name.trim())
-  )).length
-}
 
 function splitNarrativeSentences(value: string): string[] {
   const result: string[] = []
@@ -212,6 +195,8 @@ export default function AdventureGamePlayer(props: {
   scope: WorkspaceScope
   worldGroupId: number | null
   initialSessionId?: number | null
+  onOpenSession?: (id: number) => void
+  onOpenLibrary?: () => void
 }) {
   const store = useAdventureGamePlayerStore()
   const { config } = useAIConfigStore()
@@ -226,10 +211,8 @@ export default function AdventureGamePlayer(props: {
   const [checkpointName, setCheckpointName] = useState('')
   const [branchTitle, setBranchTitle] = useState('')
   const [localError, setLocalError] = useState('')
-  const [catalogReleaseId, setCatalogReleaseId] = useState<number | null>(null)
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({})
   const [mediaFailures, setMediaFailures] = useState<Array<{ assetKey: string; reason: string }>>([])
-  const [catalogCover, setCatalogCover] = useState<{ url: string; altText: string } | null>(null)
   const [accessibility, setAccessibility] = useState<AdventureAccessibilityPreferences>(initialAccessibilityPreferences)
   const playbackSessionRef = useRef<number | null>(null)
   const transcriptHydratedRef = useRef(false)
@@ -245,7 +228,6 @@ export default function AdventureGamePlayer(props: {
   }, [])
 
   useEffect(() => {
-    setCatalogReleaseId(null)
     void store.load(props.scope, props.worldGroupId, props.initialSessionId == null).then(async () => {
       if (props.initialSessionId != null) await store.select(props.initialSessionId)
     })
@@ -259,12 +241,6 @@ export default function AdventureGamePlayer(props: {
   const runtimeSourceLabel = selectedRelease
     ? 'ProductRelease v' + selectedRelease.version
     : selected?.productBuildId != null ? 'Build 预览 #' + selected.productBuildId : '未绑定运行来源'
-  const catalog = useMemo(() => currentPlayerReleases(store.releases), [store.releases])
-  const catalogRelease = catalog.find(item => item.release.id === catalogReleaseId) ?? null
-  const catalogSession = catalogRelease
-    ? store.sessions.find(session => session.productReleaseId === catalogRelease.release.id) ?? null
-    : null
-  const catalogCoverAsset = catalogRelease?.manifest?.presentation?.assets.find(asset => asset.sceneTag === 'cover-opening')
   const adventure = store.runtimeState.adventure
   const manifest = store.selectedManifest
   const adventureV2 = manifest?.adventure.version === 2 ? manifest.adventure : null
@@ -376,32 +352,6 @@ export default function AdventureGamePlayer(props: {
   useEffect(() => {
     localStorage.setItem('storyforge.text-adventure.accessibility', JSON.stringify(accessibility))
   }, [accessibility])
-
-  useEffect(() => {
-    let active = true
-    let finished = false
-    let resolver: Awaited<ReturnType<typeof createReleaseProductMediaResolver>> | null = null
-    setCatalogCover(null)
-    const load = async () => {
-      if (selected || !catalogRelease?.manifest || !catalogCoverAsset || catalogRelease.release.id == null) return
-      resolver = await createReleaseProductMediaResolver({
-        scope: props.scope,
-        productReleaseId: catalogRelease.release.id,
-        runtimePackage: catalogRelease.manifest,
-      })
-      if (!active) return resolver.dispose()
-      const loaded = await resolver.preload({
-        assetKeys: [catalogCoverAsset.assetKey],
-        maximumBytes: 16 * 1024 * 1024,
-      })
-      finished = true
-      if (!active) return resolver.dispose()
-      const url = loaded.urls[catalogCoverAsset.assetKey]
-      if (active && url) setCatalogCover({ url, altText: catalogCoverAsset.altText })
-    }
-    void load().catch(() => { finished = true; resolver?.dispose() })
-    return () => { active = false; if (finished) resolver?.dispose() }
-  }, [catalogCoverAsset, catalogRelease, props.scope, selected])
 
   useEffect(() => {
     progressiveMedia.reset()
@@ -641,37 +591,10 @@ export default function AdventureGamePlayer(props: {
 
   if (store.loading && !selected) return <div className="adventure-launcher adventure-player-v2"><Loader2 className="adventure-loading" /><span>正在整理行囊…</span></div>
 
-  if (!selected || !adventure || !manifest || !location) return <div className="adventure-launcher adventure-player-v2" data-testid="adventure-game-player">
-    <div className="adventure-launcher-atmosphere" />
-    <div className="adventure-launcher-content">
-      <span className="adventure-kicker"><Compass /> TEXT ADVENTURE</span>
-      <h2>{catalogRelease ? '冒险详情' : '文字冒险游戏库'}</h2>
-      <p>{catalogRelease ? '确认地图、角色、物品、技能与任务规模，然后开始新的旅程。' : '先选择一部冒险，再从独立标题页开始旅程；角色、地图、物品、技能与任务会在进入游戏后展开。'}</p>
-      {error && <div role="alert" className="adventure-alert">{error}</div>}
-      {catalogRelease ? <section className="textgame-title-page adventure-title-page" aria-label="文字冒险游戏详情">
-        <button type="button" className="textgame-catalog-back" onClick={() => setCatalogReleaseId(null)}><ArrowLeft />返回全部游戏</button>
-        <div className="textgame-title-art">
-          {catalogCover
-            ? <img src={catalogCover.url} alt={catalogCover.altText} />
-            : <><Compass aria-hidden="true" /><span aria-hidden="true">EXPLORE<br />THE UNKNOWN</span></>}
-        </div>
-        <div className="textgame-title-copy">
-          <small>文字冒险 · 当前可玩版本</small>
-          <h3>{presentationText(catalogRelease.manifest?.definition.title) || catalogRelease.release.label}</h3>
-          <p>{presentationText(catalogRelease.manifest?.definition.description) || '一场由探索、物品、能力和任务共同推进的冒险。'}</p>
-          {catalogRelease.manifest && <div className="textgame-title-stats"><span>{catalogRelease.manifest.adventure.locations.length} 个地点</span><span>{adventureNpcCount(catalogRelease.manifest)} 名可交谈角色</span><span>{catalogRelease.manifest.adventure.items.length} 件物品</span><span>{catalogRelease.manifest.adventure.abilities.length} 项技能</span><span>{catalogRelease.manifest.adventure.quests.length} 个任务</span></div>}
-          {catalogRelease.error ? <p className="adventure-error">{catalogRelease.error}</p> : <div className="textgame-title-actions"><button type="button" className="textgame-start" disabled={!catalogRelease.manifest || store.busy} onClick={() => void run(() => store.start(catalogRelease.release.id!))}><Plus />开始新冒险</button>{catalogSession && <button type="button" onClick={() => void store.select(catalogSession.id!)}><Save />{store.completedSessionEndingKeys[catalogSession.id!] ? '查看通关记录' : '继续上次进度'}</button>}</div>}
-        </div>
-      </section> : <>
-        <div className="textgame-catalog-heading"><span>全部游戏</span><small>{catalog.length} 部可游玩作品</small></div>
-        <section className="textgame-catalog-list" aria-label="文字冒险游戏列表">
-          {catalog.map(item => <article key={item.release.id}><button type="button" aria-label={`查看游戏：${presentationText(item.manifest?.definition.title) || item.release.label}`} onClick={() => setCatalogReleaseId(item.release.id!)}><span className="textgame-catalog-icon"><Map /></span><span className="textgame-catalog-copy"><small>文字冒险</small><strong>{presentationText(item.manifest?.definition.title) || item.release.label}</strong><p>{presentationText(item.manifest?.definition.description) || '一场由探索、物品、能力和任务共同推进的冒险。'}</p>{item.manifest && <i>{item.manifest.adventure.locations.length} 地点 · {adventureNpcCount(item.manifest)} 可交谈角色 · {item.manifest.adventure.items.length} 物品 · {item.manifest.adventure.quests.length} 任务</i>}</span><span className="textgame-catalog-open">查看详情<ChevronRight /></span></button></article>)}
-          {!catalog.length && <div className="adventure-empty">尚无可游玩的文字冒险。请先在作者工作台完成发布。</div>}
-        </section>
-        {!!store.sessions.length && <section className="adventure-launcher-saves"><h3><Save />冒险存档</h3>{store.sessions.map(session => <div key={session.id}><button onClick={() => void store.select(session.id!)}><strong>{session.title}</strong><small>{formatTime(session.updatedAt)} · {store.completedSessionEndingKeys[session.id!] ? '已通关' : '可继续'}</small></button><button aria-label="删除冒险存档" onClick={() => void removeSession(session.id!, session.title)}><Trash2 /></button></div>)}</section>}
-      </>}
-    </div>
-  </div>
+  if (!selected || !adventure || !manifest || !location) return <AdventureLibrary
+    scope={props.scope} error={error} onRemoveSession={removeSession}
+    onOpenSession={id => props.onOpenSession?.(id)}
+  />
 
   return <div
     className={`adventure-game adventure-player-v2${immersive ? ' adventure-immersive' : ''}${accessibility.highContrast ? ' adventure-high-contrast' : ''}${accessibility.reducedMotion ? ' adventure-reduced-motion' : ''}`}
@@ -682,7 +605,7 @@ export default function AdventureGamePlayer(props: {
     data-testid="adventure-game-player"
   >
     <header className="adventure-gamebar adventure-console-bar">
-      <button className="textgame-player-exit" aria-label="退出游戏" onClick={() => void store.select(null)}><ArrowLeft /><span>退出游戏</span></button>
+      <button className="textgame-player-exit" aria-label="退出游戏" onClick={() => { setPanel(null); void store.select(null); props.onOpenLibrary?.() }}><ArrowLeft /><span>退出游戏</span></button>
       <div><small>{presentationText(manifest.definition.title)}</small><strong>{locationTitle}</strong></div>
       <span className="adventure-autosave"><CircleDot />自动保存已开启</span>
       <nav aria-label="冒险功能">
@@ -709,7 +632,7 @@ export default function AdventureGamePlayer(props: {
         </figure>}
         {!!mediaFailures.length && <details className="adventure-media-fallback"><summary>插图已降级为纯文字</summary><p>{mediaFailures.map(item => `${item.assetKey}：${item.reason}`).join('；')}</p></details>}
         <section className="adventure-console-prologue">
-          <small>玩家身份 · {playerIdentity ? `${playerIdentity.name}（由你扮演）` : '你（唯一行动主角）'} · {selected.title}</small>
+          <small>玩家身份 · {playerIdentity ? `${playerIdentity.name}（由你扮演）` : '你（唯一行动主角）'}</small>
           <h1>{locationTitle}</h1>
           <p>{presentationText(location.description)}</p>
           <dl>
@@ -878,7 +801,7 @@ export default function AdventureGamePlayer(props: {
       {panel === 'ending' && <div className="adventure-ending-review"><header><small>抵达结局</small><strong>{store.runtimeState.narrative?.nodes.find(item => item.key === store.runtimeState.narrative?.endingKey)?.title ?? '尚未抵达结局'}</strong><p>以下只引用这条时间线已提交的选择与行动，不由 AI 临时补写。</p></header>{endingJourney.map((item, index) => <article key={item.eventSequence}><i>{index + 1}</i><div><small>选择 #{item.eventSequence}</small><strong>{item.label}</strong><p>进入：{item.targetTitle}</p></div></article>)}{!!adventure.conditions.length && <section><small>持久后果</small>{adventure.conditions.map(condition => <span key={`${condition.conditionKey}:${condition.appliedSequence}`}>{manifest.adventure.conditions.find(item => item.key === condition.conditionKey)?.title ?? condition.conditionKey}</span>)}</section>}{!endingJourney.length && <div className="adventure-empty">完成冒险后，这里会列出抵达结局的关键决定链。</div>}</div>}
       {panel === 'accessibility' && <div className="adventure-accessibility"><label><span>沉浸阅读</span><input type="checkbox" checked={immersive} onChange={event => setImmersive(event.target.checked)} /></label><label><span>正文字号</span><select aria-label="正文字号" value={accessibility.fontScale} onChange={event => setAccessibility(current => ({ ...current, fontScale: Number(event.target.value) }))}><option value={0.9}>较小</option><option value={1}>标准</option><option value={1.15}>较大</option><option value={1.3}>特大</option></select></label><label><span>正文行距</span><select aria-label="正文行距" value={accessibility.lineHeight} onChange={event => setAccessibility(current => ({ ...current, lineHeight: Number(event.target.value) }))}><option value={1.6}>紧凑</option><option value={1.9}>标准</option><option value={2.2}>宽松</option></select></label><label><span>高对比度</span><input type="checkbox" checked={accessibility.highContrast} onChange={event => setAccessibility(current => ({ ...current, highContrast: event.target.checked }))} /></label><label><span>减少动态效果</span><input type="checkbox" checked={accessibility.reducedMotion} onChange={event => setAccessibility(current => ({ ...current, reducedMotion: event.target.checked }))} /></label><button onClick={() => setAccessibility(DEFAULT_ACCESSIBILITY)}>恢复默认</button></div>}
       {panel === 'journal' && <div className="adventure-journal">{[...adventure.actionHistory].reverse().map(item => <article key={item.eventSequence}><i>{item.eventSequence}</i><div><small>{ACTION_KIND[item.kind]} · {item.outcome === 'success' ? '成功' : item.outcome}</small><strong>{manifest.adventure.actions.find(value => value.key === item.actionKey)?.label ?? item.actionKey}</strong><p>{item.narrative}</p></div></article>)}{!adventure.actionHistory.length && <div className="adventure-empty">你的冒险还没有留下行动记录。</div>}</div>}
-      {panel === 'saves' && <div className="adventure-save-panel"><section><h3><Save />保存检查点</h3><div><input value={checkpointName} onChange={event => setCheckpointName(event.target.value)} placeholder="为此刻命名" /><button disabled={!checkpointName.trim()} onClick={() => void run(async () => { await store.saveCheckpoint(checkpointName); setCheckpointName('') })}>保存</button></div></section><section><h3><GitBranch />已有检查点</h3>{store.checkpoints.map(item => <button key={item.id} onClick={() => void run(() => store.forkCheckpoint(item.id!))}><span><strong>{item.name}</strong><small>事件 #{item.throughSequence} · {formatTime(item.createdAt)}</small></span><b>从这里分支</b></button>)}{!store.checkpoints.length && <p>行动会自动保存；你也可以为重要时刻建立手动检查点。</p>}</section><section><h3><GitBranch />当前时间线分支</h3><div><input value={branchTitle} onChange={event => setBranchTitle(event.target.value)} placeholder="新时间线名称" /><button disabled={!branchTitle.trim()} onClick={() => void run(async () => { await store.forkCurrent(branchTitle); setBranchTitle(''); setPanel(null) })}>建立分支</button></div></section></div>}
+      {panel === 'saves' && <div className="adventure-save-panel"><section><h3><Save />保存检查点</h3><div><input value={checkpointName} onChange={event => setCheckpointName(event.target.value)} placeholder="为此刻命名" /><button disabled={!checkpointName.trim()} onClick={() => void run(async () => { await store.saveCheckpoint(checkpointName); setCheckpointName('') })}>保存</button></div></section><section><h3><GitBranch />已有检查点</h3>{store.checkpoints.map(item => <button key={item.id} onClick={() => void run(async () => { const id = await store.forkCheckpoint(item.id!); props.onOpenSession?.(id) })}><span><strong>{item.name}</strong><small>事件 #{item.throughSequence} · {formatTime(item.createdAt)}</small></span><b>从这里分支</b></button>)}{!store.checkpoints.length && <p>行动会自动保存；你也可以为重要时刻建立手动检查点。</p>}</section><section><h3><GitBranch />当前时间线分支</h3><div><input value={branchTitle} onChange={event => setBranchTitle(event.target.value)} placeholder="新时间线名称" /><button disabled={!branchTitle.trim()} onClick={() => void run(async () => { const id = await store.forkCurrent(branchTitle); props.onOpenSession?.(id); setBranchTitle(''); setPanel(null) })}>建立分支</button></div></section></div>}
       {panel === 'saves' && <section className="adventure-runtime-identity">
         <h3><KeyRound />运行版本</h3>
         <dl>

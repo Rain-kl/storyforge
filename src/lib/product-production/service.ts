@@ -1802,11 +1802,17 @@ export async function publishProductProductionV1(input: {
 export async function startProductProductionPreviewV1(input: {
   scope: WorkspaceScope
   productionId: number
+  expectedBuildId?: number
+  expectedPreviewHash?: string
   worldGroupId?: number | null
 }): Promise<{ sessionId: number; productType: ProductProductionBriefV3['intent']['productType'] }> {
   const details = await readProductProductionDetailsV1(input.scope, input.productionId)
   if (!details.brief || !details.build || !details.build.previewHash) {
     throw new Error('[product-production-service] 当前 Production 尚无可验证 Build Preview')
+  }
+  if ((input.expectedBuildId != null && input.expectedBuildId !== details.build.id)
+    || (input.expectedPreviewHash != null && input.expectedPreviewHash !== details.build.previewHash)) {
+    throw new Error('[product-production-service] 试玩版本已更新，请返回作品库重新选择')
   }
   const receipt = await executeProductProductionCommand({
     scope: input.scope, productionId: details.production.id!,

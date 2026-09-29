@@ -4339,8 +4339,19 @@ describe('R-PRODUCTPROD-1F · configured formal production executor', () => {
     expect(prepared).toMatchObject({ productType: 'avg', mediaAssetKeys: expect.arrayContaining([
       'formal.production.build-1.media.visual.001', 'formal.production.build-1.media.visual.002',
     ]) })
+    const sessionsBeforeStalePreview = await db.productRuntimeSessions.count()
+    await expect(startProductProductionPreviewV1({
+      scope: owned.scope, productionId: owned.productionId,
+      expectedBuildId: build.id! + 1, expectedPreviewHash: build.previewHash,
+    })).rejects.toThrow('试玩版本已更新')
+    await expect(startProductProductionPreviewV1({
+      scope: owned.scope, productionId: owned.productionId,
+      expectedBuildId: build.id!, expectedPreviewHash: '0'.repeat(64),
+    })).rejects.toThrow('试玩版本已更新')
+    expect(await db.productRuntimeSessions.count()).toBe(sessionsBeforeStalePreview)
     const opened = await startProductProductionPreviewV1({
       scope: owned.scope, productionId: owned.productionId,
+      expectedBuildId: build.id!, expectedPreviewHash: build.previewHash,
     })
     expect(opened.productType).toBe('avg')
     expect(await db.productRuntimeSessions.get(opened.sessionId)).toMatchObject({

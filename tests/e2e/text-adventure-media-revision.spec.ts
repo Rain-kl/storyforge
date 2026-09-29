@@ -403,7 +403,17 @@ test('Visual QA 阻塞时可直接上传同画幅高分辨率替换，旧 Build 
   await first.locator('input[type="file"]').setInputFiles({
     name: 'corrected-image.png', mimeType: 'image/png', buffer: solidPng(1536, 864, [70, 100, 140, 255]),
   })
-  await expect(page.getByTestId('product-production-command-activity')).toContainText('修订图片 · upload-replacement · succeeded')
+  // Automatic DAG resumption can replace the transient activity banner before
+  // the browser samples it. Verify the committed upload, not that timing window.
+  await expect.poll(async () => page.evaluate(async productionId => {
+    const importer = new Function('path', 'return import(path)') as (path: string) => Promise<any>
+    const { db } = await importer('/storyforge/src/lib/db/schema.ts')
+    const child = await db.productBuilds.where('[productionId+buildNumber]').equals([productionId, 2]).first()
+    if (!child) return null
+    const artifact = await db.productBuildArtifacts.where('[buildId+artifactKey]')
+      .equals([child.id, 'media.visual.001']).first()
+    return artifact ? JSON.parse(artifact.metadataJson).source : null
+  }, seeded.productionId), { timeout: 20_000 }).toBe('author-upload')
   const lineage = await page.evaluate(async ({ productionId, parentBuildId }) => {
     const importer = new Function('path', 'return import(path)') as (path: string) => Promise<any>
     const { db } = await importer('/storyforge/src/lib/db/schema.ts')

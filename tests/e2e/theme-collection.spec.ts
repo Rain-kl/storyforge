@@ -82,9 +82,9 @@ test('shared text-adventure surfaces inherit the dark palette and standalone pre
   await page.goto('./home/settings')
   await page.getByRole('button', { name: '星穹 · 透光版', exact: true }).click()
   await page.goto('./adventure/play')
-  const colors = await page.locator('.lf-paper').first().evaluate(el => ({
+  const colors = await page.locator('.adventure-product-page').evaluate(el => ({
     paper: getComputedStyle(el).backgroundColor,
-    ink: getComputedStyle(el.querySelector('h3')!).color,
+    ink: getComputedStyle(el.querySelector('h1')!).color,
   }))
   expect(contrast(colors.ink, colors.paper)).toBeGreaterThanOrEqual(4.5)
   await page.addInitScript(() => {

@@ -163,8 +163,24 @@ test('制作页真实下载的文字冒险包可在全新 Work 上传、存档�
   await expect(player).toBeVisible({ timeout: 15_000 })
   await player.getByRole('button', { name: new RegExp(`查看游戏：${source.title}`) }).click()
   await expect(player.getByRole('heading', { name: source.title })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(player.getByRole('button', { name: '开始新冒险', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.setViewportSize({ width: 1280, height: 900 })
   await player.getByRole('button', { name: '开始新冒险', exact: true }).click()
   await expect(player.getByRole('heading', { name: '封港仓房', exact: true })).toBeVisible()
+  const startedSession = new URL(page.url()).searchParams.get('session')
+  expect(startedSession).toBeTruthy()
+  await page.reload()
+  await expect(player.getByRole('heading', { name: '封港仓房', exact: true })).toBeVisible()
+  await player.getByRole('button', { name: '退出游戏', exact: true }).click()
+  await expect(player.getByRole('heading', { name: '全部游戏', exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('session')).toBeNull()
+  await player.getByRole('button', { name: new RegExp(`查看游戏：${source.title}`) }).click()
+  await player.getByRole('button', { name: '继续上次进度', exact: true }).click()
+  await expect(player.getByRole('heading', { name: '封港仓房', exact: true })).toBeVisible()
+  expect(new URL(page.url()).searchParams.get('session')).toBe(startedSession)
+
   await finishNarration(player)
   await expect(player).toContainText('离线确定性模式')
 
@@ -240,6 +256,10 @@ test('制作页真实下载的文字冒险包可在全新 Work 上传、存档�
   expect(new URL(page.url()).searchParams.get('work')).toBe(String(imported.scope.workId))
   await expect(page.getByLabel('创作工作区')).toHaveValue(String(imported.scope.projectId))
   const restoredPlayer = page.getByTestId('adventure-game-player')
+  await expect(restoredPlayer).toContainText('海上归灯', { timeout: 15_000 })
+  expect(new URL(page.url()).searchParams.get('session')).toBe(startedSession)
+  await restoredPlayer.getByRole('button', { name: '退出游戏', exact: true }).click()
+  await restoredPlayer.locator('.adventure-saved-journeys summary').click()
   // A completed timeline remains reopenable after refresh so the player can
   // review its ending, inspect the event log, and fork an earlier checkpoint.
   // The launcher deliberately labels that timeline "已通关" rather than

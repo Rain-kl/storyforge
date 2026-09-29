@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { readAdventurePlayerPreviews, type AdventurePreviewItem } from '../lib/adventure/player-previews'
 import { db } from '../lib/db/schema'
 import {
   allocateAdventureSkillPoint,
@@ -51,6 +52,7 @@ interface AdventurePlayerState {
   scope: WorkspaceScope | null
   worldGroupId: number | null
   releases: AdventureLibraryItem[]
+  previews: AdventurePreviewItem[]
   sessions: ProductRuntimeSession[]
   /** Derived from the canonical event log; keys identify timelines that reached a frozen ending. */
   completedSessionEndingKeys: Record<number, string>
@@ -70,6 +72,7 @@ interface AdventurePlayerState {
   error: string
   load(scope: WorkspaceScope, worldGroupId: number | null, openLibrary?: boolean): Promise<void>
   select(sessionId: number | null): Promise<void>
+  startPreview(buildId: number): Promise<number>
   start(productReleaseId: number, title?: string): Promise<number>
   act(actionKey: string, commandId?: string): Promise<void>
   allocateSkillPoint(abilityKey: string, commandId?: string): Promise<void>
@@ -196,7 +199,7 @@ export const useAdventureGamePlayerStore = create<AdventurePlayerState>((set, ge
   const reload = async (requested?: number | null) => {
     const scope = get().scope
     if (!scope) return
-    const releases = await readLibrary(scope)
+    const [releases, previews] = await Promise.all([readLibrary(scope), readAdventurePlayerPreviews(scope)])
     const sessions = (await readBoundInstances(scope))
       .filter(item => item.kind === 'text-adventure' && (item.worldGroupId ?? null) === get().worldGroupId)
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -225,11 +228,11 @@ export const useAdventureGamePlayerStore = create<AdventurePlayerState>((set, ge
       // Publish the new session and its matching resolver together. Exposing
       // the next sessionId with the previous session's resolver lets React
       // start a stale preload between these two states.
-      set({ releases, sessions, completedSessionEndingKeys, selectedSessionId, ...resolved })
+      set({ releases, previews, sessions, completedSessionEndingKeys, selectedSessionId, ...resolved })
     } else {
       get().selectedMediaResolver?.dispose()
       set({
-        releases, sessions, completedSessionEndingKeys, selectedSessionId: null,
+        releases, previews, sessions, completedSessionEndingKeys, selectedSessionId: null,
         events: [], checkpoints: [], recoverableRunIds: [], runtimeState: structuredClone(EMPTY_PRODUCT_RUNTIME_STATE),
         selectedManifest: null, selectedMediaResolver: null, selectedSourceSessionId: null,
       })
@@ -242,7 +245,7 @@ export const useAdventureGamePlayerStore = create<AdventurePlayerState>((set, ge
     finally { set({ busy: false }) }
   }
   return {
-    scope: null, worldGroupId: null, releases: [], sessions: [], completedSessionEndingKeys: {}, selectedSessionId: null,
+    scope: null, worldGroupId: null, releases: [], previews: [], sessions: [], completedSessionEndingKeys: {}, selectedSessionId: null,
     events: [], checkpoints: [], recoverableRunIds: [], runtimeState: structuredClone(EMPTY_PRODUCT_RUNTIME_STATE), selectedManifest: null,
     selectedMediaResolver: null, selectedSourceSessionId: null,
     pendingIntent: null, generatedNarrative: null, generatingRunId: null,
@@ -281,6 +284,18 @@ export const useAdventureGamePlayerStore = create<AdventurePlayerState>((set, ge
       } catch (error) { set({ error: error instanceof Error ? error.message : String(error) }) }
       finally { set({ loading: false }) }
     },
+    startPreview: buildId => run(async () => {
+      const scope = get().scope
+      const item = get().previews.find(candidate => candidate.buildId === buildId)
+      if (!scope || !item?.manifest || item.error) throw new Error('请选择可用的文字冒险试玩。')
+      const { startProductProductionPreviewV1 } = await import('../lib/product-production/service')
+      const started = await startProductProductionPreviewV1({
+        scope, productionId: item.productionId, worldGroupId: get().worldGroupId,
+        expectedBuildId: item.buildId, expectedPreviewHash: item.previewHash,
+      })
+      await reload(started.sessionId)
+      return started.sessionId
+    }),
     start: (productReleaseId, title) => run(async () => {
       const scope = get().scope
       const item = get().releases.find(candidate => candidate.release.id === productReleaseId)
