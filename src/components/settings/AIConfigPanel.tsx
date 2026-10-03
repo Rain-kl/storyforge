@@ -18,22 +18,22 @@ import AIConnectionTestSection from './AIConnectionTestSection'
 import ThemeSelector from './ThemeSelector'
 
 export const PROVIDER_OPTIONS: { value: AIProvider; label: string; cors: boolean; hint: string }[] = [
-  { value: 'deepseek', label: 'DeepSeek', cors: false, hint: '官方 V4 Flash / Pro · 付费 API · 获取 Key: platform.deepseek.com → API Keys（浏览器直连失败时切换本地代理）' },
+  { value: 'deepseek', label: 'DeepSeek', cors: false, hint: '官方 V4 Flash / Pro · 付费 API · 获取 Key: platform.deepseek.com → API Keys（直连受限时请查看下方代理说明）' },
   { value: 'qwen', label: '通义千问', cors: true, hint: '获取 Key: dashscope.console.aliyun.com → API-KEY 管理' },
-  { value: 'doubao', label: '火山方舟（豆包 / DeepSeek）', cors: false, hint: '火山方舟文本生成 · 支持已开通的豆包与 DeepSeek 模型 · 获取 Key: console.volcengine.com → 方舟 → API Key（浏览器直连受限，需切换本地代理）' },
+  { value: 'doubao', label: '火山方舟（豆包 / DeepSeek）', cors: false, hint: '火山方舟文本生成 · 支持已开通的豆包与 DeepSeek 模型 · 获取 Key: console.volcengine.com → 方舟 → API Key（直连受限时请查看下方代理说明）' },
   { value: 'minimax', label: 'MiniMax', cors: true, hint: '获取 Key: platform.minimaxi.com → API Keys' },
   { value: 'glm', label: '智谱 GLM', cors: true, hint: '获取 Key: open.bigmodel.cn → API Keys' },
   { value: 'wenxin', label: '文心一言', cors: true, hint: '获取 Key: console.bce.baidu.com → 千帆大模型 → API Key' },
-  { value: 'gemini', label: 'Gemini', cors: false, hint: '官方 OpenAI 兼容接口 · 默认 Gemini 3.5 Flash · 浏览器直连失败时使用本地代理' },
+  { value: 'gemini', label: 'Gemini', cors: false, hint: '官方 OpenAI 兼容接口 · 默认 Gemini 3.5 Flash · 直连受限时请查看下方代理说明' },
   { value: 'poe', label: 'Poe', cors: true, hint: '获取 Key: poe.com → Settings → API → API Key' },
-  { value: 'openai', label: 'OpenAI', cors: false, hint: '获取 Key: platform.openai.com → API Keys（需点击下方「切换到本地代理」）' },
-  { value: 'kimi', label: 'Kimi', cors: false, hint: '获取 Key: platform.moonshot.cn → API Key 管理（需点击下方「切换到本地代理」）' },
-  { value: 'claude', label: 'Claude', cors: false, hint: '获取 Key: console.anthropic.com → API Keys（需点击下方「切换到本地代理」）' },
-  { value: 'nvidia', label: 'NVIDIA NIM（开发免费端点）', cors: false, hint: '开发者原型端点按模型限速，额度以 build.nvidia.com 账户显示为准；浏览器需使用本地代理' },
+  { value: 'openai', label: 'OpenAI', cors: false, hint: '获取 Key: platform.openai.com → API Keys（直连受限时请查看下方代理说明）' },
+  { value: 'kimi', label: 'Kimi', cors: false, hint: '获取 Key: platform.moonshot.cn → API Key 管理（直连受限时请查看下方代理说明）' },
+  { value: 'claude', label: 'Claude', cors: false, hint: '获取 Key: console.anthropic.com → API Keys（直连受限时请查看下方代理说明）' },
+  { value: 'nvidia', label: 'NVIDIA NIM（开发免费端点）', cors: false, hint: '开发者原型端点按模型限速，额度以 build.nvidia.com 账户显示为准；直连受限时请查看下方代理说明' },
   { value: 'modelscope', label: '魔搭社区', cors: true, hint: '获取 Key: modelscope.cn → 我的 → Access Token' },
   { value: 'agnes', label: 'Agnes AI（提供免费层）', cors: true, hint: '官方 OpenAI 兼容接口 · 免费层与模型额度以账户/Key 为准 · Agent 推荐 agnes-2.5-flash' },
-  { value: 'longcat', label: 'LongCat（美团）', cors: false, hint: '获取 Key: longcat.chat 平台控制台；OpenAI 兼容接口（若浏览器直连 CORS 失败可切换本地代理）' },
-  { value: 'opencode', label: 'OpenCode Go（月付）', cors: false, hint: '获取 Key: opencode.ai → Zen → Go API Key（需点击下方「切换到本地代理」）' },
+  { value: 'longcat', label: 'LongCat（美团）', cors: false, hint: '获取 Key: longcat.chat 平台控制台；OpenAI 兼容接口（直连受限时请查看下方代理说明）' },
+  { value: 'opencode', label: 'OpenCode Go（月付）', cors: false, hint: '获取 Key: opencode.ai → Zen → Go API Key（直连受限时请查看下方代理说明）' },
   { value: 'ollama', label: '本地模型 (Ollama / LM Studio 等)', cors: true, hint: '本地 OpenAI-compatible /v1 接口；Ollama 常用 http://localhost:11434/v1，LM Studio 常用 http://localhost:1234/v1；通常无需 API Key。' },
   { value: 'custom', label: '自定义', cors: true, hint: '填写任何兼容 OpenAI 格式的 API' },
 ]
@@ -282,20 +282,25 @@ export default function AIConfigPanel() {
                 const isProxy = config.baseUrl.startsWith('/' + config.provider)
                 return (
                   <div className="mt-1.5 flex gap-2">
-                    {!isProxy ? (
+                    {!isProxy && import.meta.env.DEV ? (
                       <button
                         onClick={() => setConfig({ baseUrl: pm.proxy })}
                         className="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
                       >
                         🔄 切换到本地代理
                       </button>
-                    ) : (
+                    ) : isProxy ? (
                       <button
                         onClick={() => setConfig({ baseUrl: pm.direct })}
                         className="text-xs px-2 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
                       >
                         🔗 恢复直连
                       </button>
+                    ) : null}
+                    {!import.meta.env.DEV && (
+                      <p className="text-xs text-text-muted">
+                        线上部署不自带本地代理。直连需服务商允许跨域；自建代理请手动填写 Base URL。已有代理配置可保留或恢复直连。
+                      </p>
                     )}
                   </div>
                 )
