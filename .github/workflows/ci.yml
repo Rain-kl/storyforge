@@ -67,5 +67,8 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: 生产版模型与嵌入代理设置
+        run: PLAYWRIGHT_PRODUCTION_PREVIEW=1 npx playwright test tests/e2e/settings-proxy.spec.ts
+
       - name: 核心用户路径浏览器冒烟
         run: npm run ci:e2e
