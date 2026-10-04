@@ -10,6 +10,8 @@ interface AIStreamOutputProps {
   output: string
   /** 是否正在生成 */
   isStreaming: boolean
+  /** 流已结束，但正式候选仍在校验或持久化。 */
+  isFinalizing?: boolean
   /** 错误信息 */
   error: string | null
   /** 本次生成的 token 用量 */
@@ -39,6 +41,7 @@ interface AIStreamOutputProps {
 export default function AIStreamOutput({
   output,
   isStreaming,
+  isFinalizing = false,
   error,
   onStop,
   onAccept,
@@ -55,7 +58,7 @@ export default function AIStreamOutput({
   const [acceptError, setAcceptError] = useState('')
   const [editableOutput, setEditableOutput] = useState(output)
   useEffect(() => setEditableOutput(output), [output])
-  const displayedOutput = editable && !isStreaming ? editableOutput : output
+  const displayedOutput = editable && !isStreaming && !isFinalizing ? editableOutput : output
   const hasOutput = displayedOutput.length > 0
   const [marked, setMarked] = useState<'good' | 'bad' | null>(null)
   const [showRaw, setShowRaw] = useState(false)
@@ -123,7 +126,7 @@ export default function AIStreamOutput({
               </p>
             )}
           </div>
-        ) : editable && hasOutput && !isStreaming ? (
+        ) : editable && hasOutput && !isStreaming && !isFinalizing ? (
           <CTextarea
             aria-label="AI 候选可编辑内容"
             disabled={accepting}
@@ -136,7 +139,12 @@ export default function AIStreamOutput({
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm text-text-secondary">
               <Braces className="w-4 h-4 text-accent shrink-0" />
-              {isStreaming ? (
+              {isFinalizing ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  正在校验并保存候选…
+                </span>
+              ) : isStreaming ? (
                 <span className="flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   {onAccept
@@ -203,6 +211,11 @@ export default function AIStreamOutput({
               <Square className="w-3 h-3" />
               停止
             </button>
+          ) : isFinalizing ? (
+            <span className="flex items-center gap-1.5 text-xs text-text-muted" role="status">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              正在建立可恢复候选…
+            </span>
           ) : (
             <>
               {(hasOutput || error) && (

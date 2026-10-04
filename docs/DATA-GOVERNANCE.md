@@ -1,6 +1,6 @@
 # StoryForge 数据与三注册表治理标准
 
-> 版本：1.7.0 · 生效：2026-09-10 · 权威层级：L1
+> 版本：1.8.0 · 生效：2026-09-28 · 权威层级：L1
 > 本标准规定 AI 读写、表生命周期、数据所有权、世界版本与跨产品流动。实现细节以注册表和 schema 为事实源。
 
 ## 1. 三个单一事实源
@@ -95,7 +95,7 @@
 |---|---|---|---|---|
 | `S1 世界封存` | 世界草稿及其来源 | 世界 draft/release | 可引用 `WorldRelease`：code、不可变 release ID/hash、能力画像 | 产品设置、媒资、session 或私域演化进入世界 |
 | `S2 产品定向` | 可引用 WorldRelease 和按需世界资源 | product draft/intent | 精确 `WorldReference`、产品专用 Brief、`ProductSourcePlan`、用户开始授权及其 revision | 未授权即正式生产；修改或补写来源世界 |
-| `S3 产品执行` | 已冻结 Brief/source plan、旧 ProductRelease（增量时） | production/build/ProductRelease/session | 每 run Context Manifest、发布时 `ProductSourceManifest` 快照、构建证据、不可变 ProductRelease、父版本/兼容谱系 | 超出 plan 或改读可变世界草稿；追写旧 release manifest；自动回写世界 |
+| `S3 产品执行` | 已冻结 Brief/source plan、旧 ProductRelease（增量时） | production/build/ProductRelease/session | 每 run Context Manifest、发布时 `ProductSourceManifest` 快照、构建/运行时 AI/验收成熟度证据、不可变 ProductRelease、父版本/兼容谱系 | 超出 plan 或改读可变世界草稿；追写旧 release manifest；自动回写世界 |
 
 S2 的配置必须归具体产品，不能落入一个全产品通用设置表。产品可以用时长、章节、回合、分支、参与者或其他专用字段，也可以没有其中任何一项；数据治理只要求 schema 有 owner、版本、来源、用户确认和迁移规则。
 
@@ -118,11 +118,12 @@ Provider 的缓存必须同时绑定 release UID、content hash 与投影版本�
 
 ### 5.7 ProductRelease 谱系
 
-- `ProductRelease` 必须不可变，并记录 product instance、父 ProductRelease（如有）、来源 Brief revision、source plan/manifest hash、build/quality evidence 和兼容策略。
+- `ProductRelease` 必须不可变，并记录 product instance、父 ProductRelease（如有）、来源 Brief revision、source plan/manifest hash、build/quality evidence、运行时 AI 契约引用、验收成熟度和兼容策略。
 - 用户改变产品设置、选择新世界 release，或一次增量演化改变资源需求/权限时，应创建新的 Brief/SourcePlan 和 production/候选版本，不覆盖旧 plan/release。
 - 已存在 runtime 默认继续绑定启动时的 ProductRelease；升级必须显式执行兼容检查和迁移，失败时旧存档仍可继续使用旧 release。
 - 仅世界来源改变不代表产品必须自动升级；同一世界 release 也可被多个相互隔离的产品实例引用。
 - 正式 runtime 只能绑定该产品自己的不可变 ProductRelease。WorldRelease、产品 draft、通用 preview 或诊断实例均不能代替 ProductRelease；所有正式产品 kind 由同一运行边界登记并拒绝旁路。
+- ProductRelease、可搬运产品包、工作区安装记录和社区/市场条目分别拥有身份与生命周期；导出、导入或发布动作只能引用 release，不得反向把安装/社区状态写进不可变 release。
 
 ## 6. `PROJECT_TABLES` 生命周期
 

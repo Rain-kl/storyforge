@@ -1,6 +1,6 @@
 # 世界引擎上层产品跨产品架构契约
 
-> 版本：2.5.0 · 生效：2026-09-10 · 对应总纲：§6、S1/S2/S3
+> 版本：2.6.0 · 生效：2026-09-28 · 对应总纲：§2.1、§6、§10.1、S1/S2/S3
 > 本文只规定跑团、角色互动、AI 小镇、文字冒险、AVG 和文字开放世界共同遵守的架构边界与流转协议，不替代任何一个产品的专项功能设计。
 
 ## 1. 契约目的与非范围
@@ -24,6 +24,10 @@
 - 当前统一生产 Harness 只接受跑团、角色互动、AI 小镇、文字冒险、AVG、文字开放世界六种索引化身份；每种身份都有自己的需求适配器和生产模块。
 - AI 小镇拥有自己的 Brief、SourceSelection、生产模块、ProductRelease、runtime 状态与命令；角色回复可复用底层互动事件能力，但必须使用 AI 小镇专属 Skill 和上下文源。
 - 叙事模拟是文字开放世界可以调用的内部运行能力，不是产品身份，不拥有独立 Production、ProductRelease、Session 或入口。
+
+### 1.2 产品能力与游戏实例分层
+
+开发某类上层产品与使用该产品生产一个具体游戏/体验是两条生命周期。前者实现作者端、玩家端、数据、编译器、runtime、存档和应用级质量门；后者通过 S1/S2/S3 生产本实例的内容、系统配置、媒资、Build、ProductRelease 和 session。产品基础系统不得由每个游戏实例重新生成，实例配置也不得写回共享产品代码或被误报为产品能力完成。
 
 ## 2. 三阶段主链
 
@@ -78,16 +82,18 @@ S3 由具体产品的主 Agent 和内部能力完成。内容、规则、媒资�
 
 S3 使用四个共同定位点：
 
-1. `S3.1 生产`：按本产品计划生成内容、规则与媒资，并记录真实上下文证据；
-2. `S3.2 验收`：组装 build，执行产品专用质量门和有界修复；
-3. `S3.3 发布`：冻结 ProductRelease、聚合 ProductSourceManifest，并生成版本谱系；
-4. `S3.4 运行与演化`：runtime/session 绑定准确 ProductRelease，在产品私域内推进和形成后续版本。
+1. `S3.1 生产`：按本产品计划以游戏内容、产品系统配置和媒资三条依赖式并行泳道生成受治理产物，并记录真实上下文证据；
+2. `S3.2 验收`：由确定性 Build Integrator 组装 build，以可玩切片执行产品专用质量门、问题定位、局部返修、依赖失效、局部重建和受影响路线重放；
+3. `S3.3 发布`：冻结 ProductRelease、聚合 ProductSourceManifest，并生成版本谱系、运行时 AI、验收成熟度和兼容证据；
+4. `S3.4 运行与演化`：runtime/session 绑定准确 ProductRelease，在机器可校验的 Runtime AI Contract 内推进私域状态、形成后续版本和发布后修复闭环。
 
 怎样生产、何时进入运行、用户进度何时触发下一轮演化、怎样形成结局，都属于该产品的专项功能。跨产品架构只强制：
 
 - 每次工作有有限、可恢复的运行单元和明确 owner；
 - 正式运行绑定不可变 ProductRelease，不读取可变世界草稿；
 - 增量版本记录父 ProductRelease、来源和兼容结果，不覆盖旧版本；
+- 运行时 AI 不得改变 WorldRelease、ProductRelease、确定性状态机或未授权状态；
+- 自动可执行、创作者接受、独立玩家验证和公开分发准备分别记录，不相互冒充；
 - 运行事件只改变产品私域，不能自动反馈到共享世界。
 
 ## 4. 跨阶段交接物
@@ -100,11 +106,11 @@ S3 使用四个共同定位点：
 | `ProductSourcePlan` | S2 → S3 | WorldReference、需求适配器/版本、资源需求、允许范围、初始选择、缺失/补充策略和咨询 Context Manifest refs |
 | `ConfirmedProductBrief` | S2 → S3 | product kind、用户目标、产品专用设置、限制、revision、确认时间/主体 |
 | `ProductSourceManifest` | S3.3 发布证据 | 聚合 production run manifests 中实际读取/采用/缺失/冲突/遗漏的世界资源；发布时冻结 hash |
-| `ProductReleaseLineage` | S3.3/S3.4 版本谱系 | product instance、release/hash、parent release、source plan/manifest、brief/build/quality references、兼容结论 |
+| `ProductReleaseLineage` | S3.3/S3.4 版本谱系 | product instance、release/hash、parent release、source plan/manifest、brief/build/quality/runtime AI/maturity references、兼容结论 |
 
 任何物理 schema 都必须能从记录恢复上述语义。不能因为某产品不用其中某个可选设置，就绕过世界版本、用户开始授权或 release 谱系。
 
-它们不是五份都由主 Agent 自由撰写的文本。系统生成并校验 `WorldReference`；主 Agent 可根据对话起草 Brief 和 SourcePlan，用户确认 Brief、系统校验 plan；`ProductSourceManifest` 由真实 run Context Manifests 自动聚合；`ProductReleaseLineage` 由发布系统根据父版本、build、quality 和兼容证据生成并冻结。Agent 可以解释这些产物，不能伪造读取、hash 或版本关系。
+它们不是五份都由主 Agent 自由撰写的文本。系统生成并校验 `WorldReference`；主 Agent 可根据对话起草 Brief 和 SourcePlan，用户确认 Brief、系统校验 plan；`ProductSourceManifest` 由真实 run Context Manifests 自动聚合；`ProductReleaseLineage` 由发布系统根据父版本、build、quality、runtime AI、maturity 和兼容证据生成并冻结。Agent 可以解释这些产物，不能伪造读取、hash、成熟度或版本关系。
 
 ## 5. 世界数据按协议统一、按产品适配
 
@@ -146,10 +152,15 @@ Product-specific goal/config
 | World requirement adapter | 怎样把本产品目标转换为世界资源需求，怎样处理缺失/冲突？ |
 | Brief schema | 用户在 S2 确认了什么，怎样版本化和判定 stale？ |
 | Production contract | 用户开始后，哪些 Agent/Skill/确定性服务被授权生产什么？ |
+| Build/integration contract | 三条泳道怎样汇合，怎样校验引用、使下游 stale、局部重建和重放？ |
 | Media ownership | 哪些媒资由哪个 production/build/release 拥有，怎样存储和回收？ |
 | Release contract | 什么构成可运行版本，hash、质量证据和不可变性怎样保证？ |
 | Runtime contract | 哪些状态可以变化，怎样隔离、保存、恢复和授权查看？ |
+| Runtime AI contract | 运行时模型能读写什么，预算、工具、降级、审计和存档兼容怎样机器化？ |
+| Quality/maturity contract | 工程可玩、创作者接受、独立玩家验证和分发准备分别需要什么证据？ |
+| Distribution contract | ProductRelease、游戏包、安装记录和社区条目怎样区分？ |
 | Evolution contract | 新 release/checkpoint 怎样继承旧版本和 source plan，怎样处理兼容与回退？ |
+| Maintenance contract | 发布问题怎样定位、修复、形成后继 release、迁移旧档和回退？ |
 
 这些是接入框架的槽位，不是要求所有产品复用同一套具体 schema、Agent 图或运行逻辑。只有真实相同且已被至少一个产品验证的设施，才进入共享底座。
 
@@ -171,6 +182,12 @@ Product-specific goal/config
 
 衍生内容若要成为世界新版本，必须离开正常产品运行链，进入由世界作者发起的独立创作/采纳流程。默认、批量或隐式回写一律禁止。
 
+生产时 AI 与运行时 AI 必须分离。Runtime AI Contract 至少冻结可读来源、可变私域状态、禁止边界、工具闭集、调用/费用/时延预算、provider 能力、失败与离线降级、审计、回滚和存档兼容。超出原 Brief/SourcePlan 或改变世界版本、产品目标、权限与重要系统设置时，必须回到 S2，而不是由模型自行扩大授权。
+
+发布后问题必须能通过 release、save、事件序列、Artifact、系统配置、媒资、模型调用和运行环境定位。修复创建直接后继 ProductRelease，并重放受影响路线、验证新存档和旧存档兼容；迁移失败时旧档继续绑定旧 release 或显式回退，不得追写旧 release/旧存档。
+
+ProductRelease、可搬运游戏包、工作区安装记录和社区/市场条目各有独立 owner 与生命周期。首版可以只支持本地发布和隔离导入导出，但不得用本地 release 冒充已经公开分发。
+
 ## 9. 架构级验收
 
 本契约只验收共同框架是否成立：
@@ -181,10 +198,15 @@ Product-specific goal/config
 - S2 设置由产品拥有，世界 release 不随产品设置变化；
 - 媒资、生产、release、session 和演化均有产品 owner；
 - ProductRelease 不可变，升级/演化有父版本、兼容和回退证据；
+- Build Integrator 能验证跨泳道引用并支持可玩切片、依赖失效、局部重建和受影响路线重放；
+- 运行时 AI 的读取、写入、预算、工具、降级和审计边界可机器校验；
+- `engineering-playable`、`creator-accepted`、`player-validated`、`distribution-ready` 的证据分别保存，未完成项可见；
+- 来源/媒资权利、安全隐私、生产/运行费用、性能存储、provider 能力/漂移和失败降级进入 Build/Release 门；
+- release、游戏包、安装记录和社区条目没有混用身份或生命周期；
 - 多个用户引用同一世界时数据互相隔离，运行不回写世界；
 - 刷新、中断、失败和版本变化后能恢复到正确阶段，不跨阶段重复写入。
 
-“跑团是否好玩”“角色聊天是否自然”“AVG 是否具备完整演出”等不由本契约宣称完成，必须在对应产品专项方案和真实 E2E/体验验收中裁决。
+共同验收必须分别报告结构/工程正确、声明路线可执行、玩家可理解和体验质量。自动游玩和已知路线只能证明相应路径可执行；“跑团是否好玩”“角色聊天是否自然”“AVG 是否具备完整演出”等不由本契约宣称完成，必须在对应产品专项方案和真实 E2E、创作者试玩及独立玩家体验中裁决。
 
 ## 10. 并行产品分支
 
