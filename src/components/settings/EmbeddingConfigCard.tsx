@@ -19,7 +19,7 @@ const PROXY_PAIRS: Array<{ proxy: string; direct: string }> = [
   { proxy: '/openai-proxy/v1', direct: 'https://api.openai.com/v1' },
 ]
 
-// baseUrl 默认走本地代理路径（绕浏览器 CORS，本地运行工具时生效；线上部署需改直连且服务商允许跨域）。
+// 开发模式使用已登记的本地代理；生产预设在作者点击时改用对应直连地址。
 const PRESETS: Array<{ label: string; note: string; cfg: Partial<EmbeddingConfig> }> = [
   { label: '硅基流动 · bge-m3', note: '无需显卡 · 国内可用 · 有免费额度(推荐)', cfg: { provider: 'custom', baseUrl: '/siliconflow-proxy/v1', model: 'BAAI/bge-m3' } },
   { label: '通义 · v3', note: '阿里大厂 · 便宜稳 · 中文强', cfg: { provider: 'qwen', baseUrl: '/qwen-proxy/compatible-mode/v1', model: 'text-embedding-v3' } },
@@ -99,7 +99,10 @@ export default function EmbeddingConfigCard() {
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {PRESETS.map(p => (
-              <button key={p.label} onClick={() => setEmbeddingConfig(p.cfg)}
+              <button key={p.label} onClick={() => {
+                const pair = PROXY_PAIRS.find(item => item.proxy === p.cfg.baseUrl)
+                setEmbeddingConfig(!import.meta.env.DEV && pair ? { ...p.cfg, baseUrl: pair.direct } : p.cfg)
+              }}
                 className="text-xs px-2.5 py-1.5 rounded-lg bg-bg-elevated border border-border text-text-secondary hover:text-accent hover:border-accent/50 transition-colors text-left">
                 <div className="font-medium">{p.label}</div>
                 <div className="text-[10px] text-text-muted">{p.note}</div>
@@ -107,7 +110,9 @@ export default function EmbeddingConfigCard() {
             ))}
           </div>
           <p className="text-[11px] text-text-muted">
-            国内预设默认走<strong>本地代理</strong>(本地运行工具时自动绕过浏览器 CORS);线上部署版请把 Base URL 改成服务商直连地址。没显卡选<strong>硅基流动/通义/智谱</strong>即可,云端算力、填 key 就能用。
+            {import.meta.env.DEV
+              ? '国内预设默认使用开发服务器的本地代理。'
+              : '线上部署不自带本地代理，预设使用服务商直连地址。直连仍需服务商允许跨域；自建代理请手动填写 Base URL。'}
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -123,12 +128,12 @@ export default function EmbeddingConfigCard() {
                     className="mt-1 text-[11px] px-2 py-1 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors">
                     🔗 切换到直连(线上部署用)
                   </button>
-                ) : (
+                ) : import.meta.env.DEV ? (
                   <button onClick={() => setEmbeddingConfig({ baseUrl: pair.proxy })}
                     className="mt-1 text-[11px] px-2 py-1 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors">
                     🔄 切换到本地代理(本地运行用)
                   </button>
-                )
+                ) : null
               })()}
             </div>
             <div>
