@@ -30,8 +30,14 @@ The quest journal groups objectives by category. Inventory, equipment, skill poi
 
 Progress binds to a frozen version. Check the version and save when refreshing or recovering. Use supported recovery paths after corruption warnings; do not manually alter frozen data. For failed or paused production, inspect the existing run and retained artifacts before restarting the entire work.
 
-## Development not yet merged
+## Library, playtests, and local revisions
 
-The cover/detail flow, unpublished-playtest presentation, and further local revisions for The Tidal Bell Isles: The Last Light (潮钟群岛：最后的灯火) remain on a separate branch. PR #100 was unmerged at this review. These branch interfaces are not delivered main-branch features; see [Pending development](/en/updates/development-status).
+Works and playtests now groups cover cards by work. Open details to start, continue, or choose a save; historical versions of the same work appear in those details. A Build with valid provenance but no formal publication is explicitly labeled Unpublished playtest (未发布试玩), not a signed product release. If the selected Build changed before starting, refresh the library and confirm again.
+
+Reading offers immersion, font, contrast, and reduced-motion controls. Starting, continuing, branching, and refreshing preserve the corresponding save. Characters in a scene follow its frozen cast list. Unavailable choices explain missing objectives, items, or resources, and completed actions provide explicit feedback.
+
+Production supports version-constrained local revisions to accepted stories, cast, scene plans, prose, dialogue, and routes. Check the impact and rerun affected dependencies. Pause recovery, uploaded image replacements, and visual review retain the existing production flow, old Builds, and saves. Time-capacity revisions may only raise the limit, not reduce the time available in an older version.
+
+These capabilities entered main through [PR #100](https://github.com/yuanbw2025/storyforge/pull/100) on October 4, 2026. The Tidal Bell Isles: The Last Light (潮钟群岛：最后的灯火) remains a local unpublished playtest: merging engineering code does not publish that work or make it available in a fresh installation. Local images and browser saves do not travel with Git. See [Pending development](/en/updates/development-status) for other branches requiring review.
 
 Evidence: [Production flow](https://github.com/yuanbw2025/storyforge/commit/237f1912) · [Product packages](https://github.com/yuanbw2025/storyforge/commit/ecc178b8) · [Mainline production path](https://github.com/yuanbw2025/storyforge/commit/fdc5b87c).

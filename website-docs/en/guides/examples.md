@@ -20,7 +20,7 @@ Open Text open world → “先试玩《盐脊：断流之夜》”. No workspac
 
 This is a built-in open-world showcase on main. It demonstrates exploration, quests, and endings in prepared content, not completion of all real-model and human acceptance for general production. For your own work, follow [Text open world production](/en/features/interactive/open-world).
 
-Other built-in works still on local branches, and the Tidal Bell Isles playtest, are listed in [Pending development](/en/updates/development-status). They are not part of the current mainline built-in catalog.
+The Tidal Bell Isles: The Last Light is an author-local unpublished playtest. Its presentation and recovery code is on main, but the work, images, and saves are not supplied by a fresh installation and are not part of this built-in catalog. Other locally developed works appear in [Pending development](/en/updates/development-status).
 
 ## Creative-product examples
 

@@ -2,7 +2,7 @@
 
 ## Which version these docs describe
 
-These instructions were checked against **main baseline 0108ab31 on October 4, 2026**. The package version remains **3.9.1**, but main includes features and UI changes added after the formal v3.9.1 release.
+These instructions were checked against **main baseline dd253f85 on October 4, 2026**. The package version remains **3.9.1**, but main includes features and UI changes added after the formal v3.9.1 release.
 
 Two builds both labeled 3.9.1 need not contain identical code. Include the build commit, address, and date when reporting issues.
 

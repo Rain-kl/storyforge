@@ -1,6 +1,6 @@
 # 当前产品能力与成熟度
 
-> 核对日期：2026-10-04 · main 基线：0108ab31。正式 Release、当前 main 和在线部署可能不同，见[版本说明](/updates/compatibility)。
+> 核对日期：2026-10-04 · main 基线：dd253f85。正式 Release、当前 main 和在线部署可能不同，见[版本说明](/updates/compatibility)。
 
 “已发布”沿用当前产品目录的状态，表示产品可进入已声明的主流程，不表示有新的语义版本号，也不保证模型质量。“预览”有可用实现但完整体验仍待验证。“实验性”不作为日常使用承诺。
 
@@ -32,6 +32,6 @@
 - 世界与作品的引用有明确版本，后续变化不会自动到处同步。
 - 当前不承诺 AI 永不遗忘、作品永无矛盾或自动完成商业级成品。
 
-工程依据：[产品目录](https://github.com/yuanbw2025/storyforge/blob/0108ab31/src/lib/product/product-catalog.ts) · [能力基线](https://github.com/yuanbw2025/storyforge/blob/0108ab31/docs/roadmap/CAPABILITY-BASELINE.md)。
+工程依据：[产品目录](https://github.com/yuanbw2025/storyforge/blob/dd253f85/src/lib/product/product-catalog.ts) · [能力基线](https://github.com/yuanbw2025/storyforge/blob/dd253f85/docs/roadmap/CAPABILITY-BASELINE.md)。
 
 本轮另核对了所有本地分支；尚未合并、仅本地保存或历史等价性待核对的内容见[待合并开发记录](/updates/development-status)，不计入以上主干能力。

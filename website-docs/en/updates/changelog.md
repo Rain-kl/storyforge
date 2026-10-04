@@ -4,6 +4,17 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### 2026-10-04 · Adventure presentation, local revisions, and large backups
+
+- Connected cover cards, details, start/continue, and saves. Unpublished playtests are labeled, historical versions are grouped under details, and stale Build starts are blocked.
+- Reading includes immersion and accessibility controls, with usable narrow-screen toolbars. Choices show actual missing conditions and scene characters follow the frozen cast list.
+- Added local story, cast, scene, dialogue, and route revisions; improved pause recovery, image replacement, rights declarations, and visual-review dependencies while retaining old Builds and saves.
+- Improved large-project JSON reading/writing and open-world travel-effect validation performance.
+- Engineering delivery for Tidal Bell Isles is separate from publishing the work: its local unpublished playtest, images, and saves do not arrive through Git or a fresh installation.
+
+Guides: [Text adventure](/en/features/interactive/text-adventure) · [Large backups](/en/guides/backup-restore).
+Evidence: [PR #100 mainline integration](https://github.com/yuanbw2025/storyforge/commit/dd253f85).
+
 ### 2026-10-04 · Longform context fixes and Luniang naming
 
 - Corrected cases where existing material was incorrectly reported as a missing mandatory resource, blocking outline, detailed-outline, or prose generation.
@@ -150,4 +161,4 @@ Historical capability descriptions belong to their original context and cannot i
 
 September 20, 2026: rebuilt product guides, onboarding, data/cost explanations, and main-branch milestone records against baseline 58892a5b. This is a knowledge-base maintenance date, not a new product release date.
 
-2026-10-04: reconciled late-September onward mainline changes against remote main `0108ab31`, inspected all 85 local branches and associated worktrees, and synchronized Chinese and English guides. [Pending development](/en/updates/development-status) lists unmerged work separately, without claiming it is live. Documentation deployment requires a successful corresponding workflow run.
+2026-10-04: reconciled late-September onward mainline changes against remote main `dd253f85`, inspected all 86 local branches and associated worktrees, and synchronized Chinese and English guides. [Pending development](/en/updates/development-status) lists unmerged work separately, without claiming it is live. Documentation deployment requires a successful corresponding workflow run.

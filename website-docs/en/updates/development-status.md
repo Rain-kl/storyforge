@@ -1,31 +1,29 @@
 # Pending development and branch review
 
-> Snapshot: October 4, 2026 · remote main `0108ab31`. This is development evidence, not a released-feature list or a promise to merge historical alternatives.
+> Snapshot: October 4, 2026 · remote main `dd253f85`. This is development evidence, not a released-feature list or a promise to merge historical alternatives.
 
-Inspected all 85 local branches: 65 heads are ancestors of main, and 20 have commits outside main. “Local-only commits” below means commits not reachable from any fetched origin branch; rebases, cherry-picks, and merge commits can leave different SHAs for overlapping content. Counts are not counts of missing features. No development branches were pushed or merged during this documentation audit.
+Rechecked all 86 local branches after PR #100 merged. Excluding this documentation-maintenance branch, 67 heads are ancestors of main and 18 have commits outside main. “Local-only commits” means commits not reachable from any fetched origin branch. Rebases, cherry-picks, and merges can leave different SHAs for overlapping content; counts are not counts of missing features. No other development branches were pushed or merged by this documentation task.
 
-Formal usage instructions describe mainline behavior. Unmerged work is recorded here and must be reassessed after integration. [PR #100](https://github.com/yuanbw2025/storyforge/pull/100) was open at the snapshot; its latest status and final checks govern future decisions.
+[PR #100](https://github.com/yuanbw2025/storyforge/pull/100) merged on October 4. The flagship and render-cost branch heads are now contained in main; several older revision branches are patch-equivalent. Their delivered behavior is documented in [Text adventure](/en/features/interactive/text-adventure) and the [Changelog](/en/updates/changelog). The particular Tidal Bell Isles work remains a local unpublished playtest, not a built-in distributed release.
 
 | Local branch | Commits outside main | Local-only commits | Content and disposition |
 | --- | ---: | ---: | --- |
 | `codex/backup-text-open-world-before-main-sync-20260906-3f38495f` | 45 | 45 | Historical open-world backup; 43 patches match main. Review remaining changes individually; do not merge blindly. |
 | `codex/backup-text-open-world-pre-main-rebase-20260906` | 38 | 38 | Pre-rebase open-world backup; same head as the product-architecture branch. Old SHAs alone do not prove missing functionality. |
 | `feat/application-dossier` | 1 | 1 | AVG frozen-world media reuse; identical commit to fix/avg-production-world-media-reuse. Later implementation equivalence needs review. |
-| `feat/builtin-3d-adventure` | 9 | 9 | Tidemark (潮痕：最后一盏灯), Aphelion (远日点：第七码头), and a short rescue episode, independent saves and display controls; local commits not pushed. |
+| `feat/builtin-3d-adventure` | 9 | 9 | Tidemark, Aphelion, and a short rescue episode, independent saves and display controls; local commits not pushed. |
 | `feat/game-product-production-lanes` | 4 | 4 | Game-product lifecycle, production responsibilities, and charter knowledge-base routing; four documentation commits not pushed. |
 | `feat/independent-creation-integration` | 2 | 2 | Only distinct merge commits; no file delta against the merge base. Not a new feature. |
 | `feat/mist-harbor-builtin` | 1 | 1 | Fog Harbor AVG sound, music, and recording copy; one local commit beyond its remote branch. |
 | `feat/public-product-presentation` | 53 | 53 | Historical open-world production branch; 45 patches match main. Remaining source/rules/protagonist/story changes need comparison with later implementations. |
-| `feat/text-adventure-content-revision` | 9 | 1 | Story/cast revisions; the local-only patch is equivalent to PR #100. Track with that PR. |
-| `feat/text-adventure-first-community-flagship` | 43 | 0 | PR #100 pushed, not merged: unpublished Tidal Bell Isles playtest, cover/details, local revisions, recovery, and player guidance. Engineering and work publication require separate acceptance. |
-| `feat/text-adventure-scene-plan-revision` | 22 | 12 | Twelve local-only patches match PR #100; do not count scene, route, and visual revisions twice. |
+| `feat/text-adventure-content-revision` | 1 | 1 | The distinct story/cast revision patch now matches main. Retain its historical identity without counting it as undelivered functionality. |
+| `feat/text-adventure-scene-plan-revision` | 12 | 12 | All 12 local-only patches now match main. Scene, route, and visual revisions shipped through PR #100; historical commits remain. |
 | `feat/text-open-world-product-architecture` | 38 | 38 | Historical open-world architecture/gameplay, same head as the pre-rebase backup; partly equivalent, partly requiring manual review. |
 | `fix/avg-production-world-media-reuse` | 1 | 1 | Same commit as feat/application-dossier; retain frozen-media reuse as a review item. |
 | `fix/home-layout-font-preview` | 3 | 3 | Home/sidebar layout and power settings consolidated under world origin; local only. Current-main guides retain current entries. |
-| `fix/open-world-player-render-cost` | 26 | 0 | Head is contained in PR #100; travel-effect validation indexing and related adventure revisions are tracked there. |
 | `fix/readme-community-links` | 1 | 1 | Distinct merge commit; no new community capability claimed. Historical merge differences need maintainer review. |
-| `fix/text-adventure-repair-baseline` | 11 | 1 | Local-only fix matches PR #100: invalidate repair baselines after upstream changes. |
-| `fix/text-adventure-source-depth` | 1 | 1 | Specialist tasks read selected sources; related later implementation exists in PR #100, but patch IDs differ. Review before disposition. |
+| `fix/text-adventure-repair-baseline` | 1 | 1 | The distinct fix matches main. Repair-baseline invalidation after upstream changes is delivered, not a missing feature. |
+| `fix/text-adventure-source-depth` | 1 | 1 | Main contains later specialist-source reading work, but this older patch has a different patch ID. Retain a delta review item without claiming the capability is missing. |
 | `refactor/storyforge-bronze-ui` | 3 | 0 | Bronze UI branch pushed but unmerged; a historical alternative, not a replacement for current-main instructions. |
 | `refactor/storyforge-ui-rebuild` | 5 | 5 | Early UI rebuild and handoff, local only; overlaps later mainline UI and needs a unique-delta review. |
 

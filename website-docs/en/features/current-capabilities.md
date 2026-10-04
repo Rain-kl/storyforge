@@ -1,6 +1,6 @@
 # Current capabilities and maturity
 
-> Checked October 4, 2026 · main baseline: 0108ab31. Tagged releases, current main, and live deployments may differ; see [version compatibility](/en/updates/compatibility).
+> Checked October 4, 2026 · main baseline: dd253f85. Tagged releases, current main, and live deployments may differ; see [version compatibility](/en/updates/compatibility).
 
 “Released” follows the product catalog: the declared main workflow is available. It does not announce a new semantic version or guarantee model quality. “Preview” has usable implementation but still needs complete-experience validation. “Experimental” is not an everyday-use commitment.
 
@@ -32,6 +32,6 @@
 - World/work references have explicit versions; later changes do not automatically synchronize everywhere.
 - There is no promise that AI never forgets, works never contradict themselves, or commercial-ready results are automatic.
 
-Engineering evidence: [Product catalog](https://github.com/yuanbw2025/storyforge/blob/0108ab31/src/lib/product/product-catalog.ts) · [Capability baseline](https://github.com/yuanbw2025/storyforge/blob/0108ab31/docs/roadmap/CAPABILITY-BASELINE.md).
+Engineering evidence: [Product catalog](https://github.com/yuanbw2025/storyforge/blob/dd253f85/src/lib/product/product-catalog.ts) · [Capability baseline](https://github.com/yuanbw2025/storyforge/blob/dd253f85/docs/roadmap/CAPABILITY-BASELINE.md).
 
 All local branches were also inspected. [Pending development](/en/updates/development-status) separates unmerged work, local-only changes, and historical changes whose equivalence still needs review; these are not counted as delivered mainline capabilities above.
