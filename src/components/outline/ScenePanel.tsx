@@ -73,6 +73,7 @@ export default function ScenePanel({ project, outlineNodeId, chapterTitle, chapt
     ai,
     enhanceAI,
     isRecovering,
+    finalizingOperation,
     pendingCandidate,
     generateScenes,
     generateEnhanced,
@@ -188,7 +189,7 @@ export default function ScenePanel({ project, outlineNodeId, chapterTitle, chapt
           <Plus className="w-3.5 h-3.5" />
         </span>
         <span onClick={e => { e.stopPropagation(); handleAIGenerate() }}
-          className={`p-1 text-text-muted hover:text-accent rounded ${isRecovering || ai.isStreaming || enhanceAI.isStreaming || pendingCandidate ? 'opacity-50 pointer-events-none' : ''}`}
+          className={`p-1 text-text-muted hover:text-accent rounded ${isRecovering || finalizingOperation || ai.isStreaming || enhanceAI.isStreaming || pendingCandidate ? 'opacity-50 pointer-events-none' : ''}`}
           title="AI 一键拆场景">
           <Sparkles className="w-3.5 h-3.5" />
         </span>
@@ -230,18 +231,20 @@ export default function ScenePanel({ project, outlineNodeId, chapterTitle, chapt
           {(ai.output || ai.isStreaming || ai.error) && (
             <div>
               <AIStreamOutput
-                output={ai.output} isStreaming={ai.isStreaming} error={ai.error} tokenUsage={ai.tokenUsage}
-                editable
+                output={ai.output} isStreaming={ai.isStreaming} isFinalizing={finalizingOperation === 'scenes' && !ai.isStreaming} error={ai.error} tokenUsage={ai.tokenUsage}
+                editable={pendingCandidate?.candidate.operation === 'scenes'}
                 onStop={ai.stop}
-                onAccept={async (text) => {
+                onAccept={pendingCandidate?.candidate.operation === 'scenes' ? async (text) => {
                   try {
                     if (await acceptCandidate('scenes', text)) toast.success('已采纳场景细纲')
                   } catch (err) {
                     console.error('[ScenePanel] 采纳失败:', err)
                     toast.error(err instanceof Error ? err.message : '采纳场景失败，请重试')
                   }
-                }}
-                onDismiss={() => { void dismissCandidate('scenes') }}
+                } : undefined}
+                onDismiss={pendingCandidate?.candidate.operation === 'scenes'
+                  ? () => { void dismissCandidate('scenes') }
+                  : undefined}
                 onRetry={handleAIGenerate}
               />
               {pendingCandidate?.candidate.operation === 'scenes'
@@ -259,18 +262,21 @@ export default function ScenePanel({ project, outlineNodeId, chapterTitle, chapt
               <AIStreamOutput
                 output={enhanceAI.output}
                 isStreaming={enhanceAI.isStreaming}
+                isFinalizing={finalizingOperation === 'enhanced' && !enhanceAI.isStreaming}
                 error={enhanceAI.error}
                 tokenUsage={enhanceAI.tokenUsage}
-                editable
+                editable={pendingCandidate?.candidate.operation === 'enhanced'}
                 onStop={enhanceAI.stop}
-                onAccept={async text => {
+                onAccept={pendingCandidate?.candidate.operation === 'enhanced' ? async text => {
                   try {
                     if (await acceptCandidate('enhanced', text)) toast.success('已采纳增强细纲')
                   } catch (error) {
                     toast.error(error instanceof Error ? error.message : '采纳增强细纲失败，请重试')
                   }
-                }}
-                onDismiss={() => { void dismissCandidate('enhanced') }}
+                } : undefined}
+                onDismiss={pendingCandidate?.candidate.operation === 'enhanced'
+                  ? () => { void dismissCandidate('enhanced') }
+                  : undefined}
                 onRetry={handleEnhancedGenerate}
               />
               {pendingCandidate?.candidate.operation === 'enhanced'

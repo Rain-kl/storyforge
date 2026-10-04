@@ -89,6 +89,7 @@ export function useDetailedOutlineGenerationController(
   const restoreDetail = ai.restore
   const restoreEnhanced = enhanceAI.restore
   const [pendingCandidate, setPendingCandidate] = useState<PendingDetailedOutlineCandidate | null>(null)
+  const [finalizingOperation, setFinalizingOperation] = useState<DetailedOutlineGenerationOperationV1 | null>(null)
   const recoveryTargetKey = !suspendRecovery && selectedOutlineNodeId != null
     ? `${projectId}:${selectedOutlineNodeId}`
     : null
@@ -177,7 +178,9 @@ export function useDetailedOutlineGenerationController(
 
   const run = useCallback(async (operation: DetailedOutlineGenerationOperationV1) => {
     const outlineNodeId = selectedOutlineNodeId
-    if (outlineNodeId == null || isRecovering || pendingCandidate) return
+    if (outlineNodeId == null || isRecovering || pendingCandidate || finalizingOperation) return
+    setFinalizingOperation(operation)
+    try {
     await flushPendingEditsV1()
     const scope = await resolveScopeLike(projectId)
     const contentRevision = await captureWorkspaceContentRevisionV1({ scope, worldGroupId })
@@ -275,6 +278,9 @@ export function useDetailedOutlineGenerationController(
     const persisted = await persistDetailedOutlineGenerationCandidateV1({ scope, candidate })
     snapshot = await recordDetailedOutlineGenerationCandidateV1({ scope, snapshot, candidate })
     setPendingCandidate({ candidate, eventId: persisted.event.id! })
+    } finally {
+      setFinalizingOperation(null)
+    }
   }, [
     ai,
     buildDetailContext,
@@ -289,6 +295,7 @@ export function useDetailedOutlineGenerationController(
     worldGroupId,
     isRecovering,
     pendingCandidate,
+    finalizingOperation,
   ])
 
   const acceptCandidate = useCallback(async (
@@ -411,6 +418,7 @@ export function useDetailedOutlineGenerationController(
     ai,
     enhanceAI,
     isRecovering,
+    finalizingOperation,
     pendingCandidate,
     buildDetailContext,
     adoptDetailedPatch,
