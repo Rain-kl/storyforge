@@ -1,7 +1,7 @@
 ---
 productId: independent.longform
 status: released
-lastVerified: 2026-09-20
+lastVerified: 2026-10-04
 ---
 # Step-by-step longform
 
@@ -35,6 +35,21 @@ Entry: “Longform → Library → New longform” (长篇 → 作品库 → 新
 | Versions and export | History, prose, and backups | Milestones and before changing devices |
 
 Use these areas as needed. A short realistic scene does not require a power system; a single-world story does not need multi-world mode.
+
+## Choose what to write now
+
+Start from a minimal confirmed idea, or work only on a selected volume, chapter, prose passage, or character field. Tell the companion your scope—for example, “only add the character's motivation” or “write chapter three first; do not change the world.” Review the plan before confirming. Completing every setting first is not required.
+
+Candidates can be read, edited, discussed further, or explicitly declined. Declining optional work should not force you to complete it. If optional post-adoption organization fails, adopted prose remains saved and the follow-up can be recovered separately where offered. Library word counts reflect saved prose; generated drafts are not saved word counts.
+
+## Luniang (炉娘) and voice
+
+The writing companion is now named Luniang (炉娘). Open Assistant and voice settings (助手与语音设置) to adjust visibility, portrait, and voice modes.
+
+- Recognized speech enters an editable input box. Review it before sending; speech does not automatically execute plans or adopt candidates.
+- Choose browser recognition or configure a transcription service. Service recordings are limited to 60 seconds and are not stored in the work. Browser recognition may process audio online through the browser vendor.
+- Read visible replies or the beginning of prose aloud, up to 2,000 characters per manual request. Automatic reading is off by default; when enabled, it reads up to 400 characters from new replies. Stop at any time; starting speech input also stops playback.
+- External transcription or speech services receive the relevant audio or text and may charge fees. Browser support varies; do not assume everything runs offline.
 
 ## How AI connects to earlier content
 

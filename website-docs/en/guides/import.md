@@ -30,3 +30,9 @@ For adaptation, preserve source provenance. Do not modify source records merely 
 ## Older backups
 
 Import validates backup versions and does not accept arbitrary old formats. Preserve the original backup and runtime environment; read [upgrade and compatibility](/en/updates/compatibility). Do not manually change JSON version numbers to bypass validation.
+
+## When some analysis chunks fail
+
+Retry failed chunks (重试失败块) retries failures and continues unprocessed chunks without writing successful chunks again. Explicit recovery renews the bounded attempt allowance for failed chunks that exhausted it.
+
+Only a clearly retryable HTTP 503 busy-service response is retried automatically, with at most three attempts per chunk. Incomplete JSON, authorization problems, and unknown outcomes stop processing and preserve the failure state. Check model logs and configuration before choosing a manual retry. Partial extraction is not complete success.

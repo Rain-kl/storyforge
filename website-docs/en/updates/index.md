@@ -6,3 +6,5 @@
 - [Archive](/en/archive/): historical WPS overviews, feature records, and cost notes.
 
 The changelog explains what changed and when; current product guides describe operations.
+
+- [Pending development](/en/updates/development-status): inspected local branches, unpushed or unmerged work, and uncommitted changes.

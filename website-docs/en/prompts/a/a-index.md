@@ -7,6 +7,20 @@ Translated from the original Word asset's Chinese Markdown migration. This is a 
 
 This index collects directly usable Prompts for fiction stages and routes for longform, short fiction, serials, and genres. The core system contains three method documents, 30 stage/genre documents, and 118 directly usable Prompt units.
 
+## Forge Writing Workshop: start with one concrete problem
+
+The application also includes 28 original workshop templates for drafting, local revision, and reducing mechanical prose. Open the Prompt library, select the Forge Writing Workshop (熔炉写作工坊) scope, or search for “续写”, “对白”, or “去ai味”. New templates are inactive by default and leave existing selections unchanged.
+
+- Only an idea: choose Start from one sentence (一句话起步); full character sheets and worldbuilding are not required.
+- Ready to draft: choose Scene card (场景卡) or Write prose from a scene (按场景写正文), supplying the goal and stopping point.
+- Mechanical style: diagnose with 去 AI 味体检, then choose faithful light revision, sentence groups, details, or dialogue as needed. You do not need every template.
+- Finished a chapter: use Accurate handoff (准确交接), checking character knowledge and actual events before continuing.
+- Preparing to publish: use blind-read checks and title/blurb tools, checking for inflated story promises.
+
+In a workflow node, choose the relevant Prompt module and select its name under This node's template (本节点模板), then supply materials. When connecting upstream output, bind the target variable to `text`. These templates process explicitly provided materials; they do not automatically read the entire work. Node hints can add style, protected facts, and length requirements.
+
+The four “去 AI 味·” templates can also be activated for the prose tool. They return only revised prose; diagnostic and style-analysis templates return reports and should run separately in workflows. Clone a template into My templates before customizing it. Reducing mechanical prose means improving expression, not evading AI detection or replacing the author's voice.
+
 ## 1. Read first
 
 1. [Master blueprint: fiction stages and Prompt system](/en/prompts/a/a-1)

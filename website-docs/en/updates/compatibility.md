@@ -2,7 +2,7 @@
 
 ## Which version these docs describe
 
-These instructions were checked against **main baseline 58892a5b on September 20, 2026**. The package version remains **3.9.1**, but main includes features and UI changes added after the formal v3.9.1 release.
+These instructions were checked against **main baseline 0108ab31 on October 4, 2026**. The package version remains **3.9.1**, but main includes features and UI changes added after the formal v3.9.1 release.
 
 Two builds both labeled 3.9.1 need not contain identical code. Include the build commit, address, and date when reporting issues.
 
@@ -35,3 +35,5 @@ Do not alter backup version numbers, delete validation fields, or clear the orig
 Reverting source or opening an old release does not guarantee the old program can read newer data. Original pre-upgrade backups and a separate environment provide the recovery basis.
 
 Continue: [Backup and recovery](/en/guides/backup-restore) · [Changelog](/en/updates/changelog).
+
+Implemented on a branch, merged into remote main, and successfully deployed are three separate states. [Pending development](/en/updates/development-status) records work not yet delivered. A documentation review date is not a product release date.

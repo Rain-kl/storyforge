@@ -13,7 +13,7 @@ description: 从选择产品到创作、改编、备份和交付的 StoryForge �
 
 StoryForge 是开源、本地优先的叙事创作与体验工具。你可以写小说、改编剧本与漫画、准备漫剧材料，或建立世界并试用互动产品。
 
-> 本轮指南核对至 2026-09-20 的 main 基线。固定 Release 与在线部署可能不同，先看[当前能力状态](/features/current-capabilities)和[版本说明](/updates/compatibility)。
+> 本轮指南核对至 2026-10-04 的 main 基线。固定 Release 与在线部署可能不同，先看[当前能力状态](/features/current-capabilities)和[版本说明](/updates/compatibility)。
 
 ## 第一次使用
 

@@ -34,3 +34,11 @@ After moving or editing chapters, check order, prose correspondence, foreshadowi
 Formal AI results usually require candidate confirmation. The end of streaming only means generation ended; adoption determines whether content became official. If a result fails or becomes stale, preserve usable text and read the reason first.
 
 Details: [AI candidates and recovery](/en/guides/ai-workflow) · [Export and delivery](/en/guides/export).
+
+## Saving, dragging, and switching chapters
+
+Work-information and story-core editors preserve the current draft; use the displayed save action and verify persisted content. Dragging a chapter near a list edge scrolls the list. Check ownership after moving between volumes. When switching chapters quickly, generation status and recoverable candidates should match the current target, not the previous chapter.
+
+Read streaming output progressively. Edit prose candidates before adoption while retaining revision evidence. Generation, adoption, and persistence are separate states; check the save acknowledgment before leaving or refreshing.
+
+The October 4 mainline fix corrects cases where existing material was incorrectly reported as a missing mandatory resource, and reduces false conflicts between events that can coexist. Actual missing information and conflicting states still require attention; do not delete facts to bypass a block.

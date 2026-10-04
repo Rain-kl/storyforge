@@ -14,6 +14,14 @@ A TTRPG community-preview work with AI hosting, investigation, companions, secre
 
 Public online multiplayer is not deployed. The work's tabletop is not a live public multiplayer platform.
 
+## Salt Ridge: Night of the Cutoff (盐脊：断流之夜)
+
+Open Text open world → “先试玩《盐脊：断流之夜》”. No workspace selection or model configuration is required. The first start creates an independent release and save; continue from your own progress afterward.
+
+This is a built-in open-world showcase on main. It demonstrates exploration, quests, and endings in prepared content, not completion of all real-model and human acceptance for general production. For your own work, follow [Text open world production](/en/features/interactive/open-world).
+
+Other built-in works still on local branches, and the Tidal Bell Isles playtest, are listed in [Pending development](/en/updates/development-status). They are not part of the current mainline built-in catalog.
+
 ## Creative-product examples
 
 Libraries for short fiction, screenplays, comics, and other products offer examples. Inspect output structure, review evidence, and delivery formats. To edit, use an independent experience copy offered by the interface or your own work; confirm the current object first.
