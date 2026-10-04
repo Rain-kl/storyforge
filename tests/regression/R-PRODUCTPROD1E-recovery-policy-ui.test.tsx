@@ -25,6 +25,8 @@ const serviceMocks = vi.hoisted(() => ({
     | 'author-charged-reservation-upper-bound'
     | null
   > => null),
+  progressBarrier: null as Promise<void> | null,
+  readProgressCompleted: vi.fn(),
 }))
 
 vi.mock('../../src/lib/product-production/service', async importOriginal => {
@@ -33,6 +35,12 @@ vi.mock('../../src/lib/product-production/service', async importOriginal => {
     ...actual,
     setProductProductionPausedV1: serviceMocks.setPaused,
     retryProductProductionBlockerV1: serviceMocks.retryBlocker,
+    readProductProductionProgressV1: async (...args: Parameters<typeof actual.readProductProductionProgressV1>) => {
+      if (serviceMocks.progressBarrier) await serviceMocks.progressBarrier
+      const result = await actual.readProductProductionProgressV1(...args)
+      serviceMocks.readProgressCompleted()
+      return result
+    },
   }
 })
 
@@ -243,6 +251,8 @@ describe('PRODUCT-PROD-1E · recovery policy UI', () => {
   beforeEach(async () => {
     serviceMocks.setPaused.mockClear()
     serviceMocks.retryBlocker.mockClear()
+    serviceMocks.progressBarrier = null
+    serviceMocks.readProgressCompleted.mockClear()
     localStorage.clear()
     await db.delete()
     await db.open()
@@ -257,6 +267,37 @@ describe('PRODUCT-PROD-1E · recovery policy UI', () => {
   })
 
   afterAll(() => db.close())
+
+  it('首次异步补齐进度不会清空作者已经输入的任务修订稿', async () => {
+    const f = await seedTextAdventureMediaRevisionWorkbenchV1('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8WgWQAAAABJRU5ErkJggg==')
+    await db.productBuilds.update(f.parentBuildId, {
+      status: 'recovery-required',
+      failureJson: JSON.stringify({
+        taskKey: 'content.quest-script.main.act-2.single',
+        code: 'task-executor-failed',
+        detail: '结算文案偏离冻结目标',
+      }),
+    })
+    await db.productProductions.update(f.productionId, { status: 'producing' })
+    let releaseProgress!: () => void
+    serviceMocks.progressBarrier = new Promise<void>(resolve => { releaseProgress = resolve })
+    await act(async () => root.render(createElement(ProductProductionStudio, {
+      scope: f.scope, initialProductionId: f.productionId,
+      initialProduct: 'text-adventure', allowedProducts: ['text-adventure'],
+    })))
+    await waitFor(() => expect(textarea(host, '作者修订的完整任务 JSON')).toBeTruthy())
+    const draft = '{"schema":"author-quest-candidate","source":"author"}'
+    await setTextareaValue(textarea(host, '作者修订的完整任务 JSON')!, draft)
+    releaseProgress()
+    await waitFor(() => {
+      expect(serviceMocks.readProgressCompleted).toHaveBeenCalled()
+      expect(textarea(host, '作者修订的完整任务 JSON')?.value).toBe(draft)
+    })
+    await act(async () => button(host, '修正后继续制作').click())
+    await waitFor(() => expect(serviceMocks.retryBlocker).toHaveBeenCalledWith(expect.objectContaining({
+      authorDraftJson: draft,
+    })))
+  })
 
   it.each(['content.quest-script.main.act-2.single', 'content.quest-script.supplemental', 'content.dialogue-pass.act-2'])('%s 失败后可提交完整修订稿，错误Skill身份不能获得修订权', async taskKey => {
     const f = await seedTextAdventureMediaRevisionWorkbenchV1('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X8WgWQAAAABJRU5ErkJggg==')

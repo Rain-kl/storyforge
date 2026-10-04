@@ -696,13 +696,34 @@ export default function ProductProductionStudio(props: {
   const [unknownResultDisposition, setUnknownResultDisposition] = useState<
     '' | 'confirmed-not-charged' | 'charge-reservation-upper-bound'
   >('')
+  const recoveryDraftScopeRef = useRef<{ productionId: number | null; controlEpoch: number | null }>({
+    productionId: null,
+    controlEpoch: null,
+  })
+  const recoveryDraftControlEpoch = progress?.productionId === selectedProductionId
+    ? progress.controlEpoch
+    : details?.production.id === selectedProductionId
+      ? details.build?.controlEpoch ?? null
+      : null
   useEffect(() => {
+    const previous = recoveryDraftScopeRef.current
+    const productionChanged = previous.productionId !== selectedProductionId
+    const controlEpochChanged = !productionChanged
+      && previous.controlEpoch != null
+      && recoveryDraftControlEpoch != null
+      && previous.controlEpoch !== recoveryDraftControlEpoch
+    recoveryDraftScopeRef.current = {
+      productionId: selectedProductionId,
+      controlEpoch: recoveryDraftControlEpoch
+        ?? (productionChanged ? null : previous.controlEpoch),
+    }
+    if (!productionChanged && !controlEpochChanged) return
     setTaskEvidence(null)
     setRepairNote('')
     setAuthorDraftJson('')
     setContentRevision(null)
     setUnknownResultDisposition('')
-  }, [selectedProductionId, progress?.controlEpoch])
+  }, [recoveryDraftControlEpoch, selectedProductionId])
   const [performanceGate, setPerformanceGate] = useState<VerifiedProductBrowserPerformanceGateV1 | null>(null)
   const [performanceGateError, setPerformanceGateError] = useState('')
   const [performanceLabRunning, setPerformanceLabRunning] = useState(false)
