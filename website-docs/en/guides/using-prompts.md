@@ -25,3 +25,11 @@ Preserve required constraints, steps, output formats, and strength of meaning. I
 Before processing prose or private settings, confirm the provider and privacy scope.
 
 Continue: [Full library](/en/prompts/) · [AI workflow](/en/guides/ai-workflow).
+
+## In-app Forge Writing Workshop
+
+Prompt library → Scope → Forge Writing Workshop (熔炉写作工坊) offers 28 original templates. Search for continuation, dialogue, or reducing mechanical prose. New templates are inactive by default and do not replace existing choices.
+
+Workflow nodes can select a template under This node's template (本节点模板). Supply materials explicitly; when an upstream output supplies prose material, bind the target variable to `text`. Use Hints for AI (给 AI 的提示) for style, protected facts, and length. Workshop templates do not automatically read the whole work.
+
+Diagnose first, then choose a targeted revision. The four “去 AI 味·” prose templates can be activated for the prose tool; diagnostic and style reports belong in separate workflow runs. Check short original-text evidence in Accurate handoff (准确交接); do not promote speculation into established fact. See [Workshop instructions and index](/en/prompts/a/a-index).

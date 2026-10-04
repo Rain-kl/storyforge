@@ -189,6 +189,7 @@ const zhSidebar = [
     items: [
       { text: '项目动态概览', link: '/updates/' },
       { text: '更新日志', link: '/updates/changelog' },
+      { text: '待合并开发记录', link: '/updates/development-status' },
       { text: '版本、升级与兼容', link: '/updates/compatibility' },
     ],
   },

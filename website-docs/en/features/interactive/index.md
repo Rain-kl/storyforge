@@ -1,6 +1,6 @@
 # Interactive products: produce, then play
 
-These products reference definite world versions and own their production workflows, assets, and saves. All are currently previews; general-purpose text-adventure and text-open-world interfaces remain in development.
+These products own their production workflows, assets, and saves, and all remain previews. They usually reference definite world versions; text open world also accepts an explicitly selected novel range through its own production flow.
 
 | Product | Experience | Main current limitation |
 | --- | --- | --- |
@@ -8,8 +8,8 @@ These products reference definite world versions and own their production workfl
 | [Character chat](/en/features/interactive/character-chat) | Conversations with defined characters, relationships, and memory | Primarily text; long-term results remain under validation |
 | [AI town](/en/features/interactive/ai-town) | Residents' lives and relationships after an ending | Long-term model behavior, assets, and performance need testing |
 | [AVG](/en/features/interactive/avg) | Branching narrative, backgrounds, sprites, and audio presentation | Literary and audiovisual quality require per-work acceptance |
-| [Text adventure](/en/features/interactive/text-adventure) | Actions, resources, quests, and endings | General-purpose production UI remains in development |
-| [Text open world](/en/features/interactive/open-world) | Regional exploration and evolving quests | Long-term evolution and the complete experience are still being built |
+| [Text adventure](/en/features/interactive/text-adventure) | Actions, resources, quests, and endings | Professional production is connected; real-model and human acceptance remain |
+| [Text open world](/en/features/interactive/open-world) | Regional exploration and evolving quests | Production and player UI are connected; real-provider calibration and human acceptance remain |
 
 ## Shared flow
 
@@ -21,3 +21,5 @@ These products reference definite world versions and own their production workfl
 Saving a direction draft does not mean formal production requirements are satisfied. Play state and character memories do not automatically write back to the shared world.
 
 To try a prepared result first, see [Built-in works and examples](/en/guides/examples).
+
+For a novel source, follow the dedicated [text open world production guide](/en/features/interactive/open-world) to select and freeze the range. Converting the novel to a shared world first is not required; original-work ownership is preserved.

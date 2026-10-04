@@ -1,7 +1,7 @@
 ---
 productId: authoring.nodes
 status: preview
-lastVerified: 2026-09-20
+lastVerified: 2026-10-04
 ---
 # Node authoring
 
@@ -30,3 +30,7 @@ Official nodes reuse longform capabilities, works, and memory. Experimental-node
 A connected graph does not guarantee semantic correctness. The preview canvas is not a second independent work database. Correct invalid connections, stale inputs, or missing permissions as prompted before execution.
 
 Continue: [AI candidates and recovery](/en/guides/ai-workflow).
+
+## Select a specific node template
+
+Choose a template under This node's template (本节点模板), then inspect material bindings and node hints. Use the in-app [Forge Writing Workshop](/en/guides/using-prompts) diagnostic, prose, and handoff templates separately. Specify variables when connecting upstream material; a connection alone does not supply missing inputs.
