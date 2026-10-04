@@ -151,8 +151,8 @@ export function compileTextAdventureInteractionV1(input: {
       const participantKey = participantByCharacter.get(characterKey)
       return participantKey ? [participantKey] : []
     }) ?? []
-    const participantKeys = [...new Set(castParticipants.length
-      ? castParticipants : profiles.slice(sceneIndex % profiles.length, sceneIndex % profiles.length + 1).map(profile => profile.participantKey))]
+    // An empty scene cast means solitude, not permission to invent an NPC.
+    const participantKeys = [...new Set(castParticipants)]
     const outgoing = outgoingByNode.get(node.key) ?? []
     const endingNode = outgoing.map(choice => endings.find(ending => ending.key === choice.targetNodeKey)).find(Boolean)
     const relationshipRules = participantKeys.flatMap((participantKey, participantIndex) => {
@@ -380,8 +380,8 @@ export function compileTextAdventureModuleV2(
       const useAlternative = objective.alternatives.find(alternative => alternative.actionKind === 'use')
       items.push({
         key: questItemKey,
-        title: `${objective.title}所需物`,
-        description: `用于“${objective.title}”的任务物品；取得、使用与交付都由确定性事件记录。`,
+        title: `任务物品 · ${objective.title}`,
+        description: `用于“${objective.title}”。收集后可在背包中查看，或用于对应的任务行动。`,
         tags: ['quest', `objective:${objective.key}`],
         stackable: false,
         consumable: false,
@@ -394,7 +394,7 @@ export function compileTextAdventureModuleV2(
         key: `object.main.${objective.key}`,
         locationKey: scene.locationKey,
         sceneKey: scene.key,
-        title: `${objective.title}所需物`,
+        title: `任务物品 · ${objective.title}`,
         description: `完成“${objective.title}”前可以取得的任务物品。`,
         tags: ['quest', `objective:${objective.key}`],
       })
@@ -402,7 +402,7 @@ export function compileTextAdventureModuleV2(
         registerAction({
           key: `action.prepare.${objective.key}`,
           kind: 'take',
-          label: `取得：${objective.title}所需物`,
+          label: '收集任务物品',
           description: `先把完成“${objective.title}”所需的物品收入背包。`,
           locationKey: scene.locationKey,
           targetKey: `object.main.${objective.key}`,
@@ -420,9 +420,9 @@ export function compileTextAdventureModuleV2(
             claimKey: `claim.main.${objective.key}`,
           }],
           costlySuccessEffects: [], failureEffects: [],
-          successText: `你取得了${objective.title}所需物，并把它妥善放进背包。`,
-          costlySuccessText: `你付出代价后取得了${objective.title}所需物。`,
-          failureText: `你暂时无法取得${objective.title}所需物。`,
+          successText: `你把“${objective.title}”需要的任务物品收进背包。`,
+          costlySuccessText: `你付出代价，取得了“${objective.title}”需要的任务物品。`,
+          failureText: `你暂时无法取得“${objective.title}”需要的任务物品。`,
           unavailableText: '该任务物品已经取得、目标尚未开放，或你不在对应场景。',
           repeatable: false, narrativeChoiceKey: null, interaction: null,
         }, scene.key)
@@ -727,7 +727,7 @@ export function compileTextAdventureModuleV2(
         if (useItemKey) {
           items.push({
             key: useItemKey,
-            title: `${entry.title} · ${stage.title}所需物`,
+            title: `任务物品 · ${stage.title}`,
             description: `用于完成“${stage.objective}”的任务物品。`,
             tags: ['quest', bundle.bundleKind, `stage:${stage.key}`],
             stackable: false,
@@ -742,7 +742,7 @@ export function compileTextAdventureModuleV2(
             key: objectKey,
             locationKey: location.key,
             sceneKey: firstSceneForLocation.get(location.key) ?? null,
-            title: `${entry.title} · ${stage.title}所需物`,
+            title: `任务物品 · ${stage.title}`,
             description: `完成“${stage.objective}”前可以取得的任务物品。`,
             tags: ['quest', bundle.bundleKind, `stage:${stage.key}`],
           })
@@ -750,7 +750,7 @@ export function compileTextAdventureModuleV2(
           registerAction({
             key: prepareActionKey,
             kind: 'take',
-            label: `取得：${entry.title} · ${stage.title}所需物`,
+            label: '收集任务物品',
             description: `把完成“${stage.objective}”所需的物品收入背包。`,
             locationKey: location.key,
             targetKey: objectKey,
@@ -876,7 +876,9 @@ export function compileTextAdventureModuleV2(
   if (interactionScene && interactionRule && authoredInteractionProfile) registerAction({
     key: 'action.talk.opening', kind: 'talk', label: `交谈：${authoredInteractionProfile.name}`,
     description: '在冻结角色事实和知识边界内推进关系与当前目标。', locationKey: entryLocationKey,
-    targetKey: null, requirements: [], rule: { kind: 'automatic' },
+    targetKey: null, requirements: [{
+      narrativePath: '__storyforge.currentNarrativeNodeKey', narrativeEquals: interactionScene.openingNodeKey,
+    }], rule: { kind: 'automatic' },
     successEffects: [{ op: 'change-resource', resourceKey: clock.key, delta: 3 }], costlySuccessEffects: [], failureEffects: [],
     successText: '这段对话留下了可回放的关系与知识证据。', costlySuccessText: '对话推进，但关系付出代价。',
     failureText: '对方暂时拒绝继续。', unavailableText: '当前无法开始这段对话。', repeatable: true,

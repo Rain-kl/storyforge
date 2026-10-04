@@ -28,7 +28,8 @@ test('adventure: real product entry persists across pages', async ({ page }) => 
  for (const [section, heading] of pages) {
   await page.goto(`./adventure/${section}`)
   await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
-  await expect(page.getByText('文字冒险 · 可验证预览', { exact: true })).toBeVisible()
+  if (section === 'vision') await expect(page.getByText('文字冒险 · 可验证预览', { exact: true })).toBeVisible()
+  else await expect(page.getByRole('navigation', { name: '文字冒险导航', exact: true })).toBeVisible()
   await page.reload()
   await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
  }

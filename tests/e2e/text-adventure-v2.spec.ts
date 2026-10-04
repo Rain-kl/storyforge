@@ -80,6 +80,7 @@ test('文字冒险 V2 在浏览器中加载冻结插图、系统面板并在刷�
   await openTextAdventurePage(page, seeded.scope, 'play')
   const player = page.getByTestId('adventure-game-player')
   await expect(player).toBeVisible({ timeout: 15_000 })
+  await player.locator('.adventure-saved-journeys summary').click()
   await player.getByRole('button', { name: /雾潮灯塔 V2 浏览器版/ }).click()
   await expect(player.getByRole('img', { name: '金色月光下的雾潮灯塔剪影。' })).toBeVisible()
   await expect(player).toContainText('雾港 · 内港区')
