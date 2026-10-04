@@ -175,3 +175,25 @@
 .adventure-crossproduct-nav a:hover,.adventure-crossproduct-nav a[aria-current] { color:#e2bd83; }
 .adventure-product-page:has(.adventure-game)>.adventure-crossproduct-nav { display:none; }
 @media (max-width:640px) { .adventure-crossproduct-nav { padding:12px 20px; gap:20px; } }
+
+/* Two independent rows prevent the tools from squeezing the title or wrapping Chinese labels. */
+.adventure-product-page .adventure-gamebar { grid-template-columns:auto minmax(0,1fr) auto; gap:12px 20px; }
+.adventure-product-page .adventure-gamebar>div { min-width:0; }
+.adventure-product-page .adventure-gamebar>div strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.adventure-product-page .adventure-gamebar button,.adventure-product-page .adventure-autosave { flex-shrink:0; white-space:nowrap; }
+.adventure-product-page .adventure-gamebar nav { display:flex; grid-column:1/-1; width:100%; min-width:0; justify-content:flex-start; flex-wrap:wrap; gap:6px; padding-top:10px; border-top:1px solid #ffffff12; }
+.adventure-product-page .adventure-gamebar nav button { padding:0 12px; }
+.adventure-product-page .adventure-console-choices button { text-align:left; }
+.adventure-product-page .adventure-console-choices button>span { flex:1; }
+.adventure-product-page .adventure-choice-reason { display:block; margin-top:8px; color:#c7bda7; font:400 12px/1.7 Inter,"PingFang SC",sans-serif; }
+.adventure-product-page .adventure-console-choices button:disabled { cursor:not-allowed; opacity:.8; }
+.adventure-product-page .adventure-command-suggestions>button { text-align:left; }
+.adventure-product-page .adventure-command-suggestions small { display:block; max-width:320px; margin-top:4px; color:#94aaa1; line-height:1.6; }
+@media (max-width:640px) {
+ .adventure-product-page .adventure-gamebar { gap:10px; }
+ .adventure-product-page .adventure-autosave { display:none; }
+ .adventure-product-page .adventure-gamebar { grid-template-columns:auto minmax(0,1fr); }
+ .adventure-product-page .adventure-gamebar nav { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+ .adventure-product-page .adventure-gamebar nav button { padding:0 10px; }
+ .adventure-product-page .adventure-command-suggestions { max-height:none; overflow:visible; }
+}

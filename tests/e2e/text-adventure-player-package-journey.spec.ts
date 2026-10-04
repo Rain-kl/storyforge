@@ -171,6 +171,19 @@ test('制作页真实下载的文字冒险包可在全新 Work 上传、存档�
   await page.setViewportSize({ width: 1280, height: 900 })
   await player.getByRole('button', { name: '开始新冒险', exact: true }).click()
   await expect(player.getByRole('heading', { name: '封港仓房', exact: true })).toBeVisible()
+  // The reader toolbar must fit independently of the title at intermediate widths too.
+  for (const width of [1280, 980, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    const toolbar = player.getByRole('navigation', { name: '冒险功能' })
+    await expect(toolbar).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
+    expect(await toolbar.getByRole('button').evaluateAll(buttons => buttons.every(button => {
+      const style = getComputedStyle(button)
+      return style.whiteSpace === 'nowrap' && button.getBoundingClientRect().height >= 30
+    }))).toBe(true)
+  }
+  await page.setViewportSize({ width: 1280, height: 900 })
+
   const startedSession = new URL(page.url()).searchParams.get('session')
   expect(startedSession).toBeTruthy()
   await page.reload()

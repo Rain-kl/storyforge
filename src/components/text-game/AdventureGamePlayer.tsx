@@ -120,6 +120,7 @@ function presentationText(value: string | undefined): string {
 
 function friendlyName(title: string | undefined, key: string): string {
   const value = presentationText(title)
+  if (/^(?:item|object)\.(?:main|side)\./u.test(key) && value.endsWith('所需物')) return `任务物品 · ${value.slice(0, -3)}`
   return !value || value.toLowerCase() === key.toLowerCase() ? COMMON_LABELS[key] ?? value ?? key : value
 }
 
@@ -308,9 +309,12 @@ export default function AdventureGamePlayer(props: {
   const skillPointBalance = adventureV2 && adventure
     ? adventure.resources[adventureV2.progression.skillPointResourceKey] ?? 0
     : 0
-  const currentParticipantKeys = useMemo(() => new Set(actions
-    .filter(item => item.action.locationKey === location?.key && item.action.interaction)
-    .map(item => item.action.interaction!.participantKey)), [actions, location?.key])
+  const currentParticipantKeys = useMemo(() => {
+    const scene = manifest?.interaction.sceneTemplates.find(item => item.openingNodeKey === store.runtimeState.narrative?.currentNodeKey)
+    return new Set(scene ? scene.participantKeys : actions
+      .filter(item => item.available && item.action.locationKey === location?.key && item.action.interaction)
+      .map(item => item.action.interaction!.participantKey))
+  }, [actions, location?.key, manifest?.interaction.sceneTemplates, store.runtimeState.narrative?.currentNodeKey])
   const currentProfiles = useMemo(() => {
     const profiles = manifest?.interaction.profiles ?? []
     return profiles.filter(profile => (
@@ -688,13 +692,13 @@ export default function AdventureGamePlayer(props: {
           {!!store.recoverableRunIds.length && <details className="adventure-console-recovery"><summary>恢复未完成的主 Agent 行动</summary><p>候选已经保存在统一 Harness 中，可以从原检查点继续，不会重复调用模型。</p>{store.recoverableRunIds.map(runId => <button key={runId} disabled={store.busy || generating} onClick={() => void run(() => store.resumeRun(runId))}>恢复行动 #{runId}</button>)}</details>}
         </section>
 
-        {!!progressionChoices.length && !store.runtimeState.narrative?.completed && <section className="adventure-console-choices"><small>{progressionChoices.some(choice => narrativeActionByChoice.get(choice.choiceKey)?.available !== false) ? '选择接下来的行动' : '先完成现场探索，继续故事'}</small>{progressionChoices.map(choice => { const action = narrativeActionByChoice.get(choice.choiceKey); return <button key={choice.choiceKey} title={action && !action.available ? presentationText(action.reason) : undefined} disabled={store.busy || narrativeReading || (action != null && !action.available)} onClick={() => void run(() => store.choose(choice.choiceKey))}>{presentationText(choice.text)}<ChevronRight /></button> })}</section>}
-        {!!endingChoices.length && !store.runtimeState.narrative?.completed && <section className="adventure-console-choices"><small>最终抉择已经解锁</small>{endingChoices.map(choice => { const action = narrativeActionByChoice.get(choice.choiceKey); return <button key={choice.choiceKey} title={action && !action.available ? presentationText(action.reason) : undefined} disabled={store.busy || narrativeReading || (action != null && !action.available)} onClick={() => void run(() => store.choose(choice.choiceKey))}>{presentationText(choice.text)}<ChevronRight /></button> })}</section>}
+        {!!progressionChoices.length && !store.runtimeState.narrative?.completed && <section className="adventure-console-choices"><small>{progressionChoices.some(choice => narrativeActionByChoice.get(choice.choiceKey)?.available !== false) ? '选择接下来的行动' : '先完成现场探索，继续故事'}</small>{progressionChoices.map(choice => { const action = narrativeActionByChoice.get(choice.choiceKey); return <button key={choice.choiceKey} title={action && !action.available ? presentationText(action.reason) : undefined} disabled={store.busy || narrativeReading || (action != null && !action.available)} onClick={() => void run(() => store.choose(choice.choiceKey))}><span>{presentationText(choice.text)}{action && !action.available && <small className="adventure-choice-reason">{presentationText(action.reason)}</small>}</span><ChevronRight /></button> })}</section>}
+        {!!endingChoices.length && !store.runtimeState.narrative?.completed && <section className="adventure-console-choices"><small>最终抉择已经解锁</small>{endingChoices.map(choice => { const action = narrativeActionByChoice.get(choice.choiceKey); return <button key={choice.choiceKey} title={action && !action.available ? presentationText(action.reason) : undefined} disabled={store.busy || narrativeReading || (action != null && !action.available)} onClick={() => void run(() => store.choose(choice.choiceKey))}><span>{presentationText(choice.text)}{action && !action.available && <small className="adventure-choice-reason">{presentationText(action.reason)}</small>}</span><ChevronRight /></button> })}</section>}
         {store.runtimeState.narrative?.completed && <section className="adventure-console-ending"><BookOpenCheck /><div><small>冒险结束</small><h2>{store.runtimeState.narrative.nodes.find(item => item.key === store.runtimeState.narrative?.endingKey)?.title}</h2><p>这条时间线已经完整保存。你可以回顾关键决定，或从检查点探索另一种结果。</p></div><span><button onClick={() => setPanel('ending')}><BookOpenCheck />结局因果</button><button onClick={() => setPanel('saves')}><GitBranch />查看时间线</button></span></section>}
 
         {!store.runtimeState.narrative?.completed && <section className={`adventure-command-center${narrativeReading ? ' is-reading' : ''}`} aria-label="冒险指令台" aria-busy={narrativeReading}>
           <header><div><small>{narrativeReading ? '故事正在继续…' : '你要做什么？'}</small><p>{narrativeReading ? '读完当前行动结果后，下一轮指令会重新开放。' : '输入自然语言命令，或选择当前可执行的文字指令。'}</p></div><span>{narrativeReading ? '正在逐句呈现' : aiReady ? '自由表达已连接主 Agent' : '离线确定性模式'}</span></header>
-          <div className="adventure-command-suggestions">{commandSuggestions.map((item, index) => <button key={item.action.key} disabled={store.busy || generating || narrativeReading} title={presentationText(item.action.description)} onClick={() => void executeAction(item.action.key)}><kbd>{index + 1}</kbd>{presentationText(item.action.label)}</button>)}</div>
+          <div className="adventure-command-suggestions">{commandSuggestions.map((item, index) => <button key={item.action.key} disabled={store.busy || generating || narrativeReading} title={presentationText(item.action.description)} onClick={() => void executeAction(item.action.key)}><kbd>{index + 1}</kbd><span>{item.action.key.startsWith('action.prepare.') && item.action.label.endsWith('所需物') ? '收集任务物品' : presentationText(item.action.label)}{(item.action.label.endsWith('所需物') || item.action.label === '收集任务物品') && <small>{presentationText(item.action.description)}</small>}</span></button>)}</div>
           <form onSubmit={(event) => void submitCommand(event)}>
             <span>&gt;</span>
             <input aria-label="输入冒险指令" value={commandText} onChange={event => setCommandText(event.target.value)} onKeyDown={navigateCommandHistory} disabled={store.busy || generating || narrativeReading} autoComplete="off" placeholder={narrativeReading ? '请先读完当前行动结果' : `例如：观察${locationTitle}，或输入“帮助”`} />
