@@ -16,9 +16,11 @@ async function finishNarration(player: Locator) {
 async function chooseVisibleAction(player: Locator, label: string) {
   const action = player.getByRole('button', { name: new RegExp(`${label}$`) }).last()
   const entries = player.locator('.adventure-console-entry')
-  const priorEntryCount = await entries.count()
   await expect(action).toBeVisible()
   await expect(action).toBeEnabled()
+  // A checkpoint fork can still show the old transcript until its actions are
+  // ready. Compare counts within the ready session, never across that switch.
+  const priorEntryCount = await entries.count()
   await action.click()
   await expect.poll(() => entries.count()).toBeGreaterThan(priorEntryCount)
   await finishNarration(player)

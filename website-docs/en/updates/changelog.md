@@ -4,6 +4,15 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### October 3, 2026 · Model proxy settings in deployed builds
+
+- Deployed builds no longer offer the development-server-only local proxy button, preventing accidental use of unavailable proxy endpoints.
+- Semantic retrieval presets use local proxies in development and direct provider endpoints in deployed builds. Direct requests still depend on the provider's cross-origin policy.
+- Saved proxy addresses remain unchanged. Self-hosted proxies can still be configured manually, and direct access can be restored explicitly.
+
+Entry: [Model and API configuration](/en/getting-started/model-config).
+Evidence: [Proxy settings fix](https://github.com/yuanbw2025/storyforge/commit/98f7e8a6).
+
 ### September 18–19, 2026 · Official knowledge base and feedback
 
 - Added an independent VitePress documentation site with Chinese navigation, local search, Prompt materials, and historical archives.

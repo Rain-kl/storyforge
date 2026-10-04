@@ -3135,7 +3135,7 @@ export const AGENT_SKILLS = [
     contextCompression: AI_TOWN_RUNTIME_COMPRESSION_POLICY,
     maxOutputTokens: 2_000,
     writeTargets: [],
-    lastVerifiedAt: '2026-08-17',
+    lastVerifiedAt: '2026-10-03',
     regressionTests: ['R-AITOWN1-runtime'],
   },
   {
