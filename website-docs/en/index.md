@@ -13,7 +13,7 @@ description: Official StoryForge guides for writing, adaptation, backup, and del
 
 StoryForge is an open-source, local-first tool for narrative creation and experiences. Write fiction, adapt screenplays and comics, prepare motion-comic materials, or build worlds and explore interactive products.
 
-> These guides were checked against main on September 20, 2026. Tagged releases and live deployments may differ. See [current capabilities](/en/features/current-capabilities) and [version compatibility](/en/updates/compatibility).
+> These guides were checked against main on October 4, 2026. Tagged releases and live deployments may differ. See [current capabilities](/en/features/current-capabilities) and [version compatibility](/en/updates/compatibility).
 
 ## Getting started
 

@@ -355,29 +355,34 @@ test('世界引擎可生成并预检本地世界分享包，再导入为新编�
   await page.getByRole('navigation',{name:'世界页面导航'}).getByRole('button',{name:'我的世界',exact:true}).click()
   await expect(page.locator('.lf-library-grid').getByRole('heading', { name: '分享包测试世界', exact: true })).toHaveCount(2)
   await expect(page.locator('.lf-library-grid article')).toHaveCount(2)
-  const importedCodeText = await page.locator('.lf-heading small').textContent()
-  const importedWorldCode = importedCodeText?.match(/W-[A-Z0-9]+-[A-Z0-9]+/)?.[0]
+  // The library has no active-world header; read the two rendered entries
+  // instead of racing the outgoing world's heading during navigation.
+  const worldCodes = (await page.locator('.lf-library-grid article small').allTextContents())
+    .map(text => text.match(/W-[A-Z0-9]+-[A-Z0-9]+/)?.[0])
+  expect(worldCodes).toContain(sourceWorldCode)
+  expect(worldCodes.every(Boolean)).toBe(true)
+  expect(new Set(worldCodes).size).toBe(2)
+  const importedWorldCode = worldCodes.find(code => code !== sourceWorldCode)
   expect(importedWorldCode).toBeTruthy()
   expect(importedWorldCode).not.toBe(sourceWorldCode)
   const projects = await page.evaluate(async () => {
     const importer = new Function('path', 'return import(path)') as (path: string) => Promise<any>
     const { db } = await importer('/storyforge/src/lib/db/schema.ts')
     const projects = await db.projects.toArray()
-    return Promise.all(projects.map(async (project: any) => ({
-      id: project.id,
-      name: project.name,
-      origin: project.activeWorldId == null
-        ? null
-        : (await db.worlds.get(project.activeWorldId))?.communityOrigin ?? null,
-    })))
+    return Promise.all(projects.map(async (project: any) => {
+      const world = project.activeWorldId == null ? null : await db.worlds.get(project.activeWorldId)
+      return { id: project.id, name: project.name, code: world?.code, origin: world?.communityOrigin ?? null }
+    }))
   })
   expect(projects).toHaveLength(2)
   expect(projects).toContainEqual(expect.objectContaining({
     name: '分享包测试世界',
+    code: sourceWorldCode,
     origin: null,
   }))
   expect(projects).toContainEqual(expect.objectContaining({
     name: '分享包测试世界（导入）',
+    code: importedWorldCode,
     origin: expect.objectContaining({ sourceWorldCode }),
   }))
 })
@@ -1340,7 +1345,8 @@ test('主 Agent 调度世界领域任务，拒绝零写入并精确采纳可见�
   await copilot.getByRole('button', { name: '讨论与规划', exact: true }).click()
   await copilot.getByRole('button', { name: '确认计划并开始', exact: true }).click()
   await expect(candidate).toContainText(firstCandidate.value)
-  await expect(copilot.getByText(/均衡 · ≈[\d,]+ tokens/)).toBeVisible()
+  await expect(copilot.getByText(/均衡 · 资料 ≈[\d,]+ tokens/)).toBeVisible()
+  await copilot.getByText('质量提示与运行详情', { exact: true }).click()
   await expect(copilot.getByText(/查看本次实际输入证据 · \d+ 个来源/)).toBeVisible()
   await expect(copilot.getByText(/本轮团队预算约 [\d,]+ \/ 160,000 tokens · 2\/7 次调用 · Canon 打回 1\/1/)).toBeVisible()
 
@@ -1455,7 +1461,7 @@ test('故事核心面板通过主 Agent 生成单字段候选，刷新恢复后�
     ...modelCandidate,
     value: '作者确认版：守灯人为找回父亲主动典当的记忆追查潮汐钟，并拒绝让港城继续以遗忘换取安稳。',
   }
-  await candidate.fill(JSON.stringify(edited, null, 2))
+  await candidate.fill(edited.value)
   await page.getByRole('button', { name: '采纳', exact: true }).click()
   await expect(page.getByText(edited.value, { exact: true })).toBeVisible()
   await expect(candidate).toHaveCount(0)
@@ -1793,25 +1799,26 @@ test('分步骤角色面板通过 character.create Skill 生成、恢复并确�
   await expect(page.getByText('角色生成 · 0', { exact: true })).toBeVisible()
 
   const request = page.getByPlaceholder('角色要求（可选）')
-  const candidate = page.getByRole('textbox', { name: '角色候选内容' })
+  const candidate = page.getByRole('textbox', { name: '姓名 · 候选 1', exact: true })
   await request.fill('设计一名守灯钟匠，克制寡言')
   await page.getByRole('button', { name: 'AI 设计角色', exact: true }).click()
-  await expect(candidate).toContainText('模型守灯人')
+  await expect(candidate).toHaveValue('模型守灯人')
   await page.reload()
   await openSidebarLeaf(page, '角色设计', '角色生成')
-  await expect(candidate).toContainText('模型守灯人')
+  await expect(candidate).toHaveValue('模型守灯人')
   await page.getByRole('button', { name: '拒绝', exact: true }).click()
   await expect(page.getByText('角色生成 · 0', { exact: true })).toBeVisible()
 
   await request.fill('重新设计一名守灯钟匠')
   await page.getByRole('button', { name: 'AI 设计角色', exact: true }).click()
-  await expect(candidate).toContainText('模型守灯人')
+  await expect(candidate).toHaveValue('模型守灯人')
   const edited = {
     ...modelCandidate,
     name: '沈砚灯',
     shortDescription: '作者确认的旧港守灯钟匠。',
   }
-  await candidate.fill(JSON.stringify(edited, null, 2))
+  await candidate.fill(edited.name)
+  await page.getByRole('textbox', { name: '简介 · 候选 1', exact: true }).fill(edited.shortDescription)
   await page.getByRole('button', { name: '采纳', exact: true }).click()
 
   await expect(page.getByText('角色生成 · 1', { exact: true })).toBeVisible()
@@ -1894,7 +1901,7 @@ test('已有角色补全通过定向 Skill 恢复候选，确认后只写入所�
   await openSidebarLeaf(page, '角色设计', '角色生成')
   await page.getByPlaceholder('角色要求（可选）').fill('设计一名守灯钟匠')
   await page.getByRole('button', { name: 'AI 设计角色', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: '角色候选内容' })).toContainText('模型守灯人')
+  await expect(page.getByRole('textbox', { name: '姓名 · 候选 1', exact: true })).toHaveValue('模型守灯人')
   await page.getByRole('button', { name: '采纳', exact: true }).click()
   await expect(page.getByText('角色生成 · 1', { exact: true })).toBeVisible()
 
@@ -1996,6 +2003,8 @@ test('主 Agent 调度大纲领域任务，确认可见整批候选后同步到�
   await request.fill('规划全书两卷卷纲')
   await copilot.getByRole('button', { name: '讨论与规划', exact: true }).click()
   await copilot.getByRole('button', { name: '确认计划并开始', exact: true }).click()
+  await expect(copilot.getByRole('textbox', { name: '标题 · 候选 1', exact: true })).toHaveValue('第一卷：退潮')
+  await copilot.getByRole('button', { name: '查看原始结构', exact: true }).click()
   await expect(candidate).toContainText('第一卷：退潮')
   await copilot.getByRole('button', { name: '拒绝', exact: true }).click()
   await expect(page.locator('main').getByText('第一卷：退潮', { exact: true })).toHaveCount(0)
@@ -2007,6 +2016,7 @@ test('主 Agent 调度大纲领域任务，确认可见整批候选后同步到�
     { ...modelCandidate[0], summary: '作者确认版：守灯人发现从海床升起的浮空城。' },
     modelCandidate[1],
   ]
+  await copilot.getByRole('button', { name: '查看原始结构', exact: true }).click()
   await candidate.fill(JSON.stringify(edited, null, 2))
   await copilot.getByRole('button', { name: '采纳', exact: true }).click()
 

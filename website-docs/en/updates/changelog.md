@@ -4,6 +4,85 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### 2026-10-04 · Adventure presentation, local revisions, and large backups
+
+- Connected cover cards, details, start/continue, and saves. Unpublished playtests are labeled, historical versions are grouped under details, and stale Build starts are blocked.
+- Reading includes immersion and accessibility controls, with usable narrow-screen toolbars. Choices show actual missing conditions and scene characters follow the frozen cast list.
+- Added local story, cast, scene, dialogue, and route revisions; improved pause recovery, image replacement, rights declarations, and visual-review dependencies while retaining old Builds and saves.
+- Improved large-project JSON reading/writing and open-world travel-effect validation performance.
+- Engineering delivery for Tidal Bell Isles is separate from publishing the work: its local unpublished playtest, images, and saves do not arrive through Git or a fresh installation.
+
+Guides: [Text adventure](/en/features/interactive/text-adventure) · [Large backups](/en/guides/backup-restore).
+Evidence: [PR #100 mainline integration](https://github.com/yuanbw2025/storyforge/commit/dd253f85).
+
+### 2026-10-04 · Longform context fixes and Luniang naming
+
+- Corrected cases where existing material was incorrectly reported as a missing mandatory resource, blocking outline, detailed-outline, or prose generation.
+- Fact checks distinguish events that can coexist from conflicting single states, retaining real-conflict blocks.
+- Renamed the companion to Luniang (炉娘) across the panel, settings, and portrait descriptions without changing works or voice settings.
+
+Guides: [Longform](/en/features/longform/) · [Outlines and prose](/en/features/longform/writing).
+Evidence: [Context fix](https://github.com/yuanbw2025/storyforge/commit/0c602f2d) · [Companion naming](https://github.com/yuanbw2025/storyforge/commit/db86b01a).
+
+### October 3, 2026 · Model proxy settings in deployed builds
+
+- Deployed builds no longer offer the development-server-only local proxy button, preventing accidental use of unavailable proxy endpoints.
+- Semantic retrieval presets use local proxies in development and direct provider endpoints in deployed builds. Direct requests still depend on the provider's cross-origin policy.
+- Saved proxy addresses remain unchanged. Self-hosted proxies can still be configured manually, and direct access can be restored explicitly.
+
+Entry: [Model and API configuration](/en/getting-started/model-config).
+Evidence: [Proxy settings fix](https://github.com/yuanbw2025/storyforge/commit/98f7e8a6).
+
+### 2026-09-29 · Forge Writing Workshop and node templates
+
+- Added 28 optional original templates for starting, scenes, prose, local revision, style diagnosis, chapter handoff, and publication copy.
+- Search by workshop scope or keyword in the Prompt library. Templates are inactive by default and preserve existing author selections.
+- Workflows select per-node templates, bind materials, and preserve author hints. Handoff templates use short prose evidence to separate actual events from speculation.
+
+Guides: [Prompt usage](/en/guides/using-prompts) · [Workshop index](/en/prompts/a/a-index) · [Nodes](/en/features/nodes).
+Evidence: [Workshop templates](https://github.com/yuanbw2025/storyforge/commit/8d3c1985) · [Handoff evidence](https://github.com/yuanbw2025/storyforge/commit/ac8c0be9). The date is the mainline integration date.
+
+### 2026-09-25–27 · Selective longform writing, saving, and import recovery
+
+- Start from a minimal confirmed idea or a selected volume, chapter, passage, or character field; execution plans preserve explicit scope and negative instructions.
+- Edit, discuss, or decline candidates. Recover optional post-adoption organization separately; library counts reflect saved manuscripts.
+- Added cancellable speech input and reading. Recognized text is editable before sending; it never automatically sends or adopts. Automatic reading is off by default.
+- Fixed work-information saving, streaming display, chapter-switch state, and candidate revision; outline dragging scrolls at list edges.
+- Fixed world background being mistaken for an instruction to write world data, and handling of ambiguous chapter ordinals.
+- Retry failed import chunks and continue unprocessed ones. Incomplete JSON, authorization failures, and unknown outcomes stop; only clearly retryable HTTP 503 responses receive bounded automatic retries.
+
+Guides: [Longform](/en/features/longform/) · [Saving prose](/en/features/longform/writing) · [Import](/en/guides/import).
+Evidence: [Selective writing and candidates](https://github.com/yuanbw2025/storyforge/commit/e082dcb0) · [Voice](https://github.com/yuanbw2025/storyforge/commit/eeda8bd7) · [Saving and switching](https://github.com/yuanbw2025/storyforge/commit/2b6c8499) · [Post-adoption recovery](https://github.com/yuanbw2025/storyforge/commit/92a6f80b) · [Feedback fixes](https://github.com/yuanbw2025/storyforge/commit/3ea1c8e3) · [Explicit recovery](https://github.com/yuanbw2025/storyforge/commit/ab07dee3) · [Counts](https://github.com/yuanbw2025/storyforge/commit/ba275db2).
+
+### 2026-09-22–26 · Text open world production and Salt Ridge showcase
+
+- Connected dedicated production from a frozen world or novel source through goal confirmation, authorized production, artifact editing, local repair, assets, quality, and release.
+- Player views include maps, quests, characters, inventory, combat, crafting/trade, world records, tutorials, and saves. Runtime AI remains constrained by formal gameplay and state.
+- Existing saves retain their release; upgrades require compatibility checks. Production previews remain separate from the formal game library.
+- Added Salt Ridge: Night of the Cutoff (盐脊：断流之夜), a prepared showcase that starts independent play and saves without model configuration.
+- The product remains a preview. Engineering checks and a showcase do not replace real-provider calibration and human acceptance of general production.
+
+Guides: [Text open world](/en/features/interactive/open-world) · [Examples](/en/guides/examples).
+Evidence: [Mainline integration](https://github.com/yuanbw2025/storyforge/commit/8402d50b) · [Dedicated entry](https://github.com/yuanbw2025/storyforge/commit/541c9d04) · [Salt Ridge](https://github.com/yuanbw2025/storyforge/commit/a4bc3f62).
+
+### 2026-09-22 · Professional text-adventure production, assets, and packages
+
+- Mainline entries connect product direction, automatic production, quality/assets, publishing/export, and adventure runtime.
+- Professional production covers story, cast, quests, scenes, and dialogue, checking decision consequences and ending closure.
+- Images have versioned binding evidence. Visual requirements and images require author confirmation, with independent visual review and targeted repairs.
+- Product packages support validation, import, and independent play. Budget recovery, task rewind, and checkpoint recovery preserve valid existing artifacts.
+- The product remains a preview. Automated checks do not prove human acceptance or publication of a particular flagship work.
+
+Guide: [Text adventure](/en/features/interactive/text-adventure).
+Evidence: [Mainline integration](https://github.com/yuanbw2025/storyforge/commit/58c5723c) · [Professional production](https://github.com/yuanbw2025/storyforge/commit/237f1912) · [Product packages](https://github.com/yuanbw2025/storyforge/commit/ecc178b8) · [Mainline path](https://github.com/yuanbw2025/storyforge/commit/fdc5b87c).
+
+### 2026-09-21 · English knowledge base and return-to-site navigation
+
+- Completed English pages, locale-specific links, and recovery guidance; Chinese remains the authoritative source.
+- Added return-to-official-site navigation, keeping clear entries between the knowledge base and product website.
+
+Evidence: [Bilingual knowledge base](https://github.com/yuanbw2025/storyforge/commit/6262e6ed) · [Return navigation](https://github.com/yuanbw2025/storyforge/commit/0fcff237).
+
 ### September 18–19, 2026 · Official knowledge base and feedback
 
 - Added an independent VitePress documentation site with Chinese navigation, local search, Prompt materials, and historical archives.
@@ -81,3 +160,5 @@ Historical capability descriptions belong to their original context and cannot i
 ## Documentation maintenance
 
 September 20, 2026: rebuilt product guides, onboarding, data/cost explanations, and main-branch milestone records against baseline 58892a5b. This is a knowledge-base maintenance date, not a new product release date.
+
+2026-10-04: reconciled late-September onward mainline changes against remote main `dd253f85`, inspected all 86 local branches and associated worktrees, and synchronized Chinese and English guides. [Pending development](/en/updates/development-status) lists unmerged work separately, without claiming it is live. Documentation deployment requires a successful corresponding workflow run.

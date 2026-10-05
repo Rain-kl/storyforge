@@ -111,6 +111,7 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
     ai,
     enhanceAI,
     isRecovering,
+    finalizingOperation,
     pendingCandidate: pendingDetailedCandidate,
     adoptDetailedPatch,
     generateScenes,
@@ -406,7 +407,7 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
   }, [enhanceAI])
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex flex-col md:flex-row">
       <DetailedOutlineSidebar
         chapters={chapterNodes}
         detailedOutlines={detailedOutlines}
@@ -420,7 +421,7 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
       {/* 右侧：细纲编辑 */}
       <div
         {...initialRecordTargetAttributes(currentChapter?.id === initialNodeId, currentChapter?.id)}
-        className={`flex-1 overflow-y-auto p-6 ${
+        className={`flex-1 min-w-0 overflow-y-auto p-3 md:p-6 ${
           currentChapter?.id === initialNodeId ? INITIAL_RECORD_TARGET_CLASS : ''
         }`}
       >
@@ -463,7 +464,7 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
             )}
 
             {/* 操作栏 */}
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
               <button
                 onClick={addScene}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-white text-sm rounded hover:bg-accent-hover"
@@ -472,14 +473,14 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
               </button>
               <button
                 onClick={handleAIGenerate}
-                disabled={isRecovering || ai.isStreaming || enhanceAI.isStreaming || !!pendingDetailedCandidate || !!pendingBatchCandidate}
+                disabled={isRecovering || !!finalizingOperation || ai.isStreaming || enhanceAI.isStreaming || !!pendingDetailedCandidate || !!pendingBatchCandidate}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent text-sm rounded hover:bg-accent/20 disabled:opacity-50"
               >
                 <Sparkles className="w-4 h-4" /> AI 一键拆场景
               </button>
               <button
                 onClick={handleEnhancedGenerate}
-                disabled={isRecovering || ai.isStreaming || enhanceAI.isStreaming || !!pendingDetailedCandidate || !!pendingBatchCandidate}
+                disabled={isRecovering || !!finalizingOperation || ai.isStreaming || enhanceAI.isStreaming || !!pendingDetailedCandidate || !!pendingBatchCandidate}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-success/10 text-success text-sm rounded hover:bg-success/20 disabled:opacity-50"
               >
                 <Wand2 className="w-4 h-4" /> 完善细纲
@@ -490,11 +491,15 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
             {(ai.output || ai.isStreaming || ai.error) && (
               <div className="mb-4">
                 <AIStreamOutput
-                  output={ai.output} isStreaming={ai.isStreaming} error={ai.error} tokenUsage={ai.tokenUsage}
-                  editable
+                  output={ai.output} isStreaming={ai.isStreaming} isFinalizing={finalizingOperation === 'scenes' && !ai.isStreaming} error={ai.error} tokenUsage={ai.tokenUsage}
+                  editable={pendingDetailedCandidate?.candidate.operation === 'scenes'}
                   onStop={ai.stop}
-                  onAccept={text => { void handleAcceptDetailed('scenes', text) }}
-                  onDismiss={() => { void handleDismissDetailed('scenes') }}
+                  onAccept={pendingDetailedCandidate?.candidate.operation === 'scenes'
+                    ? text => handleAcceptDetailed('scenes', text)
+                    : undefined}
+                  onDismiss={pendingDetailedCandidate?.candidate.operation === 'scenes'
+                    ? () => { void handleDismissDetailed('scenes') }
+                    : undefined}
                   onRetry={handleAIGenerate}
                 />
                 {pendingDetailedCandidate?.candidate.operation === 'scenes'
@@ -511,11 +516,15 @@ export default function DetailedOutlinePanel({ project, initialNodeId }: Props) 
             {(enhanceAI.output || enhanceAI.isStreaming || enhanceAI.error) && (
               <div className="mb-4">
                 <AIStreamOutput
-                  output={enhanceAI.output} isStreaming={enhanceAI.isStreaming} error={enhanceAI.error} tokenUsage={enhanceAI.tokenUsage}
-                  editable
+                  output={enhanceAI.output} isStreaming={enhanceAI.isStreaming} isFinalizing={finalizingOperation === 'enhanced' && !enhanceAI.isStreaming} error={enhanceAI.error} tokenUsage={enhanceAI.tokenUsage}
+                  editable={pendingDetailedCandidate?.candidate.operation === 'enhanced'}
                   onStop={enhanceAI.stop}
-                  onAccept={text => { void handleAcceptDetailed('enhanced', text) }}
-                  onDismiss={() => { void handleDismissDetailed('enhanced') }}
+                  onAccept={pendingDetailedCandidate?.candidate.operation === 'enhanced'
+                    ? text => handleAcceptDetailed('enhanced', text)
+                    : undefined}
+                  onDismiss={pendingDetailedCandidate?.candidate.operation === 'enhanced'
+                    ? () => { void handleDismissDetailed('enhanced') }
+                    : undefined}
                   onRetry={handleEnhancedGenerate}
                 />
                 {pendingDetailedCandidate?.candidate.operation === 'enhanced'

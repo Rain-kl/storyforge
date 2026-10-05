@@ -26,7 +26,9 @@ Text settings do not automatically configure images, audio, or external video to
 
 ## Cross-origin access and proxies
 
-Browsers may restrict direct calls to third-party APIs. Follow settings guidance for a local proxy or a provider-supported access method. The proxy address, network, and service must all work.
+Browsers may restrict direct calls to third-party APIs. When running locally with `npm run dev`, supported providers can use the development server's local proxy through settings. Deployed builds do not include these proxies and do not show the switch-to-local-proxy button.
+
+Semantic retrieval presets in deployed builds use the provider's direct endpoint, which still requires the provider to allow browser cross-origin requests. If your deployment supplies a same-origin reverse proxy, enter its Base URL manually. Saved proxy addresses are preserved, and you can explicitly switch back to direct access; opening settings never automatically rewrites saved configuration.
 
 Never put API keys in work descriptions, Prompts, or public feedback. Your model provider determines billing.
 

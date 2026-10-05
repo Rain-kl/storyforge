@@ -1001,7 +1001,37 @@ export function adventureNarrativeActionContext(
 export function availableAdventureActions(content: AdventureContent, state: AdventureRuntimeState, narrativeVariables: Record<string, unknown> = {}): Array<{ action: AdventureActionDefinition; available: boolean; reason: string }> {
   return content.actions.filter(action => action.locationKey === state.currentLocationKey).map(action => {
     const available = (action.repeatable || !state.completedActionKeys.includes(action.key)) && action.requirements.every(item => adventureRequirementSatisfied(item, state, narrativeVariables, content))
-    return { action, available, reason: available ? '' : action.unavailableText }
+    let reason = available ? '' : action.unavailableText
+    if (!available && content.version === 2) {
+      if (!action.repeatable && state.completedActionKeys.includes(action.key)) reason = '这个行动已经完成。'
+      else {
+        const missing = action.requirements.filter(item => !adventureRequirementSatisfied(item, state, narrativeVariables, content))
+        const explanations = missing.map(item => {
+          if (item.itemKey && !adventureRequirementSatisfied({ itemKey: item.itemKey, itemQuantity: item.itemQuantity, itemState: item.itemState }, state)) {
+            const title = content.items.find(value => value.key === item.itemKey)?.title ?? '任务物品'
+            const held = state.inventory.find(value => value.itemKey === item.itemKey && value.ownerKey === 'player' && value.state !== 'transferred')
+            if ((held?.quantity ?? 0) < (item.itemQuantity ?? 1)) return `需要${title} ×${item.itemQuantity ?? 1}`
+            return item.itemState === 'equipped' ? `需要先装备${title}` : item.itemState === 'carried' ? `需要先将${title}收回背包` : action.unavailableText
+          }
+          if (item.resourceKey && !adventureRequirementSatisfied({ resourceKey: item.resourceKey, resourceMinimum: item.resourceMinimum }, state)) return `需要${content.resources.find(value => value.key === item.resourceKey)?.title ?? '资源'}达到 ${item.resourceMinimum ?? 0}`
+          if (item.abilityKey && !adventureRequirementSatisfied({ abilityKey: item.abilityKey, abilityMinimum: item.abilityMinimum }, state, narrativeVariables, content)) return `需要${content.abilities.find(value => value.key === item.abilityKey)?.title ?? '能力'}达到 ${item.abilityMinimum ?? 0}`
+          if (item.conditionKey && (item.conditionPresent ?? true) && !adventureRequirementSatisfied({ conditionKey: item.conditionKey, conditionPresent: true }, state)) {
+            const objectiveEffect = content.actions.flatMap(candidate => {
+              const effects = candidate.successEffects
+              return effects.some(effect => effect.op === 'apply-condition' && effect.conditionKey === item.conditionKey)
+                ? effects.filter(effect => effect.op === 'complete-objective') : []
+            })[0]
+            if (objectiveEffect?.op === 'complete-objective') {
+              const objective = content.quests.find(quest => quest.key === objectiveEffect.questKey)?.objectives.find(value => value.key === objectiveEffect.objectiveKey)
+              if (objective) return `先完成：${objective.title}`
+            }
+          }
+          return null
+        }).filter((value): value is string => value != null)
+        if (explanations.length) reason = [...new Set(explanations)].join('；')
+      }
+    }
+    return { action, available, reason }
   })
 }
 

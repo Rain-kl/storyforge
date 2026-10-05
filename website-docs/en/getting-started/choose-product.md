@@ -1,6 +1,6 @@
 # Choose a product
 
-> Applies to the current main branch; checked September 20, 2026. Tagged releases may not include these entries.
+> Applies to the current main branch; checked October 4, 2026. Tagged releases may not include these entries.
 
 Decide what you want to deliver, then choose a product. Fiction can start directly, without completing the world engine.
 

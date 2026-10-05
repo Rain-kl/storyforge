@@ -131,6 +131,7 @@ test('文字冒险候选包在新 Work 上传后可从正式 Release 完成双�
 
   await openTextAdventurePage(page, prepared.targetScope, 'play')
   const restored = page.getByTestId('adventure-game-player')
+  await restored.locator('.adventure-saved-journeys summary').click()
   await restored.getByRole('button', { name: /雾潮灯塔.*新冒险.*(?:可继续|已通关)/ }).click()
   await expect(restored).toContainText('海上归灯', { timeout: 15_000 })
   await expect(restored).toContainText('冒险结束')

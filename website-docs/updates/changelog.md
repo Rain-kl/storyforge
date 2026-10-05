@@ -4,6 +4,85 @@
 
 ## Unreleased / 当前主干
 
+### 2026-10-04 · 文字冒险作品展示、局部修订与大备份
+
+- 作品库贯通封面、详情、开始/继续与存档；未发布试玩有明确标记，同名历史版本归入详情，过期 Build 启动会被阻止。
+- 阅读界面提供沉浸与可访问性设置，窄屏工具栏保持可用；选择展示真实缺失条件，人物按冻结出场表出现。
+- 支持故事、人物、场景、对白和路线的局部修订，并改善暂停恢复、图片替换、权利声明和视觉审查依赖处理；旧 Build 与存档保留。
+- 改进大型项目 JSON 读写及开放世界旅行效果校验性能。
+- 《潮钟群岛》的代码交付与具体作品发布分开：本地未发布试玩及其图片、存档不会随 Git 或新安装自动获得。
+
+入口：[文字冒险](/features/interactive/text-adventure) · [大型备份](/guides/backup-restore)。
+依据：[PR #100 主干整合](https://github.com/yuanbw2025/storyforge/commit/dd253f85)。
+
+### 2026-10-04 · 长篇上下文修复与炉娘命名
+
+- 修复资料已存在却被误判为缺少必读资源而阻断大纲、细纲或正文生成的问题。
+- 事实检查区分可并存事件与单一状态冲突，保留真实冲突的阻断。
+- 创作助手统一更名为“炉娘”，包含面板、设置和形象说明；不改变原有作品与语音配置。
+
+入口：[长篇创作](/features/longform/) · [大纲与正文](/features/longform/writing)。
+依据：[上下文修复](https://github.com/yuanbw2025/storyforge/commit/0c602f2d) · [助手命名](https://github.com/yuanbw2025/storyforge/commit/db86b01a)。
+
+### 2026-10-03 · 线上模型代理设置
+
+- 线上版不再提供仅适用于开发服务器的“切换到本地代理”按钮，避免保存线上不存在的代理地址。
+- 语义检索预设在本地开发时使用本地代理，线上使用服务商直连地址；直连仍受服务商跨域规则约束。
+- 已保存的代理地址保持不变，自建代理仍可手动配置，也可显式恢复直连。
+
+入口：[模型与 API 配置](/getting-started/model-config)。
+依据：[代理设置修复](https://github.com/yuanbw2025/storyforge/commit/98f7e8a6)。
+
+### 2026-09-29 · 熔炉写作工坊与节点模板
+
+- 新增 28 条原创可选模板，涵盖起步、场景、正文、局部修改、风格诊断、章后交接和发布文案。
+- 提示词库支持按工坊作用域和关键词查找；默认不激活，保留作者原有选择。
+- 工作流可指定本节点模板、绑定材料并保留作者提示；交接模板用短原文证据区分已发生事实与推测。
+
+入口：[Prompt 用法](/guides/using-prompts) · [工坊目录](/prompts/a/a-index) · [节点创作](/features/nodes)。
+依据：[工坊模板](https://github.com/yuanbw2025/storyforge/commit/8d3c1985) · [交接证据](https://github.com/yuanbw2025/storyforge/commit/ac8c0be9)。日期为进入主干日期。
+
+### 2026-09-25～27 · 长篇选写、保存与导入恢复
+
+- 可从最小确认想法或指定卷章、片段、人物字段开始，执行计划保留作者明确的范围与否定要求。
+- 候选可编辑、讨论或拒绝；已采纳正文后的可选整理可单独恢复，作品库字数读取已保存手稿。
+- 增加可取消的语音输入和朗读；识别文本先供作者编辑，不自动发送或采纳，默认不自动朗读。
+- 修复作品资料保存、流式显示、切章状态和候选修订；大纲拖动到边缘时可滚动列表。
+- 修复把世界背景误当作世界写入请求的问题，以及含糊章节序号的处理。
+- 文档导入可重试失败块并继续未处理部分；不完整 JSON、授权或结果未知时停止，明确可重试的 503 才有限自动重试。
+
+入口：[长篇](/features/longform/) · [正文保存](/features/longform/writing) · [文档导入](/guides/import)。
+依据：[选写与候选](https://github.com/yuanbw2025/storyforge/commit/e082dcb0) · [语音](https://github.com/yuanbw2025/storyforge/commit/eeda8bd7) · [保存与切章](https://github.com/yuanbw2025/storyforge/commit/2b6c8499) · [采纳后恢复](https://github.com/yuanbw2025/storyforge/commit/92a6f80b) · [反馈修复](https://github.com/yuanbw2025/storyforge/commit/3ea1c8e3) · [显式恢复](https://github.com/yuanbw2025/storyforge/commit/ab07dee3) · [字数](https://github.com/yuanbw2025/storyforge/commit/ba275db2)。
+
+### 2026-09-22～26 · 文字开放世界制作与盐脊展示作品
+
+- 专属制作流程贯通冻结世界或小说来源、目标确认、授权生产、产物编辑、局部修复、素材、质量与版本发布。
+- 玩家界面提供地图、任务、角色、背包、战斗、制作交易、世界记录、教程和存档；运行时 AI 受正式玩法与状态约束。
+- 旧存档继续绑定原发布，升级需要兼容检查；制作预览与正式游戏库分开。
+- 加入免模型配置的《盐脊：断流之夜》展示作品，可直接开始独立游玩与存档。
+- 产品仍为预览；工程检查和展示作品不替代通用生产的真实模型校准与真人验收。
+
+入口：[文字开放世界](/features/interactive/open-world) · [内置作品](/guides/examples)。
+依据：[主干整合](https://github.com/yuanbw2025/storyforge/commit/8402d50b) · [专属入口](https://github.com/yuanbw2025/storyforge/commit/541c9d04) · [盐脊展示作品](https://github.com/yuanbw2025/storyforge/commit/a4bc3f62)。
+
+### 2026-09-22 · 文字冒险专业生产、素材与产品包
+
+- 主干接入产品定向、自动制作、质量与素材、发布导出及冒险运行入口。
+- 专业生产覆盖故事、人物、任务、场景和对白，并检查决策后果与结局闭环。
+- 图片具有版本和绑定依据，视觉要求及图片需要作者确认，并支持独立视觉审查和定向修复。
+- 产品包支持校验、导入和独立运行；预算恢复、任务回退及检查点恢复保留已有有效产物。
+- 仍为预览，不能把自动检查通过视为真人验收或具体旗舰作品已经发布。
+
+入口：[文字冒险](/features/interactive/text-adventure)。
+依据：[主干整合](https://github.com/yuanbw2025/storyforge/commit/58c5723c) · [专业生产](https://github.com/yuanbw2025/storyforge/commit/237f1912) · [产品包](https://github.com/yuanbw2025/storyforge/commit/ecc178b8) · [主干路径](https://github.com/yuanbw2025/storyforge/commit/fdc5b87c)。
+
+### 2026-09-21 · 英文知识库与返回官网入口
+
+- 补齐英文知识库、语言内链接与数据恢复说明；中文继续作为权威源。
+- 导航增加“回到官网”，知识库与产品官网保持明确入口。
+
+依据：[双语知识库](https://github.com/yuanbw2025/storyforge/commit/6262e6ed) · [返回官网](https://github.com/yuanbw2025/storyforge/commit/0fcff237)。
+
 ### 2026-09-18～19 · 官方知识库与反馈入口
 
 - 建立独立 VitePress 文档站，提供中文目录、本地搜索、Prompt 资料与历史归档。
@@ -81,3 +160,5 @@
 ## 文档维护记录
 
 2026-09-20：按 main 基线 58892a5b 重建产品指南、上手流程、数据与费用说明，并补齐以上主干阶段记录。这是知识库维护日期，不是新产品版本的发布日期。
+
+2026-10-04：按远程 main `dd253f85` 补齐 9 月下旬以来的主干变化，核对全部 86 个本地分支及关联工作区，并同步中文和英文说明。未合并内容单列于[待合并开发记录](/updates/development-status)，不作为已上线能力；文档部署状态以对应工作流成功记录为准。

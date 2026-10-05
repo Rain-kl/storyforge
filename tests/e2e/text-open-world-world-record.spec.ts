@@ -111,6 +111,7 @@ test('世界记录在桌面与390px只披露亲历内容，并从持久Session�
     .getByRole('button', { name: /与岑阿婆交谈/ })
   await expect(talkAction).toBeVisible()
   await talkAction.click()
+  await expect(page.getByTestId('text-open-world-feedback')).toContainText('与岑阿婆交谈已完成', { timeout: 30_000 })
   await expect.poll(async () => page.evaluate(async sessionId => {
     const importer = new Function('path', 'return import(path)') as (path: string) => Promise<any>
     const { readProductRuntimeState } = await importer('/storyforge/src/lib/product/runtime-core.ts')

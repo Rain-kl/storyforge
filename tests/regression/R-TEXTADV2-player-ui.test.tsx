@@ -254,7 +254,7 @@ describe('TEXTADV-2 · 玩家界面纵切面', () => {
     const repeatedEquip = Array.from(equippedInventory?.querySelectorAll<HTMLButtonElement>('button') ?? [])
       .find(button => button.textContent?.includes('装备守灯披风'))
     expect(repeatedEquip?.disabled).toBe(true)
-    expect(equippedInventory?.textContent).toContain('需要先持有守灯披风')
+    expect(equippedInventory?.textContent).toContain('这个行动已经完成。')
     await closePanel()
     await clickNavigation('装备')
     const equipment = host.querySelector('[aria-label="装备"]')

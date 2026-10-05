@@ -80,7 +80,7 @@
 
 ## 二、上下文源清单（CONTEXT_SOURCES · AI 读什么）
 
-共 132 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
+共 133 个上下文源。assembleContext({ sourceKeys }) 按 key 装配。
 
 | key | 标签 | 作用域 | 层级 | 预算(token) |
 |---|---|---|---|---|
@@ -100,8 +100,9 @@
 | `product-production.artifact-inputs` | 上层产品生产任务依赖 | project | L1 | 24000 |
 | `product-production.adventure-scene-script-inputs` | 文字冒险单幕分场写作投影 | project | L0 | 15100 |
 | `product-production.adventure-dialogue-inputs` | 文字冒险独立对白审校投影 | project | L0 | 12500 |
+| `product-production.adventure-visual-direction-inputs` | 文字冒险美术定向与完整正文投影 | project | L0 | 52000 |
 | `product-production.adventure-visual-quality-inputs` | 文字冒险独立图片审查投影 | project | L0 | 12500 |
-| `product-production.adventure-quality-inputs` | 文字冒险分区叙事质量审查投影 | project | L0 | 32000 |
+| `product-production.adventure-quality-inputs` | 文字冒险分区叙事质量审查投影 | project | L0 | 40000 |
 | `product-production.adventure-playtest-inputs` | 文字冒险试玩总监验收证据投影 | project | L0 | 8500 |
 | `product-production.adventure-repair-feedback` | 文字冒险上一轮质量修复反馈 | project | L0 | 6000 |
 | `text-open-world.source-pin` | 文字开放世界冻结来源与本批读取单元 | project | L0 | 100000 |
@@ -358,17 +359,17 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 | category | 触发文件 |
 |---|---|
-| `agent.orchestrator` | `src/lib/agent/orchestrator.ts:767` |
-| `agent.orchestrator.replan` | `src/lib/agent/orchestrator.ts:860` |
+| `agent.orchestrator` | `src/lib/agent/orchestrator.ts:808` |
+| `agent.orchestrator.replan` | `src/lib/agent/orchestrator.ts:912` |
 | `agent.readonly` | `src/lib/agent/client-adapter.ts:118` |
 | `authoring.ttrpg-campaign` | `src/lib/ttrpg/campaign-proposal-harness.ts:429` |
 | `canon.setting.extract` | `src/lib/agent/run/constitution-extraction-durable.ts:508` |
 | `chapter.content` | `src/lib/generation/chapter-generation-node.ts:23` |
 | `chapter.continue` | `src/lib/generation/chapter-generation-node.ts:26` |
 | `chapter.continuity` | `src/lib/node-authoring/domain-execution.ts:776`<br/>`src/lib/node-authoring/domain-execution.ts:840` |
-| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:1690` |
-| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:1668` |
-| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:1658` |
+| `chapter.deai` | `src/components/editor/ChapterEditor.tsx:1699` |
+| `chapter.expand` | `src/components/editor/ChapterEditor.tsx:1677` |
+| `chapter.polish` | `src/components/editor/ChapterEditor.tsx:1667` |
 | `chapter.toolbar` | `src/lib/agent/run/selection-edit-durable.ts:567` |
 | `cultivation.progress` | `src/lib/agent/run/cultivation-progress-extraction-durable.ts:558` |
 | `detail.chapter-planning` | `src/lib/node-authoring/domain-execution.ts:605` |
@@ -392,7 +393,7 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 | `review.outline-workshop` | `src/lib/outline/workshop.ts:457` |
 | `review.quality` | `src/components/editor/ReviewPanel.tsx:112` |
 | `review.readability` | `src/components/editor/ReviewPanel.tsx:133` |
-| `review.revise` | `src/components/editor/ChapterEditor.tsx:1718` |
+| `review.revise` | `src/components/editor/ChapterEditor.tsx:1727` |
 | `runtime.prose.ai-town-director` | `src/lib/ai-town/director-harness.ts:271` |
 | `runtime.ttrpg-gm` | `src/lib/ttrpg/decision-harness.ts:134` |
 | `runtime.ttrpg-player` | `src/lib/ttrpg/player-harness.ts:310` |
@@ -415,16 +416,16 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 - `src/lib/agent/creative-rules-copilot.ts:437 · chat`
 - `src/lib/agent/inspiration-copilot.ts:345 · chat`
 - `src/lib/agent/master-candidate-semantic-review.ts:601 · chat`
-- `src/lib/agent/outline-copilot.ts:492 · chat`
-- `src/lib/agent/outline-copilot.ts:742 · chat`
-- `src/lib/agent/prose-copilot.ts:662 · chat`
-- `src/lib/agent/prose-copilot.ts:928 · chat`
+- `src/lib/agent/outline-copilot.ts:521 · chat`
+- `src/lib/agent/outline-copilot.ts:771 · chat`
+- `src/lib/agent/prose-copilot.ts:658 · chat`
+- `src/lib/agent/prose-copilot.ts:924 · chat`
 - `src/lib/agent/run/codex-extraction-durable.ts:779 · chat`
 - `src/lib/agent/run/history-agent-durable.ts:514 · chat`
 - `src/lib/agent/run/reference-derived-durable.ts:506 · chat`
 - `src/lib/agent/run/short-novel-durable.ts:311 · chat`
-- `src/lib/agent/story-arc-copilot.ts:1587 · chat`
-- `src/lib/agent/story-arc-copilot.ts:1639 · chat`
+- `src/lib/agent/story-arc-copilot.ts:1590 · chat`
+- `src/lib/agent/story-arc-copilot.ts:1642 · chat`
 - `src/lib/agent/story-core-copilot.ts:557 · chat`
 - `src/lib/agent/storyline-progress-copilot.ts:366 · chat`
 - `src/lib/agent/worldview-field-copilot.ts:903 · chat`
@@ -499,4 +500,4 @@ AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(
 
 ---
 
-生成时间基准:commit `70517049`
+生成时间基准:commit `4d87fbb9`

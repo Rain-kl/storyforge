@@ -1,5 +1,8 @@
+import '../components/text-game/adventure-showcase.css'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import BrandIcon from '../components/shared/BrandIcon'
+import { PRODUCT_NAVIGATION } from '../components/navigation/product-navigation'
 import { liveQuery } from 'dexie'
 import ProductFrame from '../components/navigation/ProductFrame'
 import { db } from '../lib/db/schema'
@@ -211,10 +214,40 @@ export default function TextGameDevelopmentPage({ openWorld = false }: { openWor
     navigate('/settings', { state: { storyforgeProductHubReturn: creatorReturn } })
   }
 
+  if (!openWorld && mode === 'play') return <div className="adventure-product-page">
+    <header className="adventure-product-header">
+      <button className="adventure-brand" onClick={() => navigate('/')} aria-label="返回 StoryForge 首页"><BrandIcon size={36} /><span>STORYFORGE<small>文字冒险</small></span></button>
+      <nav aria-label="文字冒险导航">
+        <button aria-current="page" onClick={() => { setSession(null); navigate(workspacePath('library', { session: null })) }}>作品与试玩</button>
+        <button onClick={() => navigate(workspacePath('production', { session: null }))}>创作工作台 ↗</button>
+      </nav>
+      <label className="adventure-workspace-select">工作区
+        <select aria-label="创作工作区" value={projectId ?? ''} onChange={event => chooseProject(event.target.value)}>
+          <option value="">选择工作区</option>
+          {projects.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+        </select>
+      </label>
+    </header>
+    <nav className="adventure-crossproduct-nav" aria-label="产品导航">{PRODUCT_NAVIGATION.map(item => <Link key={item.id} to={item.path} aria-current={item.id === 'adventure' ? 'page' : undefined}>{item.label}</Link>)}</nav>
+    {error && <p role="alert">{error}</p>}
+    {decision.enterable && scope && project ? <Suspense fallback={<p className="adventure-page-loading">正在打开故事书…</p>}>
+      <AdventureGamePlayer key={scope.workId} project={project} scope={scope}
+        worldGroupId={project.enableMultiWorld ? activeWorldGroupId : null} initialSessionId={session}
+        onOpenSession={openPlayer}
+        onOpenLibrary={() => { setSession(null); navigate(workspacePath('library', { session: null })) }} />
+    </Suspense> : <div className="adventure-page-empty"><span className="adventure-eyebrow">STORYFORGE / INTERACTIVE FICTION</span><h1>{page.label}</h1><p>每一个选择，都是故事的起点。选择一个工作区，打开其中的文字冒险作品。</p></div>}
+  </div>
+
   return <ProductFrame product={base} title={title} page={page.label} navigation={navigation}>
     <section className="lf-paper">
-      <h3>{title} · 可验证预览</h3>
+      <h3>{title} · {openWorld ? '展示作品与创作' : '可验证预览'}</h3>
       <p>{decision.entry.maturityNote}</p>
+      {openWorld && <div className="home-actions">
+        <button className="lf-action lf-action-primary" onClick={() => navigate('/play/salt-ridge')}>
+          先试玩《盐脊：断流之夜》
+        </button>
+        <small>无需选择工作区或配置模型；首次开始会建立独立的正式发布与存档。</small>
+      </div>}
       {!decision.enterable
         ? <p>当前产品通道尚未开放此入口。</p>
         : <label>

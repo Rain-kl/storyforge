@@ -1,6 +1,6 @@
 # StoryForge 文档权威与归档规则
 
-> 版本：2.0.0 · 生效：2026-09-22
+> 版本：2.4.0 · 生效：2026-09-29
 > 本文回答“哪些文档仍可指导开发”。未列入现行清单的历史材料，不得作为设计或施工权威。
 
 ## 1. 裁决层级
@@ -75,13 +75,18 @@
 - `docs/AI-FUNCTIONS-MANUAL.generated.md`：代码生成，不手改。
 - `docs/AI-FUNCTIONS-MANUAL.semantic.md`：生成清单的人工语义注解。
 - `docs/CONSISTENCY-COVERAGE-MAP.md`：Canon 一致性反例状态。
+- `docs/audits/NOVEL-PROMPT-CRAFT-20260927.md`：小说工坊提示词公开来源比较、原创内容设计与验证记录；不替代产品契约或模型质量认证。
 - `docs/audits/CURRENT-ARCHITECTURE-AUDIT-20260903.md`：当前代码树的项目级架构闭环审计；不替代具体产品方案和质量认证。
 - `docs/roadmap/INDEPENDENT-CREATION-PLAN-AUDIT.md`：三份独立创作专项方案的边界、共享底座和分支隔离审查证据；不替代专项方案。
 - `docs/roadmap/MOTION-DRAMA-PLAN-AUDIT.md`：漫剧前期生产方案对当前行业流程的交叉审查与修订证据。
 - `docs/audits/TEXT-OPEN-WORLD-CAPABILITY-AUDIT-20260906.md`：文字开放世界开工时的能力审计快照；只作实施证据，当前实现以代码、测试与能力基线为准。
+- `docs/audits/GAME-PRODUCT-LIFECYCLE-COMPLETENESS-REVIEW-20260927.md`：游戏产品双生命周期、现行 S1/S2/S3 全流程、横切缺口、采纳决议与后续验证任务；七项原则已进入 L0/L1/L2，本文继续作为 L4 论证和实现审计证据，不替代上位规则或宣称实现完成。
 
 ### 2.4 用户、维护与法律资料
 
+- `website-docs/`：L4 官方项目知识库的唯一源目录，维护规则见 `website-docs/AGENTS.md`；面向用户提供产品指南、概念、Prompt、更新日志和反馈入口说明。相关变更进入 `main` 后由 `.github/workflows/deploy-docs.yml` 构建发布到 `https://docs.storyforge-lab.com/`。在线站点是仓库源文件的发布结果，不是可反向覆盖仓库的另一权威源。
+- `website-docs/updates/changelog.md`：面向用户的官网更新日志。用户可见入口、能力、限制或操作流程变化时，与对应知识库页面在同一交付中更新；它不替代根目录工程 `CHANGELOG.md`。
+- `website-docs/feedback/`：Bug、功能建议和文档反馈的用户说明及入口；`.github/ISSUE_TEMPLATE/` 是备用 GitHub Issue 表单。仓库拥有入口和表单定义，实际提交记录由正式反馈服务或 GitHub Issues 持有，不属于静态知识库正文。
 - 根目录 `README.md`、`README.en.md`、`README.fr.md`、`README.de.md`、`README.it.md`、`README.es.md`、`README.pt.md`、`README.ja.md`、`README.ko.md`：L4 九语言用户首页，包含产品导览、开始方式、演示、技术优势、Harness 架构、隐私和交流入口；按当前主干核对，不替代产品契约。更新公共能力、操作路径或限制时同步核对各语言版本，保持语言切换互通；README 翻译不代表界面或关联文档已完成同等语言覆盖。
 - `docs/assets/readme/home-current.png`：2026-09-15 当前青绿 UI 首页，隔离浏览器数据截图。
 - `docs/assets/readme/longform-create-current.png`：同次核对的长篇作品库内创建入口截图。
@@ -100,7 +105,9 @@
 
 ## 3. 清理前完整归档
 
-2026-08-26 已把文档权威重建前的完整快照上传到 WPS：
+本文所称“WPS 知识库”专指 WPS 云文档中的“StoryForge故事熔炉”文件夹。它可承载研究、讨论、工作材料和历史归档，但不与仓库 `website-docs/` 或官网自动同步，也不因位于该文件夹而自动获得 L0～L4 权威；材料必须经复核并正式进入现行仓库文档后才能指导开发。
+
+2026-08-26 已把文档权威重建前的完整快照上传到 WPS 知识库：
 
 - 文件夹：[storyforge故事熔炉 / 已过时-v3.9.1-2026-08-26](https://www.kdocs.cn/mine/556058861849)
 - 归档清单：[ARCHIVE-MANIFEST-StoryForge-v3.9.1-2026-08-26](https://www.kdocs.cn/l/cidJLBJJTi03)
@@ -142,3 +149,11 @@
 本次 1.9.0 复审登记文字冒险专项产品契约及其专业生产方案包。它细化 `UPPER-PRODUCTS.md` 已确定的共同边界，不改变世界引擎、AVG、文字开放世界或共享底座 owner；实现状态仍以能力基线、代码与当前验证证据为准。
 
 本次 2.0.0 复审登记文字开放世界整体产品、叙事子系统、愿景演进、盐脊验收 Brief、开发清单、开工卡和能力审计。整体产品架构是该产品唯一施工入口；叙事文档只管理叙事生产子系统，愿景与审计不覆盖当前代码事实。该登记不改变 `UPPER-PRODUCTS.md` 的世界衍生产品边界，也不允许文字开放世界接管共享生产、Release 或世界引擎 owner。
+
+本次 2.1.0 复审随总纲 1.8.0 将所有游戏型上层产品的 S3.1 生产统一收束为游戏内容制作、产品系统配置和媒资生产三条依赖式并行泳道，并明确 S2 产品设置与 S3 系统配置的区别。现行白名单没有增加或删除；该修订只统一职责、所有权、交接、组装和验收表达，不建立跨产品万能表、固定 Agent 图或共同游戏规则，也不改变任何产品的当前实现状态。
+
+本次 2.2.0 复审登记游戏产品全生命周期完整性审查。该审查区分 StoryForge 产品能力研发与具体游戏实例生产，记录局部返修、运行时 AI、发布成熟度、发布后维护和横切治理建议；它只为后续总纲/产品契约修订提供依据，不越级改变 L0/L1，不新增产品身份、生产阶段或实现完成度声明。
+
+本次 2.3.0 复审确认总纲 1.9.0 与上层产品契约 2.6.0 正式采纳全生命周期审查的七项长期原则，并同步开发入口、上下文路由、数据治理和 Harness 标准：双生命周期、可玩切片与局部返修、确定性 Build Integrator、分层验收成熟度、运行时 AI 契约、发布后维护和横切治理。该修订不新增 S4/S5、第四条创意泳道、万能 schema 或产品身份，也不把原则采纳误报为具体功能已经实现。
+
+本次 2.4.0 复审登记仓库 `website-docs/` 为“项目知识库”的唯一源目录，明确其通过部署工作流发布到官方知识库站点，并区分内部 `docs/`、公开项目知识库和 WPS 知识库“StoryForge故事熔炉”。同时登记用户更新日志与反馈入口的正确路径，区分仓库中的反馈表单定义和外部系统持有的实际提交记录。该修订只统一名称、路由、权威和同步证据，不复制知识库正文，也不改变任何产品能力状态。

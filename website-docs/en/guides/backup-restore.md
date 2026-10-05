@@ -67,3 +67,9 @@ See [Local memory workspace](/en/features/memory-workspace).
 First check the address, port, browser, and browser profile against the original environment. Do not immediately clear site data or overwrite the original folder.
 
 Restore JSON or workspace packages through their supported entries. If an old backup is rejected, preserve it, read [compatibility guidance](/en/updates/compatibility), and submit feedback.
+
+## Large project backups
+
+The October 4 mainline update improves large JSON file reading and writing, reducing failures caused by constructing one complete string in memory. Image-heavy backups still need sufficient storage and processing time. Confirm the downloaded file exists and verify recovery in an isolated environment before retiring the original environment. Large-file support does not guarantee every device can restore a backup of any size.
+
+Evidence: [Large backups and pause recovery](https://github.com/yuanbw2025/storyforge/commit/3ad7d59d).
