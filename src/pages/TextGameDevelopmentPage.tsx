@@ -2,6 +2,7 @@ import '../components/text-game/adventure-showcase.css'
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 import BrandIcon from '../components/shared/BrandIcon'
+import { BuiltinGameShelf } from '../components/text-game/BuiltinGameShelf'
 import { PRODUCT_NAVIGATION } from '../components/navigation/product-navigation'
 import { liveQuery } from 'dexie'
 import ProductFrame from '../components/navigation/ProductFrame'
@@ -258,6 +259,11 @@ export default function TextGameDevelopmentPage({ openWorld = false }: { openWor
             </select>
           </label>}
     </section>
+    {openWorld && mode === 'play' && <section className="lf-paper">
+      <h2>内置叙事游戏</h2>
+      <p>三段可以亲自走进的故事。无需配置 API，选择作品后即可开始；进度保存在当前浏览器。</p>
+      <BuiltinGameShelf />
+    </section>}
     {error && <p role="alert">{error}</p>}
     {decision.enterable && !error && (creatorSourceReady || (scope && project)) && <section className="lf-paper">
       <Suspense fallback={<p>正在读取…</p>}>

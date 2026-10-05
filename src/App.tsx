@@ -13,6 +13,9 @@ const WorldEnginePage = lazy(() => import('./pages/WorldEnginePage'))
 const MotionMaterialsPage = lazy(() => import('./pages/MotionMaterialsPage'))
 const MistHarborPage = lazy(() => import('./pages/MistHarborPage'))
 const SaltRidgePage = lazy(() => import('./pages/SaltRidgePage'))
+const TidemarkPage = lazy(() => import('./pages/TidemarkPage'))
+const TidemarkEchoPage = lazy(() => import('./pages/TidemarkEchoPage'))
+const AphelionPage = lazy(() => import('./pages/AphelionPage'))
 const CommunityPage = lazy(() => import('./pages/CommunityPage'))
 const TextGameDevelopmentPage = lazy(() => import('./pages/TextGameDevelopmentPage'))
 const ComicPage = lazy(() => import('./pages/ComicPage'))
@@ -56,6 +59,9 @@ export default function App() {
       <Route path="/play/session/:sessionId" element={<Suspense fallback={<RouteFallback />}><TtrpgSessionPage /></Suspense>} />
       <Route path="/play/mist-harbor" element={<Suspense fallback={<RouteFallback />}><MistHarborPage /></Suspense>} />
       <Route path="/play/salt-ridge" element={<Suspense fallback={<RouteFallback />}><SaltRidgePage /></Suspense>} />
+      <Route path="/play/tidemark" element={<Suspense fallback={<RouteFallback />}><TidemarkPage /></Suspense>} />
+      <Route path="/play/tidemark-echo" element={<Suspense fallback={<RouteFallback />}><TidemarkEchoPage /></Suspense>} />
+      <Route path="/play/aphelion" element={<Suspense fallback={<RouteFallback />}><AphelionPage /></Suspense>} />
       <Route path="/play/:gameKey" element={<Suspense fallback={<RouteFallback />}><TtrpgCommunityPage /></Suspense>} />
       <Route path="/settings" element={<Suspense fallback={<RouteFallback />}><SettingsRoutePage /></Suspense>} />
       <Route path="/short/:pageId?" element={<Suspense fallback={<RouteFallback />}><ShortformPage /></Suspense>} />

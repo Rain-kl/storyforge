@@ -22,6 +22,18 @@ This is a built-in open-world showcase on main. It demonstrates exploration, que
 
 The Tidal Bell Isles: The Last Light is an author-local unpublished playtest. Its presentation and recovery code is on main, but the work, images, and saves are not supplied by a fresh installation and are not part of this built-in catalog. Other locally developed works appear in [Pending development](/en/updates/development-status).
 
+## Three 3D narrative games
+
+Find **Built-in narrative games (内置叙事游戏)** in the Player view of Text open world. No workspace, API configuration, or external game engine is required. These three games are not featured on the homepage.
+
+- **Tidemark: Between Two Bells (潮痕：两声之间)**: a separate story of roughly 4–5 minutes. Inspect water marks, collect tools, operate the sluice in order, and carry out either rescue route.
+- **Tidemark: The Last Lamp (潮痕：最后一盏灯)**: ten chapters of coastal fantasy, over 30,000 Chinese characters in the main story, over 500 distinct dialogue lines, and four endings.
+- **Aphelion: Dock Seven (远日点：第七码头)**: ten chapters of space science fiction, over 30,000 Chinese characters in the main story and over 500 distinct dialogue lines, with equipment puzzles, side routes, and four endings.
+
+Start with Between Two Bells. Desktop controls include WASD/arrow keys, click-to-move, and E to interact nearby. Phone users can use on-screen buttons; settings offer text exploration, lighter graphics, and reading modes. Content is prepared only after an explicit start. Continue after a refresh; new journeys and checkpoint branches preserve previous saves. Transfer progress through a full project backup; browser data does not automatically sync between devices.
+
+The main stories use frozen scripts supplied with the repository, without free-form model dialogue or voice acting. The longer games only offer optional synthesized ambience; the short story currently has no sound. These works do not establish completion of general open-world generation. Download a `main` checkout containing this update or a later Release; older archives do not automatically gain this content.
+
 ## Creative-product examples
 
 Libraries for short fiction, screenplays, comics, and other products offer examples. Inspect output structure, review evidence, and delivery formats. To edit, use an independent experience copy offered by the interface or your own work; confirm the current object first.

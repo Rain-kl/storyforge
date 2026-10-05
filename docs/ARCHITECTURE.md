@@ -17,6 +17,9 @@ StoryForge 当前是 React + TypeScript + Vite 的本地优先单页应用，核
 - `/play`：社区跑团目录和本地存档；
 - `/play/mist-harbor`：雾港内置作品介绍、明确开始、恢复存档；使用现行世界封存、生产与产品发布链，无模型调用；
 - `/play/salt-ridge`：盐脊文字开放世界内置纵向展示；明确开始后冻结独立 WorldRelease，经确定性生产发布正式 ProductRelease，并创建或恢复 vNext 玩家 Session；
+- `/play/tidemark`：内置《潮痕：最后一盏灯》，从文字开放世界作品区进入；明确开始后安装冻结剧情、发布和独立存档；
+- `/play/tidemark-echo`：内置《潮痕：两声之间》，五分钟调查与救援短篇；
+- `/play/aphelion`：内置《远日点：第七码头》，科幻调查、设备交互与分支结局；
 - `/play/:gameKey`：冻结社区模组的介绍与明确开始入口；
 - `/play/session/:sessionId`：绑定正式发布或受治理预览的沉浸跑团桌面；
 - `/settings`：模型与应用设置；
@@ -102,7 +105,7 @@ flowchart TB
 | 当前事实 | 数值 | 单一事实源 |
 |---|---:|---|
 | 应用语义版本 | `3.9.1` | `package.json` |
-| TypeScript 生产源码 | 1378 个文件 / 513067 行 | `tsconfig.json` |
+| TypeScript 生产源码 | 1409 个文件 / 515433 行 | `tsconfig.json` |
 | IndexedDB schema | v10 / 123 张 required tables | `schema.ts` / `REQUIRED_TABLES` |
 | PROJECT_TABLES | 123 张表 | `project-tables.ts` |
 | Prompt 主线 | 65 个 moduleKey / 238 条内置模板 | `PromptModuleKey` / `prompt-seeds*.ts` |
