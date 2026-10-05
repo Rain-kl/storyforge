@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { advanceWalkingPath, gridWalkingPath } from '../../src/lib/builtin-adventure/navigation'
+import { advanceWalkingPath, gridWalkingPath, walkingFrameSeconds } from '../../src/lib/builtin-adventure/navigation'
 import { PLACES } from '../../src/lib/aphelion/definition'
 import { walkable, walkingPath } from '../../src/lib/aphelion/navigation'
 
 describe('内置 3D 导航在慢帧中的位移与碰撞', () => {
-  it.each([1 / 60, 1 / 5])('以 %f 秒步长穿过全部空间站区域，不在路径拐点停顿', dt => {
+  it.each([1 / 60, 1 / 5, 1])('以 %f 秒步长穿过全部空间站区域，不在路径拐点停顿', dt => {
     let position = { x: PLACES[0].x, z: PLACES[0].z + 2 }
     for (const destination of [...PLACES.slice(1), PLACES[0]]) {
       const path = walkingPath(position, destination)
       expect(path.length).toBeGreaterThan(0)
       for (let elapsed = 0; path.length && elapsed < 30; elapsed += dt) {
-        position = advanceWalkingPath(position, path, 6.5 * dt, walkable)
+        position = advanceWalkingPath(position, path, 6.5 * walkingFrameSeconds(dt * 1000), walkable)
         expect(walkable(position)).toBe(true)
       }
       expect(path, `到达 ${destination.title}`).toHaveLength(0)
       expect(Math.hypot(position.x - destination.x, position.z - destination.z)).toBeLessThan(0.001)
     }
+  })
+
+  it('恢复长时间停顿时位移有界，不接受倒流或无效时钟', () => {
+    expect(walkingFrameSeconds(10_000)).toBe(1)
+    expect(walkingFrameSeconds(-100)).toBe(0)
+    expect(walkingFrameSeconds(Number.NaN)).toBe(0)
   })
 
   it('路径能绕过障碍，长帧也不能穿墙或越过目标', () => {

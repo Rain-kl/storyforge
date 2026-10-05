@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CAST, PLACES, type CastKey, type PlaceKey } from './definition'
 import { walkable, walkingPath } from './navigation'
-import { advanceWalkingPath, type Point } from '../builtin-adventure/navigation'
+import { advanceWalkingPath, walkingFrameSeconds, type Point } from '../builtin-adventure/navigation'
 
 export interface AphelionScene {
   dispose():void; travel(place:PlaceKey):void; setPaused(value:boolean):void; setQuality(value:boolean):void
@@ -119,7 +119,7 @@ export function createAphelionScene(host:HTMLDivElement,options:AphelionSceneOpt
   function frame(now:number) {
     if(disposed)return;frameId=requestAnimationFrame(frame)
     if(document.hidden||(paused&&now-lastRendered<250)){last=now;return}
-    lastRendered=now;const dt=Math.min((now-last)/1000,.2);last=now;elapsed+=dt
+    lastRendered=now;const dt=walkingFrameSeconds(now-last);last=now;elapsed+=dt
     let moving=false
     if(!paused&&!options.preview){
       const ix=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'))+touch.x

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { CAST, PLACES, type CastKey, type PlaceKey } from './definition'
 import { groundHeight, walkable, walkingPath, type Obstacle, type Point } from './navigation'
-import { advanceWalkingPath } from '../builtin-adventure/navigation'
+import { advanceWalkingPath, walkingFrameSeconds } from '../builtin-adventure/navigation'
 
 export interface TidemarkScene {
   dispose(): void
@@ -183,7 +183,7 @@ export function createTidemarkScene(host: HTMLDivElement, options: {
     if(document.hidden){last=now;return}
     if(paused&&now-lastRendered<250){last=now;return}
     lastRendered=now
-    const dt=Math.min((now-last)/1000,.25);last=now;elapsed+=dt;frames++
+    const dt=walkingFrameSeconds(now-last);last=now;elapsed+=dt;frames++
     if(now-fpsStart>1500){options.onFrame?.(Math.round(frames*1000/(now-fpsStart)));frames=0;fpsStart=now}
     let moving=false
     if(!paused&&!preview){

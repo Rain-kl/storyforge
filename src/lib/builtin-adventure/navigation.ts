@@ -1,5 +1,12 @@
 export type Point = { x: number; z: number }
 
+/** Keep walking tied to elapsed time even below 4 FPS. Collision substeps
+ * bound the movement; a long stall catches up by at most one second, and
+ * scene loops reset their clocks while hidden or paused. */
+export function walkingFrameSeconds(elapsedMs: number): number {
+  return Number.isFinite(elapsedMs) ? Math.max(0, Math.min(elapsedMs / 1000, 1)) : 0
+}
+
 /** Spend the movement budget across waypoints, including a turn in a slow
  * render frame. Never skip corners or spend an entire frame discarding a
  * reached waypoint; collision checks remain bounded to short segments. */
