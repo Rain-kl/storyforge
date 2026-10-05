@@ -7,6 +7,12 @@ lastVerified: 2026-09-20
 
 Turn a novel into a comic script, pagination, panels, images, and lettering. Entry: Comic → Library (漫画 → 作品库); select or create an adaptation, then enter Comic production (漫画制作台).
 
+## Watch a motion-comic sample
+
+Open **The Last Letter (末班来信)** from Comic → Library or Home → Example works → Comic. The 50-second sample plays with sound in a new tab without model configuration. It supports play, pause, seeking, replay, volume, fullscreen, and a still-frame comparison. Landscape viewing with headphones is recommended. Return to the comic examples to read the existing four complete page comics.
+
+This independently prepared sample combines limited animation, camera movement, and atmospheric effects. It does not mean the current comic product can automatically generate equivalent animation, and viewing creates or changes none of your works. Initial viewing requires a network connection to load assets. Sound starts only after you press play; switching tabs pauses playback.
+
 ## Recommended sequence
 
 1. **Source and plan:** confirm source scope, reading direction, length, facts, causality, and alteration decisions.

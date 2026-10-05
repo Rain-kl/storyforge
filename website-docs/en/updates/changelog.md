@@ -15,6 +15,15 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 Guides: [Text open world](/en/features/interactive/open-world) · [Examples](/en/guides/examples).
 Evidence: [Game content and entry integration](https://github.com/yuanbw2025/storyforge/commit/41f32066).
 
+### 2026-10-06 · The Last Letter motion-comic showcase
+
+- Comic → Library and Home → Example works → Comic now offer a 50-second motion comic with sound in a separate tab. The four existing complete page comics remain readable and downloadable.
+- Fullscreen, pause, seeking, replay, volume, and still-frame comparison work without a model API or changes to author works.
+- This independently prepared sample demonstrates limited animation, camera movement, and audiovisual effects. It does not claim the current comic-production workflow automatically generates equivalent animation. Movie resources load on demand and stay outside the app precache.
+
+Guides: [Novel to comic](/en/features/comic) · [Built-in works and examples](/en/guides/examples).
+Evidence: [Motion-comic showcase integration](https://github.com/yuanbw2025/storyforge/commit/f18c2922). Live availability depends on deployment completion.
+
 ### 2026-10-04 · Adventure presentation, local revisions, and large backups
 
 - Connected cover cards, details, start/continue, and saves. Unpublished playtests are labeled, historical versions are grouped under details, and stale Build starts are blocked.

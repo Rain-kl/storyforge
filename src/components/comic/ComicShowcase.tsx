@@ -1,13 +1,14 @@
 import { useExampleReader } from '../examples/useExampleReader'
 import { useCallback } from 'react'
 import { useState, type CSSProperties } from 'react'
-import { ArrowUpRight, Images, X } from 'lucide-react'
+import { ArrowUpRight, Images, Play, X } from 'lucide-react'
 import rainPreview from '../../../showcase/comic/before-rain-stops/art/final/cover.png'
 import flamePreview from '../../../showcase/comic/borrowed-flame/art/final/cover.png'
 import gunPreview from '../../../showcase/comic/before-the-gun/art/final/cover.png'
 import moonPreview from '../../../showcase/comic/moon-buys-bread/art/final/cover.png'
 import './comic-showcase.css'
 const files = import.meta.glob('../../../showcase/comic/*/art/final/{pages/*.png,*.pdf,*.cbz}', { query: '?url', import: 'default', eager: true }) as Record<string, string>
+const motionShowcaseUrl = `${import.meta.env.BASE_URL}demo-assets/last-letter/index.html`
 
 interface ShowcaseComic {
   slug: string
@@ -73,6 +74,20 @@ export default function ComicShowcase() {
       <div><span>COMIC RELEASE GALLERY</span><h2 id="comic-showcase-title">连续成页，才是真正的小说转漫画</h2></div>
       <p>四套完整改编覆盖不同题材与画风。统一视觉圣经、连续页面、确定性中文排字，并交付 PDF 与 CBZ。</p>
     </header>
+    <article className="comic-motion-showcase" aria-labelledby="comic-motion-title">
+      <a className="comic-motion-poster" href={motionShowcaseUrl} target="_blank" rel="noopener noreferrer" aria-label="播放动态漫画《末班来信》（新标签页）">
+        <img src={`${import.meta.env.BASE_URL}demo-assets/last-letter/assets/portrait.webp`} alt="雨夜车站里，戴红围巾的女孩等待一封迟来的信" loading="lazy" decoding="async" />
+        <span><Play size={20} aria-hidden="true" />50 秒 · 有声动态漫画</span>
+      </a>
+      <div className="comic-motion-copy">
+        <small>MOTION COMIC · 独立制作样片</small>
+        <h3 id="comic-motion-title">末班来信</h3>
+        <p>一封信，穿过十年的雨。用人物眨眼、分层运动、雨雾与配乐，让静态画面拥有时间。</p>
+        <a className="lf-action" href={motionShowcaseUrl} target="_blank" rel="noopener noreferrer">播放完整短片<ArrowUpRight size={16} aria-hidden="true" /></a>
+        <small>无需 API · 支持全屏与静帧对照 · 在新标签页播放</small>
+        <p className="comic-motion-boundary">这是已准备素材的效果展示，不代表当前漫画产品可自动生成同等动画。</p>
+      </div>
+    </article>
     <div className="comic-showcase-grid">
       {COMIC_SHOWCASES.map((comic, index) => <article
         className="comic-showcase-card"

@@ -34,6 +34,12 @@ Start with Between Two Bells. Desktop controls include WASD/arrow keys, click-to
 
 The main stories use frozen scripts supplied with the repository, without free-form model dialogue or voice acting. The longer games only offer optional synthesized ambience; the short story currently has no sound. These works do not establish completion of general open-world generation. Download a `main` checkout containing this update or a later Release; older archives do not automatically gain this content.
 
+## The Last Letter (末班来信)
+
+Open the 50-second motion comic from Comic → Library or Home → Example works → Comic. Fullscreen playback, sound, and a still-frame comparison are available. No API is required, and viewing writes nothing to your works. The four existing page comics remain readable and downloadable.
+
+This is a prepared showcase, not a claim that the current product automatically produces equivalent animation. See [Novel to comic](/en/features/comic) for controls and limitations.
+
 ## Creative-product examples
 
 Libraries for short fiction, screenplays, comics, and other products offer examples. Inspect output structure, review evidence, and delivery formats. To edit, use an independent experience copy offered by the interface or your own work; confirm the current object first.
