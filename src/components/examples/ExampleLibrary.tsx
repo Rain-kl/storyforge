@@ -13,7 +13,7 @@ export type ExampleKind = 'long' | 'short' | 'script' | 'comic' | 'motion' | 'av
 const categories: [ExampleKind, string, string][] = [
   ['short', '小说 · 盐从记忆里长出来', '4 篇完整短篇，直接阅读全文。'],
   ['script', '剧本 · 夜班末站', '4 套完整剧本，阅读并下载 Fountain。'],
-  ['comic', '漫画 · 雨停之前', '4 套成品漫画，逐页阅读与下载。'],
+  ['comic', '漫画 · 雨停之前 / 末班来信', '4 套页漫与 1 部动态样片，阅读或播放。'],
   ['motion', '漫剧 · 末班车回声', '前期制作包，查看分镜与逐镜执行方案。'],
   ['avg', 'AVG · 雾港：失潮钟声', '内置完整故事，无需 API 即可游玩。'],
   ['ttrpg', '跑团 · 雾港：最后一盏灯', '导入独立游戏存档，体验内置冒险。'],

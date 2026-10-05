@@ -132,9 +132,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        globIgnores: ['ui-preview/**', 'assets/ui-preview-*'],
+        globIgnores: ['ui-preview/**', 'assets/ui-preview-*', 'demo-assets/last-letter/**'],
         navigateFallback: '/storyforge/index.html',
-        navigateFallbackDenylist: [/^\/(?!storyforge)/, /^\/storyforge\/ui-preview(?:\/|$)/],
+        navigateFallbackDenylist: [/^\/(?!storyforge)/, /^\/storyforge\/ui-preview(?:\/|$)/, /^\/storyforge\/demo-assets\/last-letter(?:\/|$)/],
         // 主 bundle 已随功能增多突破 2 MiB（pdf.js + mammoth + 分块流水线），
         // 放宽到 5 MiB 让它被精确预缓存而不是只靠 runtime cache。
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
