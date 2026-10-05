@@ -22,6 +22,12 @@ This is a built-in open-world showcase on main. It demonstrates exploration, que
 
 The Tidal Bell Isles: The Last Light is an author-local unpublished playtest. Its presentation and recovery code is on main, but the work, images, and saves are not supplied by a fresh installation and are not part of this built-in catalog. Other locally developed works appear in [Pending development](/en/updates/development-status).
 
+## The Last Letter (末班来信)
+
+Open the 50-second motion comic from Comic → Library or Home → Example works → Comic. Fullscreen playback, sound, and a still-frame comparison are available. No API is required, and viewing writes nothing to your works. The four existing page comics remain readable and downloadable.
+
+This is a prepared showcase, not a claim that the current product automatically produces equivalent animation. See [Novel to comic](/en/features/comic) for controls and limitations.
+
 ## Creative-product examples
 
 Libraries for short fiction, screenplays, comics, and other products offer examples. Inspect output structure, review evidence, and delivery formats. To edit, use an independent experience copy offered by the interface or your own work; confirm the current object first.
