@@ -37,6 +37,20 @@ Play solo with AI companions or use same-device handoff. Progress is local, with
 
 </details>
 
+### Three 3D narrative games in Text open world
+
+Run a current `main` checkout and open **Text open world → Built-in narrative games (内置叙事游戏)**. These three games have no homepage cards. No API, extra model, or external game engine is required.
+
+| Game | Content | Local path |
+|---|---|---|
+| Tidemark: Between Two Bells (潮痕：两声之间) | A 4–5 minute story with investigation, tools, a sequenced sluice puzzle, and two rescue routes/endings | `/storyforge/play/tidemark-echo` |
+| Tidemark: The Last Lamp (潮痕：最后一盏灯) | Ten chapters of coastal fantasy; over 30,000 Chinese characters of main story, over 500 distinct dialogue lines, four endings | `/storyforge/play/tidemark` |
+| Aphelion: Dock Seven (远日点：第七码头) | Ten chapters of space science fiction, equipment puzzles, side routes, four endings; the same long-story content minimums | `/storyforge/play/aphelion` |
+
+Start with Between Two Bells. Use WASD/arrow keys or click-to-move, and E to interact; phones have on-screen controls. Settings include text exploration, lighter graphics, and reading modes. An explicit first start prepares independent world and game releases. Saves stay in your browser; new journeys and checkpoint branches retain previous saves, and full project backups can restore progress. Installing npm dependencies requires a connection; the main stories work offline once loaded.
+
+The games use frozen scripts without free-form AI dialogue or voice acting, and do not establish completion of general game-generation capabilities. Older Release archives do not automatically receive them; choose a `main` checkout containing this update or a later Release.
+
 ## Why StoryForge
 
 - **Traceable long-form memory.** Original text, facts, summaries and retrieval help recover earlier clues; confirmed chapter changes feed later writing. [Long fiction](#long-fiction-and-nodes)

@@ -31,6 +31,7 @@
 | C-SCREENPLAY-01 | 小说转剧本独立产品闭环 | Product Hub 创建入口、十步专业 Skill/durable Pipeline、事实/因果/删改决定、Beat/Scene Card/场景 AST、来源与戏剧双审查、定点修订、不可变 `CreationReleaseV1`、Fountain/FDX/打印导出、`R-SCREEN2-professional-pipeline` 与剧本 UI E2E；旧一步式入口已拒绝 |
 | C-COMIC-01 | 小说转漫画独立产品闭环 | 十二阶段专业改编、页格/排字/视觉圣经、叙事与视觉审查、真实参考图与权利门、双层不可变 Release、图片/CBZ/PDF 导出、`R-COMIC2-professional-pipeline` 与漫画 UI E2E |
 | C-MOTION-DRAMA-01 | 漫剧前期生产独立产品闭环 | 三种来源入口、系列/物料圣经、八个专业 Skill、逐集剧本/分镜、图片与试听音频版本、Image/Video Prompt IR、Seedance/Runway/LTX/generic 适配包、质量门、不可变 Release、`R-MOTIONDRAMA1-preproduction` 与漫剧 UI E2E；产品终点在视频生成前 |
+| E-BUILTIN-3D | 三款内置 3D 叙事作品适配与源码分发 | `tidemark`、`aphelion`、`tidemark-echo`；文字开放世界入口、当前 Brief/发布链、全部结局、备份重映射和删除隔离、桌面/手机 E2E；范围见 `UPPER-PRODUCTS.md` §13 |
 
 ## 当前权威基线
 

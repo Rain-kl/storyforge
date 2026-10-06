@@ -165,7 +165,9 @@ describe('Text Open World vNext · governed player and enemy combat actions', ()
     playerEffect.payloadJson = JSON.stringify(payload)
     expect(() => replayProductRuntimeEvents(JSON.parse(session.initialStateJson), tampered))
       .toThrow('战斗行动授权与当前状态不一致')
-  }, 30_000)
+    // This is a replay/correctness check, not a latency benchmark. The shared
+    // two-fork coverage runner can take over 30s; retain the local deadline.
+  }, process.env.CI ? 60_000 : 30_000)
 
   it('技能行动原子消耗技能资源并按战斗回合锁定冷却', async () => {
     const session = await createCombatSession(createTextOpenWorldVNextFixture(), 'combat-skill-seed')
