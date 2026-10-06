@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { PLACES, type PlaceKey } from './definition'
 import { echoWalkable, echoWalkingPath } from './navigation'
-import type { Point } from '../builtin-adventure/navigation'
+import { advanceWalkingPath, walkingFrameSeconds, type Point } from '../builtin-adventure/navigation'
 
 export interface EchoVisualState {
   inlet: boolean; pressure: boolean; gate: boolean; harness: boolean
@@ -208,22 +208,24 @@ export function createEchoScene(host: HTMLDivElement, options: {
   const animate = (now: number) => {
     if (disposed) return
     frame=requestAnimationFrame(animate)
-    if (document.hidden || (paused && now>animateUntil) || now-lastRender < (low ? 1000/20 : 1000/30)) return
+    if (document.hidden) { lastRender=now; return }
+    if ((paused && now>animateUntil) || now-lastRender < (low ? 1000/20 : 1000/30)) return
     const elapsed=(now-lastRender)/1000; lastRender=now
     let moving=false
     if (!paused) {
       let dx=input.x+(keys.has('d')||keys.has('arrowright')?1:0)-(keys.has('a')||keys.has('arrowleft')?1:0)
       let dz=input.z+(keys.has('s')||keys.has('arrowdown')?1:0)-(keys.has('w')||keys.has('arrowup')?1:0)
-      if (dx||dz) { path=[]; target=null } else if (path[0]) { dx=path[0].x-player.group.position.x; dz=path[0].z-player.group.position.z }
-      const length=Math.hypot(dx,dz)
-      if (length>.03) {
-        const step=Math.min(length,5.6*Math.min(elapsed,.06))
-        const next={x:player.group.position.x+dx/length*step,z:player.group.position.z+dz/length*step}
-        if (echoWalkable(next,flags.gate)) { player.group.position.x=next.x;player.group.position.z=next.z;player.group.rotation.y=Math.atan2(dx,dz);moving=true }
-        if (path[0] && Math.hypot(path[0].x-player.group.position.x,path[0].z-player.group.position.z)<.001) {
-          player.group.position.x=path[0].x;player.group.position.z=path[0].z;path.shift()
-        }
-      } else if (path.length) { player.group.position.x=path[0].x;player.group.position.z=path[0].z;path.shift() }
+      const position=player.group.position
+      const distance=5.6*walkingFrameSeconds(elapsed*1000)
+      let next: Point
+      if (dx||dz) {
+        path=[];target=null
+        const length=Math.hypot(dx,dz)
+        next=advanceWalkingPath(position,[{x:position.x+dx/length*distance,z:position.z+dz/length*distance}],distance,point=>echoWalkable(point,flags.gate))
+      } else next=advanceWalkingPath(position,path,distance,point=>echoWalkable(point,flags.gate))
+      dx=next.x-position.x;dz=next.z-position.z
+      position.x=next.x;position.z=next.z
+      if(Math.hypot(dx,dz)>.001){player.group.rotation.y=Math.atan2(dx,dz);moving=true}
       if (!path.length && target) { const arrived=target;target=null;options.onArrive(arrived) }
     }
     player.legs.forEach((leg,i)=>{leg.rotation.x=moving&&!options.reducedMotion?Math.sin(now*.014+i*Math.PI)*.4:0})
@@ -258,7 +260,7 @@ export function createEchoScene(host: HTMLDivElement, options: {
   frame=requestAnimationFrame(animate)
   return {
     travel, reset, update(value){flags=value;animateUntil=performance.now()+1500;renderer.shadowMap.needsUpdate=true},
-    pause(value){paused=value;blur();if(value){path=[];target=null}},
+    pause(value){if(paused!==value)lastRender=performance.now();paused=value;blur();if(value){path=[];target=null}},
     quality(value){low=value;renderer.setPixelRatio(value?1:Math.min(devicePixelRatio,1.4));renderer.shadowMap.enabled=!value;renderer.shadowMap.needsUpdate=true;animateUntil=performance.now()+300},
     input(x,z){input={x,z}},
     dispose(){

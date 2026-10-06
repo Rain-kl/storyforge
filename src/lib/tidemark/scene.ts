@@ -154,10 +154,13 @@ export function createTidemarkScene(host: HTMLDivElement, options: {
   let paused=false,preview=options.preview,low=false,disposed=false,ending=false,quest:PlaceKey='quay'
   let waypoints:Point[]=[],angle=.62,distance=31,elapsed=0,last=performance.now(),lastRendered=0,frameId=0,frames=0,fpsStart=last
   let nearby:PlaceKey|null=null,arrived:PlaceKey=options.initialPlace
+  // Paused scenes redraw only when a visual setting/state changes, leaving
+  // the main thread available for installation and durable player commands.
+  let needsRender = true
   const keys=new Set<string>();let touch={x:0,z:0};const lookAt=new THREE.Vector3();lookAt.copy(player.group.position)
   const raycaster=new THREE.Raycaster();const pointer=new THREE.Vector2()
   let down:{x:number;y:number;button:number}|null=null
-  const resized=()=>{const {width,height}=host.getBoundingClientRect();if(!width||!height)return;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix()}
+  const resized=()=>{const {width,height}=host.getBoundingClientRect();if(!width||!height)return;needsRender=true;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix()}
   const resizeObserver=new ResizeObserver(resized);resizeObserver.observe(host);resized()
   const keyDown=(event:KeyboardEvent)=>{if((event.target as HTMLElement)?.matches('input,textarea,select,[contenteditable=true]'))return;if((event.target as HTMLElement)?.closest('button')&&[' ','Enter'].includes(event.key))return;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(event.key))event.preventDefault();keys.add(event.key.toLowerCase());if(event.key.toLowerCase()==='e'&&!event.repeat&&!paused&&!preview)options.onInteract()}
   const keyUp=(event:KeyboardEvent)=>keys.delete(event.key.toLowerCase())
@@ -181,8 +184,9 @@ export function createTidemarkScene(host: HTMLDivElement, options: {
   function frame(now:number){
     if(disposed)return;frameId=requestAnimationFrame(frame)
     if(document.hidden){last=now;return}
-    if(paused&&now-lastRendered<250){last=now;return}
-    lastRendered=now
+    if(paused&&!needsRender){last=now;return}
+    if(!paused&&now-lastRendered<1000/30)return
+    needsRender=false;lastRendered=now
     const dt=walkingFrameSeconds(now-last);last=now;elapsed+=dt;frames++
     if(now-fpsStart>1500){options.onFrame?.(Math.round(frames*1000/(now-fpsStart)));frames=0;fpsStart=now}
     let moving=false
@@ -204,7 +208,8 @@ export function createTidemarkScene(host: HTMLDivElement, options: {
       }
       const nearest=PLACES.find(p=>Math.hypot(p.x-player.group.position.x,p.z-player.group.position.z)<4.3)?.key??null
       if(nearest!==nearby){nearby=nearest;options.onNearby(nearby)}
-      if(nearest&&nearest!==arrived){arrived=nearest;options.onArrive(nearest)}
+      // A selected route commits once on arrival, not at every landmark passed.
+      if(nearest&&!waypoints.length&&nearest!==arrived){arrived=nearest;options.onArrive(nearest)}
     }
     player.legs.forEach((leg,i)=>leg.rotation.x=moving?Math.sin(elapsed*13+i*Math.PI)*.6:0)
     player.arms.forEach((arm,i)=>arm.rotation.x=moving?Math.sin(elapsed*13+i*Math.PI)*.45:0)
@@ -219,9 +224,9 @@ export function createTidemarkScene(host: HTMLDivElement, options: {
   frameId=requestAnimationFrame(frame)
   return {
     travel(place){const destination=PLACES.find(p=>p.key===place)!;waypoints=walkingPath(player.group.position,destination,obstacles)},
-    setPaused(value){paused=value;if(value)blur()}, setQuest(place,speaker){quest=place;for(const location of PLACES){const npc=npcs.get(location.key)!;npc.outfit.forEach(part=>{part.material=material(CAST[location.key===place?speaker:location.npc].color)})}},
+    setPaused(value){if(paused!==value){needsRender=true;last=performance.now()}paused=value;if(value)blur()}, setQuest(place,speaker){quest=place;needsRender=true;for(const location of PLACES){const npc=npcs.get(location.key)!;npc.outfit.forEach(part=>{part.material=material(CAST[location.key===place?speaker:location.npc].color)})}},
     setQuality(value){low=value;renderer.setPixelRatio(value?1:Math.min(window.devicePixelRatio,1.75));renderer.shadowMap.enabled=!value;resized()},
-    setPreview(value){preview=value},setInput(x,z){touch={x,z}},setEnding(value){ending=value},
+    setPreview(value){preview=value},setInput(x,z){touch={x,z}},setEnding(value){ending=value;needsRender=true},
     dispose(){disposed=true;cancelAnimationFrame(frameId);resizeObserver.disconnect();window.removeEventListener('keydown',keyDown);window.removeEventListener('keyup',keyUp);window.removeEventListener('blur',blur);renderer.domElement.removeEventListener('pointerdown',pointerDown);renderer.domElement.removeEventListener('pointermove',pointerMove);renderer.domElement.removeEventListener('pointerup',pointerUp);renderer.domElement.removeEventListener('wheel',wheel);renderer.domElement.removeEventListener('contextmenu',context);renderer.domElement.removeEventListener('webglcontextlost',lost);const geometries=new Set<THREE.BufferGeometry>();const mats=new Set<THREE.Material>();scene.traverse(object=>{if(object instanceof THREE.Mesh){geometries.add(object.geometry);(Array.isArray(object.material)?object.material:[object.material]).forEach(mat=>mats.add(mat))}});geometries.forEach(geometry=>geometry.dispose());mats.forEach(mat=>mat.dispose());renderer.dispose();renderer.domElement.remove()},
   }
 }

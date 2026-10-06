@@ -98,9 +98,12 @@ export function createAphelionScene(host:HTMLDivElement,options:AphelionSceneOpt
   const start=PLACES.find(place=>place.key===options.initialPlace)!;player.group.position.set(start.x,0,start.z+2)
   let paused=false,low=false,disposed=false,ending=false,quest:PlaceKey=options.initialPlace,nearby:PlaceKey|null=null,arrived=options.initialPlace
   let path:Point[]=[],angle=.54,distance=29,last=performance.now(),elapsed=0,frameId=0,lastRendered=0
+  // Paused scenes redraw only when a visual setting/state changes, leaving
+  // the main thread available for installation and durable player commands.
+  let needsRender = true
   const keys=new Set<string>();let touch={x:0,z:0};const target=player.group.position.clone()
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2()
-  const resize=()=>{const {width,height}=host.getBoundingClientRect();if(!width||!height)return;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix()}
+  const resize=()=>{const {width,height}=host.getBoundingClientRect();if(!width||!height)return;needsRender=true;renderer.setSize(width,height);camera.aspect=width/height;camera.updateProjectionMatrix()}
   const observer=new ResizeObserver(resize);observer.observe(host);resize()
   const blur=()=>{keys.clear();touch={x:0,z:0};last=performance.now()}
   const keydown=(event:KeyboardEvent)=>{if(event.defaultPrevented||(event.target as HTMLElement)?.closest('input,textarea,select,[contenteditable=true]'))return;if(paused||options.preview)return;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.key))event.preventDefault();keys.add(event.key.toLowerCase());if(event.key.toLowerCase()==='e'&&!event.repeat)options.onInteract()}
@@ -118,8 +121,9 @@ export function createAphelionScene(host:HTMLDivElement,options:AphelionSceneOpt
   canvas.addEventListener('pointerdown',pointerdown);canvas.addEventListener('pointermove',pointermove);canvas.addEventListener('pointerup',pointerup);canvas.addEventListener('pointercancel',cancel);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('contextmenu',context);canvas.addEventListener('webglcontextlost',lost)
   function frame(now:number) {
     if(disposed)return;frameId=requestAnimationFrame(frame)
-    if(document.hidden||(paused&&now-lastRendered<250)){last=now;return}
-    lastRendered=now;const dt=walkingFrameSeconds(now-last);last=now;elapsed+=dt
+    if(document.hidden||(paused&&!needsRender)){last=now;return}
+    if(!paused&&now-lastRendered<1000/30)return
+    needsRender=false;lastRendered=now;const dt=walkingFrameSeconds(now-last);last=now;elapsed+=dt
     let moving=false
     if(!paused&&!options.preview){
       const ix=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'))+touch.x
@@ -131,7 +135,8 @@ export function createAphelionScene(host:HTMLDivElement,options:AphelionSceneOpt
       if(length>.01){const speed=Math.min(length,(keys.has('shift')?9:6.5)*dt);const steps=Math.max(1,Math.ceil(speed/.2));dx=dx/length*speed/steps;dz=dz/length*speed/steps;const p=player.group.position;for(let i=0;i<steps;i++){if(walkable({x:p.x+dx,z:p.z}))p.x+=dx;if(walkable({x:p.x,z:p.z+dz}))p.z+=dz}player.group.rotation.y=Math.atan2(dx,dz);moving=true}
       const nearest=PLACES.find(place=>Math.hypot(player.group.position.x-place.x,player.group.position.z-place.z)<3.6)?.key??null
       if(nearest!==nearby){nearby=nearest;options.onNearby(nearby)}
-      if(nearest&&nearest!==arrived){arrived=nearest;options.onArrive(nearest)}
+      // A selected route commits once on arrival, not at every landmark passed.
+      if(nearest&&!path.length&&nearest!==arrived){arrived=nearest;options.onArrive(nearest)}
     }
     player.group.visible=!options.preview;player.limbs.forEach((limb,index)=>{limb.rotation.x=moving?Math.sin(elapsed*13+(index%2)*Math.PI)*(index<2?.6:.4):0})
     if(options.preview){const orbit=.56+(options.reducedMotion?0:Math.sin(elapsed*.03)*.08);camera.position.set(Math.sin(orbit)*107,70,Math.cos(orbit)*100-17);camera.lookAt(0,0,-8)}
@@ -145,9 +150,9 @@ export function createAphelionScene(host:HTMLDivElement,options:AphelionSceneOpt
   frameId=requestAnimationFrame(frame)
   return {
     travel(place){const destination=PLACES.find(item=>item.key===place);if(destination)path=walkingPath(player.group.position,destination)},
-    setPaused(value){paused=value;if(value)blur()},setInput(x,z){touch={x,z}},setEnding(value){ending=value},
+    setPaused(value){if(paused!==value){needsRender=true;last=performance.now()}paused=value;if(value)blur()},setInput(x,z){touch={x,z}},setEnding(value){ending=value;needsRender=true},
     setQuality(value){low=value;renderer.setPixelRatio(value?1:Math.min(devicePixelRatio,1.75));renderer.shadowMap.enabled=!value;resize()},
-    setQuest(place,speaker){quest=place;for(const p of PLACES)updateNpc(p,p.key===place?speaker:p.npc)},
+    setQuest(place,speaker){quest=place;needsRender=true;for(const p of PLACES)updateNpc(p,p.key===place?speaker:p.npc)},
     dispose(){disposed=true;cancelAnimationFrame(frameId);observer.disconnect();window.removeEventListener('keydown',keydown);window.removeEventListener('keyup',keyup);window.removeEventListener('blur',blur);canvas.removeEventListener('pointerdown',pointerdown);canvas.removeEventListener('pointermove',pointermove);canvas.removeEventListener('pointerup',pointerup);canvas.removeEventListener('pointercancel',cancel);canvas.removeEventListener('wheel',wheel);canvas.removeEventListener('contextmenu',context);canvas.removeEventListener('webglcontextlost',lost);const geometries=new Set<THREE.BufferGeometry>(),mats=new Set<THREE.Material>();scene.traverse(object=>{if(object instanceof THREE.Mesh||object instanceof THREE.Points){geometries.add(object.geometry);(Array.isArray(object.material)?object.material:[object.material]).forEach(mat=>mats.add(mat))}});geometries.forEach(geometry=>geometry.dispose());new Set([...materials.values(),...mats]).forEach(mat=>mat.dispose());renderer.dispose();canvas.remove()},
   }
   function updateNpc(place:typeof PLACES[number],speaker:CastKey){npcs.get(place.key)?.outfit.forEach(part=>{part.material=material(CAST[speaker].color,place.key==='core')})}

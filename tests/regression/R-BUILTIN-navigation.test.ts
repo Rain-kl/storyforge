@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { advanceWalkingPath, gridWalkingPath, walkingFrameSeconds } from '../../src/lib/builtin-adventure/navigation'
 import { PLACES } from '../../src/lib/aphelion/definition'
 import { walkable, walkingPath } from '../../src/lib/aphelion/navigation'
+import { PLACES as ECHO_PLACES } from '../../src/lib/tidemark-echo/definition'
+import { echoWalkable, echoWalkingPath } from '../../src/lib/tidemark-echo/navigation'
 
 describe('内置 3D 导航在慢帧中的位移与碰撞', () => {
   it.each([1 / 60, 1 / 5, 1])('以 %f 秒步长穿过全部空间站区域，不在路径拐点停顿', dt => {
@@ -12,6 +14,22 @@ describe('内置 3D 导航在慢帧中的位移与碰撞', () => {
       for (let elapsed = 0; path.length && elapsed < 30; elapsed += dt) {
         position = advanceWalkingPath(position, path, 6.5 * walkingFrameSeconds(dt * 1000), walkable)
         expect(walkable(position)).toBe(true)
+      }
+      expect(path, `到达 ${destination.title}`).toHaveLength(0)
+      expect(Math.hypot(position.x - destination.x, position.z - destination.z)).toBeLessThan(0.001)
+    }
+  })
+
+  it.each([1 / 60, 1 / 5, 1])('短篇以 %f 秒步长完成开闸后的救援路线，保持碰撞边界', dt => {
+    let position = { x: ECHO_PLACES[0].x, z: ECHO_PLACES[0].z }
+    const boat = ECHO_PLACES.find(place => place.key === 'boat')!
+    expect(echoWalkingPath(position, boat, false)).toHaveLength(0)
+    for (const destination of [...ECHO_PLACES.slice(1), ECHO_PLACES[0]]) {
+      const path = echoWalkingPath(position, destination, true)
+      expect(path.length).toBeGreaterThan(0)
+      for (let elapsed = 0; path.length && elapsed < 10; elapsed += dt) {
+        position = advanceWalkingPath(position, path, 5.6 * walkingFrameSeconds(dt * 1000), point => echoWalkable(point, true))
+        expect(echoWalkable(position, true)).toBe(true)
       }
       expect(path, `到达 ${destination.title}`).toHaveLength(0)
       expect(Math.hypot(position.x - destination.x, position.z - destination.z)).toBeLessThan(0.001)
