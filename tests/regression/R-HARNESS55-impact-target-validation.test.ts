@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { db } from '../../src/lib/db/schema'
+import { stampNewRecord } from '../../src/lib/workspace/scope'
 import type { WorkspaceScope } from '../../src/lib/types'
 import {
   isImpactHandoffRouteModuleV2,
@@ -166,10 +167,26 @@ describe.sequential('R-HARNESS55 · 人工交接精确目标验证', () => {
     expect(isImpactHandoffRouteModuleV2(null, target)).toBe(false)
   })
 
+  it('旧力量体系交接仍定位原记录，但不允许跨世界读取', async () => {
+    const fixture = await seed()
+    const other = await seedCurrentWorkspace('其他世界')
+    const recordId = await db.powerSystems.add(stampNewRecord(fixture.scope, 'powerSystems', {
+      projectId: fixture.projectId, worldGroupId: null, name: '潮息', description: '',
+      levels: '', rules: '代价不可逃避', createdAt: fixture.now, updatedAt: fixture.now,
+    }, { owner: 'world' }))
+    const legacy = handoff({ action: 'review-source-record', table: 'powerSystems', recordId,
+      targetRecordId: recordId, targetModule: 'power-system' })
+    expect(isImpactHandoffRouteModuleV2('worldview-origin', legacy)).toBe(true)
+    await expect(resolveCurrentImpactHandoffTargetV2({ scope: fixture.scope, handoff: legacy }))
+      .resolves.toEqual({ table: 'powerSystems', recordId, moduleRecordId: recordId })
+    await expect(resolveCurrentImpactHandoffTargetV2({ scope: other.scope, handoff: legacy })).resolves.toBeNull()
+    expect(legacy.targetModule).toBe('power-system')
+  })
+
   it('工作区只把验签解析后的面板 ID 交给现有模块', () => {
     const source = readFileSync('src/pages/WorkspacePage.tsx', 'utf8')
     expect(source).toContain("!isImpactHandoffRouteModuleV2(params.get('module'), parsed)")
-    expect(source).toContain('activeModule !== parsed.targetModule')
+    expect(source).toContain('activeModule !== canonicalPowerModule(parsed.targetModule)')
     expect(source).toContain('beginImpactManualCorrectionV1({ scope, handoff: parsed })')
     expect(source).toContain('impactHandoffTarget?.moduleRecordId')
     for (const prop of [

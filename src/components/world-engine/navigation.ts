@@ -1,9 +1,10 @@
+import { canonicalPowerModule } from '../../lib/workspace/module-alias'
 import type { SidebarModule } from '../layout/sidebar-tree'
 
 export const WORLD_PAGES: {id:string;label:string;description:string;modules?:[SidebarModule,string][]}[] = [
   {id:'worlds',label:'我的世界',description:'创建、选择和管理本地世界。'},
   {id:'worldbuilding',label:'世界设定',description:'从规则、环境与人物出发，逐步完善世界内容；准备好后再封存为可引用的版本。'},
-  {id:'basics',label:'规则与起源',description:'建立世界规则、起源与力量体系。',modules:[['world-rules','世界规则'],['worldview-origin','世界起源'],['power-system','力量体系'],['cultivation-progress','修炼进度']]},
+  {id:'basics',label:'规则与起源',description:'建立世界规则、起源与力量体系。',modules:[['world-rules','世界规则'],['worldview-origin','世界起源'],['cultivation-progress','修炼进度']]},
   {id:'nature',label:'自然与地理',description:'编辑自然环境、资源、地点与地理设定。',modules:[['worldview-natural','自然环境与资源'],['geography','地理设定'],['locations','地点与实体']]},
   {id:'society',label:'人文与社会',description:'管理种族、势力、城市、政治、文化、经济与物品。',modules:[['worldview-humanity','人文环境与实体'],['inventory','物品'],['state-table','状态']]},
   {id:'characters',label:'人物与关系',description:'建立人物档案与关系网络。',modules:[['characters','角色生成'],['characters-main','主要角色'],['characters-minor','次要角色'],['characters-npc','NPC'],['characters-extra','路人'],['relations','关系网络']]},
@@ -18,12 +19,13 @@ export const WORLD_PAGES: {id:string;label:string;description:string;modules?:[S
   {id:'settings',label:'通用设置',description:'管理模型、用量和完整数据备份。',modules:[['settings','通用设置'],['usage-stats','用量统计'],['data-management','备份与恢复'],['prompts','提示词库']]},
 ]
 export function worldPageForModule(module:string):string {
-  return WORLD_PAGES.find(page=>page.modules?.some(([id])=>id===module))?.id ?? 'story'
+  return WORLD_PAGES.find(page=>page.modules?.some(([id])=>id===canonicalPowerModule(module)))?.id ?? 'story'
 }
 export function worldModulePath(projectId:number|string,module:string,params?:URLSearchParams):string {
   if(module==='version-history')return `/world/versions?project=${projectId}`
   if(module==='export')module='data-management'
   const query=new URLSearchParams(params)
+  if(module==='power-system'){module='worldview-origin';query.set('originField','power')}
   query.set('project',String(projectId));query.set('module',module)
   query.delete('section');query.delete('mode')
   return `/world/${worldPageForModule(module)}?${query}`

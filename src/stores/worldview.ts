@@ -11,6 +11,7 @@ interface WorldviewStore {
   storyCore: StoryCore | null
   powerSystem: PowerSystem | null
   loading: boolean
+  loadedProjectId: number | null
   /** 当前加载的世界组（null = 单世界模式 / 未指定） */
   activeWorldGroupId: number | null
 
@@ -22,30 +23,34 @@ interface WorldviewStore {
 }
 
 const now = () => Date.now()
+let worldviewLoadRequest = 0
 
 export const useWorldviewStore = create<WorldviewStore>((set, get) => ({
   worldview: null,
   storyCore: null,
   powerSystem: null,
   loading: false,
+  loadedProjectId: null,
   activeWorldGroupId: null,
 
   loadAll: async (scopeInput: WorkspaceScopeLike, worldGroupId: number | null = null) => {
+    const request = ++worldviewLoadRequest
     set({ loading: true, activeWorldGroupId: worldGroupId })
     const scope = await resolveScopeLike(scopeInput)
+    if (request !== worldviewLoadRequest) return
+    set({ loadedProjectId: scope.projectId })
     const [wvList, sc, psList] = await Promise.all([
       readOwnedRows<Worldview>(scope, 'worldviews', { owner: 'world' }),
       readOwnedRows<StoryCore>(scope, 'storyCores', { owner: 'work' }).then(rows => rows[0]),
       readOwnedRows<PowerSystem>(scope, 'powerSystems', { owner: 'world' }),
     ])
+    if (request !== worldviewLoadRequest || get().loadedProjectId !== scope.projectId || get().activeWorldGroupId !== worldGroupId) return
     // 单世界模式（worldGroupId == null）：取第一条
     // 多世界模式：取匹配该世界组的记录
     const wv = worldGroupId == null
       ? wvList[0]
       : wvList.find(w => w.worldGroupId === worldGroupId)
-    const ps = worldGroupId == null
-      ? psList[0]
-      : psList.find(p => p.worldGroupId === worldGroupId)
+    const ps = psList.find(p => (p.worldGroupId ?? null) === worldGroupId)
     set({
       worldview: wv ?? null,
       storyCore: sc || null,   // 故事核心是项目级，不分世界
@@ -103,37 +108,43 @@ export const useWorldviewStore = create<WorldviewStore>((set, get) => ({
     const { powerSystem, activeWorldGroupId } = get()
     const projectId = data.projectId ?? powerSystem?.projectId
     if (projectId == null) return Promise.resolve()
+    const worldGroupId = data.worldGroupId !== undefined ? data.worldGroupId : activeWorldGroupId
+    // Capture scope and field patch before the queued write; never borrow a newly
+    // selected project's/group's record from the global store inside persist().
+    const patch = Object.fromEntries(
+      (['name', 'description', 'levels', 'rules'] as const)
+        .filter(field => data[field] !== undefined).map(field => [field, data[field]]),
+    )
+    if (!Object.keys(patch).length) return Promise.resolve()
+    const scopePromise = resolveScopeLike(projectId)
     return coordinatePendingEditV1({
-      key: `power-system:${projectId}:${activeWorldGroupId ?? 'default'}`,
+      key: `power-system:${projectId}:${worldGroupId ?? 'default'}`,
       persist: async () => {
-        let target = get().powerSystem
-        if (!target?.id) {
-          const list = await readOwnedRows<PowerSystem>(await resolveScopeLike(projectId), 'powerSystems', { owner: 'world' })
-          target = (activeWorldGroupId == null
-            ? (list.find(p => p.worldGroupId == null) ?? list[0])
-            : list.find(p => p.worldGroupId === activeWorldGroupId)) ?? null
-        }
+        const scope = await scopePromise
+        const list = await readOwnedRows<PowerSystem>(scope, 'powerSystems', { owner: 'world' })
+        const target = list.find(row => (row.worldGroupId ?? null) === worldGroupId)
+        let next: PowerSystem
         if (target?.id) {
           const updatedAt = now()
-          await db.powerSystems.update(target.id, { ...data, updatedAt })
+          await db.powerSystems.update(target.id, { ...patch, updatedAt })
           await refreshSettingAssertionSourceStatus({
-            projectId: target.projectId,
-            table: 'powerSystems',
-            recordId: target.id,
-            changedFields: Object.keys(data),
+            projectId, table: 'powerSystems', recordId: target.id,
+            changedFields: Object.keys(patch),
           })
-          set({ powerSystem: { ...target, ...data, updatedAt } })
-          return
+          next = { ...target, ...patch, updatedAt }
+        } else {
+          const row = stampNewRecord(scope, 'powerSystems', {
+            projectId, name: '', description: '', levels: '', rules: '',
+            ...patch, worldGroupId, createdAt: now(), updatedAt: now(),
+          }, { owner: 'world' }) as PowerSystem
+          const id = await db.powerSystems.add(row)
+          next = { ...row, id: id as number }
         }
-        const newPs = stampNewRecord(await resolveScopeLike(projectId), 'powerSystems', {
-          projectId,
-          name: '', description: '', levels: '', rules: '',
-          worldGroupId: activeWorldGroupId,
-          createdAt: now(), updatedAt: now(),
-          ...data,
-        }, { owner: 'world' }) as PowerSystem
-        const id = await db.powerSystems.add(newPs)
-        set({ powerSystem: { ...newPs, id: id as number } })
+        const current = get()
+        if (current.activeWorldGroupId === worldGroupId
+          && current.loadedProjectId === projectId) {
+          set({ powerSystem: next })
+        }
       },
     })
   },

@@ -5,6 +5,8 @@ import { resolveAgentSkillInputStateV1, type AgentSkillDefinitionV1 } from './sk
 const INPUT_SOURCE_BY_TABLE: Readonly<Record<string, string>> = {
   works: 'workStatus',
   worldviews: 'worldview',
+  powerSystems: 'powerSystem',
+  cultivationSystems: 'powerSystem',
   storyCores: 'storyCore',
   characters: 'characters',
   storyArcs: 'storyArcs',

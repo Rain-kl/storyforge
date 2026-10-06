@@ -35,8 +35,8 @@ describe('R-HARNESS81 · H57 下游执行器政策闭集', () => {
     const sourceRecords = [
       ['worldRules', 'world-rules'],
       ['worldviews', 'worldview-origin'],
-      ['powerSystems', 'power-system'],
-      ['cultivationSystems', 'power-system'],
+      ['powerSystems', 'worldview-origin'],
+      ['cultivationSystems', 'worldview-origin'],
       ['storyCores', 'story-design'],
       ['characters', 'characters'],
       ['characterRelations', 'relations'],

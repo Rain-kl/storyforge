@@ -1,3 +1,4 @@
+import { canonicalPowerModule } from '../workspace/module-alias'
 import type {
   ImpactRemediationActionV1,
   ImpactRemediationItemV1,
@@ -85,7 +86,7 @@ export function resolveImpactHandoffModuleV2(
     case 'review-source-record':
       if (item.table === 'worldRules') return 'world-rules'
       if (item.table === 'worldviews') return 'worldview-origin'
-      if (item.table === 'powerSystems' || item.table === 'cultivationSystems') return 'power-system'
+      if (item.table === 'powerSystems' || item.table === 'cultivationSystems') return 'worldview-origin'
       if (item.table === 'storyCores') return 'story-design'
       if (item.table === 'characters') return 'characters'
       if (item.table === 'characterRelations') return 'relations'
@@ -123,7 +124,7 @@ function assertHandoff(value: unknown): asserts value is ImpactHandoffV2 {
     action: row.action as ImpactRemediationActionV1,
     table: row.table,
   })
-  if (row.targetModule !== expectedModule) throw new Error('影响交接目标模块与影响项不匹配。')
+  if (row.targetModule !== expectedModule && !(row.targetModule === 'power-system' && ['powerSystems', 'cultivationSystems'].includes(String(row.table)) && expectedModule === 'worldview-origin')) throw new Error('影响交接目标模块与影响项不匹配。')
   const expectedTargetRecordId = row.action === 'review-source' ? row.sourceOutlineNodeId : row.recordId
   if (row.targetRecordId !== expectedTargetRecordId) throw new Error('影响交接目标记录与影响项不匹配。')
   if (row.returnNodeId !== row.sourceOutlineNodeId) throw new Error('影响交接返回章节与来源不匹配。')
@@ -197,5 +198,5 @@ export function isImpactHandoffRouteModuleV2(
   routeModule: string | null | undefined,
   handoff: Pick<ImpactHandoffV2, 'targetModule'>,
 ): boolean {
-  return routeModule === handoff.targetModule
+  return canonicalPowerModule(routeModule) === canonicalPowerModule(handoff.targetModule)
 }

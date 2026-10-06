@@ -3075,7 +3075,7 @@ export const CONTEXT_SOURCES: ContextSource[] = [
   },
   {
     key: 'powerSystem',
-    label: '力量体系',
+    label: '力量规则与修炼路径',
     scope: 'world',
     ownerFrom: 'world',
     layer: 'L2',
