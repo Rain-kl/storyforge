@@ -4,6 +4,13 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### 2026-10-06 · Word-import dependency security maintenance
+
+- Removed a component with a known vulnerability from the Word-import dependency chain while preserving existing `.docx` text extraction.
+- Browser regressions passed for Chinese text, paragraphs, table text, and explicit errors for damaged files.
+
+Evidence: [Dependency fix](https://github.com/yuanbw2025/storyforge/commit/f06caf0f), merged through [PR #111](https://github.com/yuanbw2025/storyforge/pull/111). See [Import and references](/en/guides/import) for usage.
+
 ### 2026-10-06 · Three ready-to-play 3D narrative games
 
 - Text open world → Built-in narrative games now offers Tidemark: The Last Lamp (潮痕：最后一盏灯), Aphelion: Dock Seven (远日点：第七码头), and Tidemark: Between Two Bells (潮痕：两声之间), with no API setup or extra model download.
