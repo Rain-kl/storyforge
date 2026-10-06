@@ -27,6 +27,12 @@ Preserve the current result, inspect the failure stage and reason, then decide w
 
 If the page offers recovery of the same run, first check for existing results and pending candidates. Rerunning the entire flow is not necessarily recovery.
 
+## Wait for candidate persistence and preserve recovery input
+
+Longform scene-outline generation validates and saves a recoverable candidate after streaming ends. While saving is shown, wait for review actions before editing, adopting, or dismissing; do not start another generation.
+
+After an interactive-production failure, read the reason before entering a repair draft if the page offers that input. The initial asynchronous progress load no longer clears an already typed draft. Changing the production or its run-control version can still reset the input. This protection does not automatically restore unsubmitted input after refresh: submit through the available action or keep a separate draft before leaving.
+
 ## Effective instructions
 
 State the goal, scope, required preservation, permitted changes, and output form. “Polish only this dialogue, preserving decisions and event order” is easier to check than “improve everything.”

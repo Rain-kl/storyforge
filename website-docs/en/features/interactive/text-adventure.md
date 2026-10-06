@@ -1,7 +1,7 @@
 ---
 productId: upper.text-adventure
 status: preview
-lastVerified: 2026-10-04
+lastVerified: 2026-10-06
 ---
 # Text adventure
 
@@ -29,6 +29,8 @@ The Text adventure entry includes Works and playtests (作品与试玩), Product
 The quest journal groups objectives by category. Inventory, equipment, skill points, and action explanations help you decide what to do next. Preconditions and resources constrain choices; actual events determine endings. Generated prose alone is not proof that an objective completed.
 
 Progress binds to a frozen version. Check the version and save when refreshing or recovering. Use supported recovery paths after corruption warnings; do not manually alter frozen data. For failed or paused production, inspect the existing run and retained artifacts before restarting the entire work.
+
+Task-repair input now survives the initial progress load instead of being cleared as that load completes. Switching productions or changing the run-control version still resets the relevant inputs. Unsubmitted drafts are not guaranteed to survive refresh; see [candidate persistence and recovery input](/en/guides/ai-workflow).
 
 ## Library, playtests, and local revisions
 
