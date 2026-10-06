@@ -15,16 +15,37 @@
 
 ## 尚未进入主干的分支
 
-| 本地分支 | 主干外提交 | 仅本地提交 | 核对结论 |
-| --- | ---: | ---: | --- |
-| `feat/builtin-games-mainline-20261006` | 5 | 0 | 三款内置叙事游戏接入文字开放世界，已推送并提出 [PR #111](https://github.com/yuanbw2025/storyforge/pull/111)，最近核对的远端 CI 失败，待修复与合并；不能写成官网已上线。 |
-| `feat/builtin-3d-adventure` | 9 | 9 | 三款内置作品的旧本地开发，与 PR #111 的迁移范围重叠；保留旧提交证据，不重复统计三款新功能。 |
-| `feat/mist-harbor-builtin` | 1 | 1 | `6ddbdb8c`：雾港 AVG 音效、配乐与录制文案；归档工作区中的未推送提交，是否仍需采用待核对。 |
-| `fix/avg-production-world-media-reuse` | 1 | 1 | `618d388e`：冻结世界媒资复用，也被旧开放世界架构分支包含；只保留一项待核对内容。 |
-| `codex/backup-text-open-world-before-main-sync-20260906-3f38495f` | 45 | 45 | 旧备份，43 个普通补丁与主干等价；剩余差异包含历史文档及生成元数据，不能按 SHA 数字重复合并。 |
-| `feat/public-product-presentation` | 53 | 53 | 旧开放世界生产分支，45 个普通补丁与主干等价；其余来源、规则、主角、故事架构及文档差异仍需结合后续实现判断。 |
-| `feat/text-open-world-product-architecture` | 38 | 38 | 旧开放世界架构，部分已被后续实现覆盖；不是 38 项缺失功能，不恢复旧产品边界。 |
-| `refactor/storyforge-bronze-ui` | 3 | 0 | 已推送的历史 UI 分支，[PR #84](https://github.com/yuanbw2025/storyforge/pull/84) 尚未合并；不据此替换当前界面指南。 |
+- `feat/builtin-games-mainline-20261006`：主干外 5 个提交，其中 0 个仅在本地。
+
+  三款内置叙事游戏接入文字开放世界，已推送并提出 [PR #111](https://github.com/yuanbw2025/storyforge/pull/111)，最近核对的远端 CI 失败，待修复与合并；不能写成官网已上线。
+
+- `feat/builtin-3d-adventure`：主干外 9 个提交，其中 9 个仅在本地。
+
+  三款内置作品的旧本地开发，与 PR #111 的迁移范围重叠；保留旧提交证据，不重复统计三款新功能。
+
+- `feat/mist-harbor-builtin`：主干外 1 个提交，其中 1 个仅在本地。
+
+  `6ddbdb8c`：雾港 AVG 音效、配乐与录制文案；归档工作区中的未推送提交，是否仍需采用待核对。
+
+- `fix/avg-production-world-media-reuse`：主干外 1 个提交，其中 1 个仅在本地。
+
+  `618d388e`：冻结世界媒资复用，也被旧开放世界架构分支包含；只保留一项待核对内容。
+
+- `codex/backup-text-open-world-before-main-sync-20260906-3f38495f`：主干外 45 个提交，其中 45 个仅在本地。
+
+  旧备份，43 个普通补丁与主干等价；剩余差异包含历史文档及生成元数据，不能按 SHA 数字重复合并。
+
+- `feat/public-product-presentation`：主干外 53 个提交，其中 53 个仅在本地。
+
+  旧开放世界生产分支，45 个普通补丁与主干等价；其余来源、规则、主角、故事架构及文档差异仍需结合后续实现判断。
+
+- `feat/text-open-world-product-architecture`：主干外 38 个提交，其中 38 个仅在本地。
+
+  旧开放世界架构，部分已被后续实现覆盖；不是 38 项缺失功能，不恢复旧产品边界。
+
+- `refactor/storyforge-bronze-ui`：主干外 3 个提交，其中 0 个仅在本地。
+
+  已推送的历史 UI 分支，[PR #84](https://github.com/yuanbw2025/storyforge/pull/84) 尚未合并；不据此替换当前界面指南。
 
 ## 未提交内容与归档去重
 

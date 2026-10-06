@@ -15,16 +15,37 @@ See the [changelog](/en/updates/changelog), [longform settings](/en/features/lon
 
 ## Branches still outside main
 
-| Local branch | Commits outside main | Local-only commits | Audit conclusion |
-| --- | ---: | ---: | --- |
-| `feat/builtin-games-mainline-20261006` | 5 | 0 | Three built-in narrative games integrated with text open world; pushed as [PR #111](https://github.com/yuanbw2025/storyforge/pull/111), its latest inspected remote CI failed, so fixes and merge are pending. Not described as live on the official site. |
-| `feat/builtin-3d-adventure` | 9 | 9 | Earlier local development of the three built-in works overlaps the migration in PR #111. Keep the old commit evidence without counting three additional features. |
-| `feat/mist-harbor-builtin` | 1 | 1 | `6ddbdb8c`: Mist Harbor AVG effects, soundtrack, and recording copy. An unpushed commit in an archived worktree; continued relevance needs review. |
-| `fix/avg-production-world-media-reuse` | 1 | 1 | `618d388e`: frozen-world media reuse, also contained in the older open-world architecture branch. Retained as one review item. |
-| `codex/backup-text-open-world-before-main-sync-20260906-3f38495f` | 45 | 45 | Old backup with 43 ordinary patches equivalent to main. Remaining differences include historical documentation and generated metadata; do not merge again based on SHA counts. |
-| `feat/public-product-presentation` | 53 | 53 | Old open-world production branch with 45 ordinary patches equivalent to main. Remaining source, rules, protagonist, story-architecture, and documentation differences need comparison with later implementations. |
-| `feat/text-open-world-product-architecture` | 38 | 38 | Old open-world architecture, partly superseded by later implementation. Not 38 missing features; do not restore obsolete product boundaries. |
-| `refactor/storyforge-bronze-ui` | 3 | 0 | Pushed historical UI branch, with [PR #84](https://github.com/yuanbw2025/storyforge/pull/84) still open. It does not replace current interface instructions. |
+- `feat/builtin-games-mainline-20261006`：5 commits outside main; 0 local-only.
+
+  Three built-in narrative games integrated with text open world; pushed as [PR #111](https://github.com/yuanbw2025/storyforge/pull/111), its latest inspected remote CI failed, so fixes and merge are pending. Not described as live on the official site.
+
+- `feat/builtin-3d-adventure`：9 commits outside main; 9 local-only.
+
+  Earlier local development of the three built-in works overlaps the migration in PR #111. Keep the old commit evidence without counting three additional features.
+
+- `feat/mist-harbor-builtin`：1 commits outside main; 1 local-only.
+
+  `6ddbdb8c`: Mist Harbor AVG effects, soundtrack, and recording copy. An unpushed commit in an archived worktree; continued relevance needs review.
+
+- `fix/avg-production-world-media-reuse`：1 commits outside main; 1 local-only.
+
+  `618d388e`: frozen-world media reuse, also contained in the older open-world architecture branch. Retained as one review item.
+
+- `codex/backup-text-open-world-before-main-sync-20260906-3f38495f`：45 commits outside main; 45 local-only.
+
+  Old backup with 43 ordinary patches equivalent to main. Remaining differences include historical documentation and generated metadata; do not merge again based on SHA counts.
+
+- `feat/public-product-presentation`：53 commits outside main; 53 local-only.
+
+  Old open-world production branch with 45 ordinary patches equivalent to main. Remaining source, rules, protagonist, story-architecture, and documentation differences need comparison with later implementations.
+
+- `feat/text-open-world-product-architecture`：38 commits outside main; 38 local-only.
+
+  Old open-world architecture, partly superseded by later implementation. Not 38 missing features; do not restore obsolete product boundaries.
+
+- `refactor/storyforge-bronze-ui`：3 commits outside main; 0 local-only.
+
+  Pushed historical UI branch, with [PR #84](https://github.com/yuanbw2025/storyforge/pull/84) still open. It does not replace current interface instructions.
 
 ## Uncommitted work and archive deduplication
 
