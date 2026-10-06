@@ -1,42 +1,62 @@
 # 待合并开发记录与分支核对
 
-> 核对快照：2026-10-04 · 远程 main `dd253f85`。本页是开发证据，不是已发布功能清单，也不承诺将历史替代方案全部合并。
+> 核对快照：2026-10-07 00:11（北京时间）· 远程 main `da3ac75c`。本页记录开发证据，不是已发布功能清单。
 
-PR #100 合入后重新遍历全部 86 个本地分支。排除本次知识库维护分支，其余 67 个 head 已是主干祖先，18 个仍有主干之外的提交。下表“仅本地提交”指未被任何已获取的 origin 分支包含的提交；rebase、cherry-pick 和 merge 都可能产生内容重叠但 SHA 不同的记录，数字不代表遗漏功能数量。本任务没有推送或合并其他开发分支。
+本轮完整核对 16 个本地分支（含本次知识库维护分支）和 41 个已登记工作区，包含 detached 与已移入归档目录的工作区。排除维护分支后，15 个分支中有 7 个 head 仍在主干之外。“仅本地提交”指未被已获取的任何 origin 分支包含的提交，不能直接当作遗漏功能数量。
 
-[PR #100](https://github.com/yuanbw2025/storyforge/pull/100) 已于 10 月 4 日合入主干。旗舰分支及 render-cost 分支的 head 已进入主干，几个旧修订分支的补丁也已等价交付；相关能力已转入[文字冒险指南](/features/interactive/text-adventure)及[更新日志](/updates/changelog)。《潮钟群岛》具体作品仍是本地未发布试玩，不是已分发的内置正式作品。
+## 已进入主干
 
-| 本地分支 | 主干外提交 | 仅本地提交 | 内容与处理结论 |
-| --- | ---: | ---: | --- |
-| `codex/backup-text-open-world-before-main-sync-20260906-3f38495f` | 45 | 45 | 旧开放世界备份；43 个补丁与主干等价，余项需逐项核对，勿重复合并。 |
-| `codex/backup-text-open-world-pre-main-rebase-20260906` | 38 | 38 | 旧开放世界 rebase 前备份；与同名产品架构分支同 head，不能仅凭旧 SHA 判断功能缺失。 |
-| `feat/application-dossier` | 1 | 1 | AVG 复用冻结世界媒资；与 fix/avg-production-world-media-reuse 同一提交，是否已被后续实现覆盖待核对。 |
-| `feat/builtin-3d-adventure` | 9 | 9 | 《潮痕：最后一盏灯》《远日点：第七码头》与短篇救援内置作品、独立存档及显示控制；本地提交未推送。 |
-| `feat/game-product-production-lanes` | 4 | 4 | 游戏产品生命周期、生产分工及总纲知识库路由规定；4 个文档提交尚未推送。 |
-| `feat/independent-creation-integration` | 2 | 2 | 仅独有 merge 提交；相对合并基线无文件差异，不当作新增功能。 |
-| `feat/mist-harbor-builtin` | 1 | 1 | 雾港 AVG 音效、配乐与录制文案；本地比远程分支多 1 个提交。 |
-| `feat/public-product-presentation` | 53 | 53 | 旧开放世界生产分支；45 个补丁与主干等价，其余涉及来源、规则、主角与故事架构，需核对后续实现。 |
-| `feat/text-adventure-content-revision` | 1 | 1 | 故事和角色修订的独有补丁已与主干等价；保留旧分支提交身份，不重复列为未交付功能。 |
-| `feat/text-adventure-scene-plan-revision` | 12 | 12 | 12 个本地独有补丁已与主干等价；场景、路线及视觉修订已随 PR #100 交付，旧提交尚未清理。 |
-| `feat/text-open-world-product-architecture` | 38 | 38 | 旧开放世界架构与玩法实现，与 rebase 前备份同 head；部分等价、部分需人工核对。 |
-| `fix/avg-production-world-media-reuse` | 1 | 1 | 与 feat/application-dossier 同一提交；保留冻结媒资复用的待核对项。 |
-| `fix/home-layout-font-preview` | 3 | 3 | 首页布局与侧栏文字、力量体系收口到世界起源；本地未推送，当前主干指南不提前切换入口。 |
-| `fix/readme-community-links` | 1 | 1 | 独有 merge 提交；不据此宣称新的社区功能，历史合并差异待维护者确认。 |
-| `fix/text-adventure-repair-baseline` | 1 | 1 | 独有修复补丁已与主干等价；上游修改后的修复基线处理已交付，不再作为缺失功能。 |
-| `fix/text-adventure-source-depth` | 1 | 1 | 主干已有后续专职任务来源读取实现，但旧补丁的 patch-id 不等价；只保留差异核对项，不据此宣称主干缺失该能力。 |
-| `refactor/storyforge-bronze-ui` | 3 | 0 | 青铜 UI 分支已推送未合并；历史替代方案，不替换当前官网操作说明。 |
-| `refactor/storyforge-ui-rebuild` | 5 | 5 | 早期 UI 重建及交接，本地未推送；与后续主干界面存在重叠，需核对独有差异。 |
+- [PR #107](https://github.com/yuanbw2025/storyforge/pull/107)：游戏生产分工与生命周期文档，以及长篇候选保存后的审阅保护。
+- [PR #108](https://github.com/yuanbw2025/storyforge/pull/108)：首次加载制作进度时保留已输入的任务修订稿。
+- [PR #109](https://github.com/yuanbw2025/storyforge/pull/109)：首页布局、文字显示及世界起源中的统一力量体系入口。原“本地未推送”记录已失效。
+- [PR #110](https://github.com/yuanbw2025/storyforge/pull/110)：《末班来信》预制漫画动态样片；对应知识库说明已通过[官网部署](https://github.com/yuanbw2025/storyforge/actions/runs/37356743763)。样片不代表漫画生产自动获得同等动画能力。
+- [PR #111](https://github.com/yuanbw2025/storyforge/pull/111)：三款内置叙事游戏已合入主干，包含慢帧移动与暂停场景修复；原“待合并、CI 失败”和活动工作区的临时未提交记录已由后续提交取代。Word 导入的间接依赖安全修复也已合入，最新主干[完整 CI](https://github.com/yuanbw2025/storyforge/actions/runs/37477830226) 已通过。
 
-## 尚未提交的工作区
+操作说明见[更新日志](/updates/changelog)、[长篇设定](/features/longform/planning)、[候选与恢复](/guides/ai-workflow)。合入 main、应用部署与知识库部署分别核对，不把合并时间当成正式版本发布日期。
 
-- `feat/builtin-games-release`：内置游戏、入口、素材、依赖与文档存在暂存及未暂存改动，与 `feat/builtin-3d-adventure` 有关联重叠；未提交文件仍需单独检查，不能当作可发布快照。
-- `codex/wechat-articles-screenshots-20260922`：首页及工作区布局 CSS 未提交，需作者判断是截图专用调整还是正式产品改动。
-- `feat/character-chat-recording`：仅发现未跟踪的 `.vite-e2e-cache/`，归类为测试缓存，不当作遗漏功能。
+## 尚未进入主干的分支
 
-本轮没有修改作者原工作区、浏览器数据或媒资。仅存在本地文件与分支，不能证明开发已完成或已经验收。
+- `feat/builtin-3d-adventure`：主干外 9 个提交，其中 9 个仅在本地。
 
-## 下次如何核对
+  三款内置作品的旧本地开发，相关作品已通过 PR #111 迁移到主干。旧提交身份与实现有差异，不直接重复合并，也不把三个作品重新列为未交付。
 
-重新枚举每个本地分支及关联工作区，刷新远程引用，结合祖先关系、补丁等价性、实际实现与 PR 状态，再对照受影响指南和更新日志。已确认但尚未合并的内容继续在本页登记，不提前放入已交付能力说明。同步维护中英文，在文档维护记录中保留上次成功处理的主干提交，另行核对官网部署是否成功。
+- `feat/mist-harbor-builtin`：主干外 1 个提交，其中 1 个仅在本地。
+
+  `6ddbdb8c`：雾港 AVG 音效、配乐与录制文案；归档工作区中的未推送提交，是否仍需采用待核对。
+
+- `fix/avg-production-world-media-reuse`：主干外 1 个提交，其中 1 个仅在本地。
+
+  `618d388e`：冻结世界媒资复用，也被旧开放世界架构分支包含；只保留一项待核对内容。
+
+- `codex/backup-text-open-world-before-main-sync-20260906-3f38495f`：主干外 45 个提交，其中 45 个仅在本地。
+
+  旧备份，43 个普通补丁与主干等价；剩余差异包含历史文档及生成元数据，不能按 SHA 数字重复合并。
+
+- `feat/public-product-presentation`：主干外 53 个提交，其中 53 个仅在本地。
+
+  旧开放世界生产分支，45 个普通补丁与主干等价；其余来源、规则、主角、故事架构及文档差异仍需结合后续实现判断。
+
+- `feat/text-open-world-product-architecture`：主干外 38 个提交，其中 38 个仅在本地。
+
+  旧开放世界架构，部分已被后续实现覆盖；不是 38 项缺失功能，不恢复旧产品边界。
+
+- `refactor/storyforge-bronze-ui`：主干外 3 个提交，其中 0 个仅在本地。
+
+  已推送的历史 UI 分支，[PR #84](https://github.com/yuanbw2025/storyforge/pull/84) 尚未合并；不据此替换当前界面指南。
+
+## 未提交内容与归档去重
+
+- `feat/builtin-games-release`：观察到 72 个状态条目，涉及内置作品、入口、素材、依赖和文档，与已合入的 PR #111 迁移范围关联；保留为旧工作区差异，不能按文件数当作遗漏功能，暂存与未暂存文件不是已验收发布快照。
+- `codex/wechat-articles-screenshots-20260922`：两份首页/工作区 CSS 未提交，仍需区分截图调整与正式产品修改。
+- `feat/character-chat-recording`：78 个未跟踪条目均在 `.vite-e2e-cache/`，仅为测试缓存。
+- `feat/character-chat-optimization-20261006`：核对时没有独立功能提交或未提交文件，分支名称不能证明优化已完成。
+
+此前按维护者要求清理了 74 个旧分支引用，并将 33 个旧工作区移入归档目录；目录仍存在不等于分支仍在开发。归档中的 detached `c5e04d3c` 仅保留独有 merge 历史，相对合并基线没有文件差异。9 月 12 日 UI 重建的 detached `e08ffd7e` 已由维护者明确废弃，不再列为待补交功能。旧文字冒险修订中的等价补丁已去重，不重新提出合并。
+
+本轮维护不提交、推送、合并或清理上述开发工作，也不修改作者浏览器数据。历史记录完整保留在 [2026-10-04 核对快照](/updates/development-status-20261004)，该快照不参与本地搜索，不代表当前待办。
+
+## 每轮基线同步
+
+每次维护先获取最新远程引用，再把维护分支同步至最新主干并核对新增变化；仅获取远程引用不等于工作分支已更新。提交和合并前再次复核主干，主干变化时补查并重跑受影响验证。作者活动工作区只读检查，维护在独立工作树执行。
 
 继续阅读：[更新日志](/updates/changelog) · [版本与兼容](/updates/compatibility)。

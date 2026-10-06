@@ -4,6 +4,13 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### 2026-10-06 · Word-import dependency security maintenance
+
+- Removed a component with a known vulnerability from the Word-import dependency chain while preserving existing `.docx` text extraction.
+- Browser regressions passed for Chinese text, paragraphs, table text, and explicit errors for damaged files.
+
+Evidence: [Dependency fix](https://github.com/yuanbw2025/storyforge/commit/f06caf0f), merged through [PR #111](https://github.com/yuanbw2025/storyforge/pull/111). See [Import and references](/en/guides/import) for usage.
+
 ### 2026-10-06 · Three ready-to-play 3D narrative games
 
 - Text open world → Built-in narrative games now offers Tidemark: The Last Lamp (潮痕：最后一盏灯), Aphelion: Dock Seven (远日点：第七码头), and Tidemark: Between Two Bells (潮痕：两声之间), with no API setup or extra model download.
@@ -15,6 +22,15 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 Guides: [Text open world](/en/features/interactive/open-world) · [Examples](/en/guides/examples).
 Evidence: [Game content and entry integration](https://github.com/yuanbw2025/storyforge/commit/41f32066).
 
+### 2026-10-06 · Home layout and a unified power-system entry
+
+- Fixed home layout and sidebar text display.
+- Longform and the world engine now edit power systems under World origin → Power system, with the overview, structured rules, and level entries on one page. Old links still reach the new entry.
+- Existing data identities and references are preserved. Overviews and structured rules do not automatically overwrite each other, and multi-world editing remains scoped to the current world.
+
+Guides: [Longform settings](/en/features/longform/planning) · [World engine](/en/features/world-engine).
+Evidence: [PR #109](https://github.com/yuanbw2025/storyforge/pull/109), mainline merge `7b0ac619`. The date is the mainline integration date; live availability depends on application deployment.
+
 ### 2026-10-06 · The Last Letter motion-comic showcase
 
 - Comic → Library and Home → Example works → Comic now offer a 50-second motion comic with sound in a separate tab. The four existing complete page comics remain readable and downloadable.
@@ -23,6 +39,15 @@ Evidence: [Game content and entry integration](https://github.com/yuanbw2025/sto
 
 Guides: [Novel to comic](/en/features/comic) · [Built-in works and examples](/en/guides/examples).
 Evidence: [Motion-comic showcase integration](https://github.com/yuanbw2025/storyforge/commit/f18c2922). Live availability depends on deployment completion.
+
+### 2026-10-05 · Candidate persistence and production-recovery input protection
+
+- Longform “Split into scenes” and “Improve scene outline” now explicitly wait for candidate validation and persistence after streaming. Editing, adoption, dismissal, and retry are not exposed before a recoverable candidate is ready.
+- The initial progress load in interactive production preserves task-repair text the author has already entered. Switching productions or changing the run-control version still resets the relevant input; unsubmitted drafts are not promised to survive refresh.
+- Updates to the game-lifecycle and production-lane charter define development boundaries, not newly completed features in every game product.
+
+Guides: [Longform scene outlines](/en/features/longform/writing) · [AI candidates and recovery](/en/guides/ai-workflow).
+Evidence: [Candidate persistence protection](https://github.com/yuanbw2025/storyforge/commit/37451b15) · [Recovery-input protection](https://github.com/yuanbw2025/storyforge/commit/36b74105), merged through [PR #107](https://github.com/yuanbw2025/storyforge/pull/107) and [PR #108](https://github.com/yuanbw2025/storyforge/pull/108), respectively.
 
 ### 2026-10-04 · Adventure presentation, local revisions, and large backups
 

@@ -4,6 +4,13 @@
 
 ## Unreleased / 当前主干
 
+### 2026-10-06 · Word 导入依赖安全维护
+
+- 移除 Word 导入依赖链中的已知漏洞组件，保留现有 `.docx` 文本提取能力。
+- 中文、段落、表格文本提取，以及损坏文件明确报错的浏览器回归已通过。
+
+依据：[依赖修复](https://github.com/yuanbw2025/storyforge/commit/f06caf0f)，随 [PR #111](https://github.com/yuanbw2025/storyforge/pull/111) 合入主干。操作说明见[导入与参考资料](/guides/import)。
+
 ### 2026-10-06 · 三款可直接游玩的 3D 叙事游戏
 
 - 在“文字开放世界 → 内置叙事游戏”提供《潮痕：最后一盏灯》《远日点：第七码头》和《潮痕：两声之间》，无需 API 配置或额外下载模型。
@@ -15,6 +22,15 @@
 入口：[文字开放世界](/features/interactive/open-world) · [内置作品](/guides/examples)。
 依据：[游戏本体与入口适配](https://github.com/yuanbw2025/storyforge/commit/41f32066)。
 
+### 2026-10-06 · 首页布局与力量体系统一入口
+
+- 修复首页布局与侧栏文字的显示。
+- 长篇和世界引擎的力量体系统一到“世界起源 → 力量体系”，在同一页编辑概述、规则明细与等级词条；旧链接继续定位到新入口。
+- 保留已有数据身份与引用，概述与规则明细不自动互相覆盖；多世界编辑按当前世界隔离。
+
+入口：[长篇设定](/features/longform/planning) · [世界引擎](/features/world-engine)。
+依据：[PR #109](https://github.com/yuanbw2025/storyforge/pull/109)，主干合并提交 `7b0ac619`。日期为合入主干日期，线上以应用部署为准。
+
 ### 2026-10-06 · 漫画动态样片《末班来信》
 
 - “漫画 → 作品库”和“首页 → 示例作品 → 漫画”新增 50 秒有声动态样片，在独立标签页播放；原有四套完整页漫继续提供阅读与下载。
@@ -23,6 +39,15 @@
 
 入口：[小说转漫画](/features/comic) · [内置作品与示例](/guides/examples)。
 依据：[动态漫画展示接入](https://github.com/yuanbw2025/storyforge/commit/f18c2922)。在线展示以部署完成为准。
+
+### 2026-10-05 · 候选保存与制作恢复输入保护
+
+- 长篇“一键拆场景”和“完善细纲”在输出结束后明确等待候选校验、保存；可恢复候选就绪前，不提前开放编辑、采纳、忽略或重试。
+- 互动产品制作首次加载进度时，保留作者已经输入的任务修订稿；切换制作或运行控制版本变化时仍重置相关输入，不承诺未提交草稿刷新后保留。
+- 游戏生命周期与生产分工的总纲更新属于开发边界规定，不代表各游戏产品新增了已完成的功能。
+
+入口：[长篇场景细纲](/features/longform/writing) · [AI 候选与失败恢复](/guides/ai-workflow)。
+依据：[候选保存保护](https://github.com/yuanbw2025/storyforge/commit/37451b15) · [恢复输入保护](https://github.com/yuanbw2025/storyforge/commit/36b74105)；分别随 [PR #107](https://github.com/yuanbw2025/storyforge/pull/107) 与 [PR #108](https://github.com/yuanbw2025/storyforge/pull/108) 进入主干。
 
 ### 2026-10-04 · 文字冒险作品展示、局部修订与大备份
 

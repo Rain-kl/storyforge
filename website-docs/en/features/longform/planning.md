@@ -20,6 +20,12 @@ Maintain real or fictional rules, world origins, natural and cultural environmen
 
 For multiple worlds, define each world's scope and connecting passages. Misfiled records affect later retrieval; check the current world before editing.
 
+## Where to edit power systems
+
+In the longform workspace, open World and settings → World origin → Power system (世界与设定 → 世界起源 → 力量体系). Maintain the overview, structured rules, and level entries on one page. Structured rules include the system name, description, level list, and cultivation constraints. World settings in the world engine uses the same entry.
+
+The separate Power system navigation item has been removed; old links open the power tab within World origin. Existing overviews, structured rules, and record identities are preserved without automatically overwriting each other. Review inconsistencies before editing. For multiple worlds, select the current world before changing its rules.
+
 ## Characters and relationships
 
 Manage protagonists, supporting characters, NPCs, and passersby by category. Record action-relevant motivations, personality, goals, weaknesses, history, and relationships. When completing a character with AI, check the selected fields and preserve established details.

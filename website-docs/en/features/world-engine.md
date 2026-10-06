@@ -1,7 +1,7 @@
 ---
 productId: world-engine
 status: released
-lastVerified: 2026-09-20
+lastVerified: 2026-10-06
 ---
 # World engine
 
@@ -23,6 +23,12 @@ Screenplays, comics, and motion-comic materials do not offer a “package as wor
 6. For file sharing, use Sharing and import (分享与导入), checking attribution, license, and purpose.
 
 Community and distribution (社区与发行) currently prepares shareable versions and licensing; it does not mean a public marketplace service is live.
+
+## Where to edit power systems
+
+In the longform workspace, open World and settings → World origin → Power system (世界与设定 → 世界起源 → 力量体系). Maintain the overview, structured rules, and level entries on one page. Structured rules include the system name, description, level list, and cultivation constraints. World settings in the world engine uses the same entry.
+
+The separate Power system navigation item has been removed; old links open the power tab within World origin. Existing overviews, structured rules, and record identities are preserved without automatically overwriting each other. Review inconsistencies before editing. For multiple worlds, select the current world before changing its rules.
 
 ## From world to interactive work
 

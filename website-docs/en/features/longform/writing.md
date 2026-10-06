@@ -35,6 +35,12 @@ Formal AI results usually require candidate confirmation. The end of streaming o
 
 Details: [AI candidates and recovery](/en/guides/ai-workflow) · [Export and delivery](/en/guides/export).
 
+## Scene generation has ended but the candidate is still being saved
+
+After “Split into scenes” or “Improve scene outline” stops streaming, the interface may still say that it is validating and saving the candidate or establishing a recoverable candidate. Wait: editing, adoption, dismissal, and retry are not yet available. Review and confirm only after the candidate is successfully saved. Fully displayed text is not a save acknowledgment that makes it safe to close the page.
+
+This waiting-state protection entered main on October 5, 2026 through [PR #107](https://github.com/yuanbw2025/storyforge/pull/107). It does not adopt the candidate for you.
+
 ## Saving, dragging, and switching chapters
 
 Work-information and story-core editors preserve the current draft; use the displayed save action and verify persisted content. Dragging a chapter near a list edge scrolls the list. Check ownership after moving between volumes. When switching chapters quickly, generation status and recoverable candidates should match the current target, not the previous chapter.
