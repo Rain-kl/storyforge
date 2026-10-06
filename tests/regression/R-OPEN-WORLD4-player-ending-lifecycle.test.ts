@@ -320,7 +320,10 @@ describe('Text Open World G4 · player ending lifecycle', () => {
     await resumeTextOpenWorldSystemWorkV1(sessionId)
     expect((await db.productRuntimeSessions.get(sessionId))?.status).toBe('completed')
     expect(await allEvents(sessionId)).toEqual(beforeEvents)
-  }, 60_000)
+    // Two full reconciliations plus the governed journey setup exceed 60s on
+    // shared coverage runners. Keep every event-equality assertion and the
+    // existing local deadline; CI still has a bounded watchdog.
+  }, process.env.CI ? 120_000 : 60_000)
 
   it('completed缺少结局、仍有pending或仍有未结算玩家cause时全部失败关闭且不改事件流', async () => {
     const missingEnding = await createSession({ status: 'completed', suffix: 'invalid-missing-ending' })

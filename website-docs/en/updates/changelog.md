@@ -4,6 +4,17 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Unreleased / current main
 
+### 2026-10-06 · Three ready-to-play 3D narrative games
+
+- Text open world → Built-in narrative games now offers Tidemark: The Last Lamp (潮痕：最后一盏灯), Aphelion: Dock Seven (远日点：第七码头), and Tidemark: Between Two Bells (潮痕：两声之间), with no API setup or extra model download.
+- Each long story retains ten chapters, over 30,000 Chinese characters of main story, over 500 distinct dialogue lines, and four endings. Between Two Bells is a four-to-five-minute investigation and rescue story.
+- Includes 3D/text exploration, interactions and branching choices, phone controls, refresh recovery, and checkpoint branches; fixed pauses during continuous pathfinding at low frame rates.
+- Content and procedural scenes ship with the source. An explicit start prepares independent releases and saves; browsing introductions installs nothing. Saves stay in the current browser and can be restored from full project backups.
+- Dialogue uses frozen scripts without free-form AI conversation or voice acting. This does not raise the maturity rating of general game production. Older Release archives retain their original content.
+
+Guides: [Text open world](/en/features/interactive/open-world) · [Examples](/en/guides/examples).
+Evidence: [Game content and entry integration](https://github.com/yuanbw2025/storyforge/commit/41f32066).
+
 ### 2026-10-06 · The Last Letter motion-comic showcase
 
 - Comic → Library and Home → Example works → Comic now offer a 50-second motion comic with sound in a separate tab. The four existing complete page comics remain readable and downloadable.

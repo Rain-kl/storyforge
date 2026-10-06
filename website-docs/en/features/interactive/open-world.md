@@ -1,7 +1,7 @@
 ---
 productId: upper.text-open-world
 status: preview
-lastVerified: 2026-10-04
+lastVerified: 2026-10-06
 ---
 # Text open world
 
@@ -14,6 +14,18 @@ Text open world combines regional exploration, character schedules, quests, comb
 Open Text open world and choose “先试玩《盐脊：断流之夜》”. No workspace selection or model configuration is needed. Starting for the first time creates an independent release and save. Explore, interact with characters, complete quests, and reach endings; continue from your own progress.
 
 This is a prepared showcase, not evidence that any input automatically produces an equally complete game. See [Built-in works and examples](/en/guides/examples).
+
+## Three 3D narrative games
+
+Find **Built-in narrative games (内置叙事游戏)** in the Player view of Text open world. No workspace, API configuration, or external game engine is required. These three games are not featured on the homepage.
+
+- **Tidemark: Between Two Bells (潮痕：两声之间)**: a separate story of roughly 4–5 minutes. Inspect water marks, collect tools, operate the sluice in order, and carry out either rescue route.
+- **Tidemark: The Last Lamp (潮痕：最后一盏灯)**: ten chapters of coastal fantasy, over 30,000 Chinese characters in the main story, over 500 distinct dialogue lines, and four endings.
+- **Aphelion: Dock Seven (远日点：第七码头)**: ten chapters of space science fiction, over 30,000 Chinese characters in the main story and over 500 distinct dialogue lines, with equipment puzzles, side routes, and four endings.
+
+Start with Between Two Bells. Desktop controls include WASD/arrow keys, click-to-move, and E to interact nearby. Phone users can use on-screen buttons; settings offer text exploration, lighter graphics, and reading modes. Content is prepared only after an explicit start. Continue after a refresh; new journeys and checkpoint branches preserve previous saves. Transfer progress through a full project backup; browser data does not automatically sync between devices.
+
+The main stories use frozen scripts supplied with the repository, without free-form model dialogue or voice acting. The longer games only offer optional synthesized ambience; the short story currently has no sound. These works do not establish completion of general open-world generation. Download a `main` checkout containing this update or a later Release; older archives do not automatically gain this content.
 
 ## Produce your own work
 

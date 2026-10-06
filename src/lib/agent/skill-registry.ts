@@ -4385,7 +4385,7 @@ export const AGENT_SKILLS = [
       fields: ['userIntentSummary'],
       adoptionExtension: 'product-production-briefs',
     }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1B-consultation'],
   },
   {
@@ -4431,7 +4431,7 @@ export const AGENT_SKILLS = [
       fields: ['briefJson'],
       adoptionExtension: 'product-production-briefs',
     }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1B-consultation', 'R-PRODUCTPROD1B-commands'],
   },
   {
@@ -4452,7 +4452,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 12_000,
     writeTargets: [{ table: 'productBuilds', fields: ['planJson'], adoptionExtension: 'product-production-builds' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1C-plan', 'R-PRODUCTPROD1D-scheduler'],
   },
   {
@@ -4473,7 +4473,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 16_000,
     writeTargets: [{ table: 'productBuildArtifacts', fields: ['payloadJson'], adoptionExtension: 'product-production-artifacts' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1F-production-executor'],
   },
   {
@@ -4938,7 +4938,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 8_000,
     writeTargets: [{ table: 'productBuildArtifacts', fields: ['metadataJson'], adoptionExtension: 'product-production-artifacts' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1F-production-executor'],
   },
   {
@@ -4959,7 +4959,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 4_000,
     writeTargets: [{ table: 'productBuildArtifacts', fields: [], adoptionExtension: 'product-production-artifacts' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1E-media-adapters', 'R-PRODUCTPROD1F-production-executor'],
   },
   {
@@ -4980,7 +4980,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 6_000,
     writeTargets: [{ table: 'productBuilds', fields: ['manifestJson', 'previewManifestJson'], adoptionExtension: 'product-production-builds' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1F-production-executor'],
   },
   {
@@ -5001,7 +5001,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 6_000,
     writeTargets: [{ table: 'productBuilds', fields: ['qualityReportJson'], adoptionExtension: 'product-production-builds' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1F-production-executor'],
   },
   {
@@ -5021,7 +5021,7 @@ export const AGENT_SKILLS = [
     contextCompression: compressionPolicy(['product-production.evolution-base']),
     maxOutputTokens: 8_000,
     writeTargets: [{ table: 'productBuilds', fields: ['compatibilityJson'], adoptionExtension: 'product-production-builds' }],
-    lastVerifiedAt: '2026-08-21',
+    lastVerifiedAt: '2026-10-06',
     regressionTests: ['R-PRODUCTPROD1B-commands', 'R-PRODUCTPROD1D-scheduler', 'R-PRODUCTPROD1F-production-executor'],
   },
 ] as const satisfies readonly AgentSkillDefinitionV1[]
