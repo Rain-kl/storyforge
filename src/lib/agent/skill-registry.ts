@@ -712,7 +712,7 @@ const CREATIVE_RULES_INPUT_POLICY = {
 } as const satisfies AgentSkillInputPolicyV1
 
 const WORLDVIEW_FIELD_INPUT_POLICY = {
-  sourceKeys: ['worldview', 'storyCore', 'characters', 'storyArcs'],
+  sourceKeys: ['worldview', 'powerSystem', 'storyCore', 'characters', 'storyArcs'],
   states: {
     empty: {
       handling: 'create-from-request',
@@ -720,7 +720,7 @@ const WORLDVIEW_FIELD_INPUT_POLICY = {
     },
     partial: {
       handling: 'reference-and-create',
-      instruction: '锁定已有世界字段；缺失上游可依据故事核心、角色、故事线或大纲反推，但只能写当前目标字段，推断不得冒充已确认设定。',
+      instruction: '锁定已有世界字段及力量规则明细；概述与明细不一致时必须指出差异，不能静默覆盖明细；缺失上游可依据故事核心、角色、故事线或大纲反推，但只能写当前目标字段，推断不得冒充已确认设定。',
     },
     complete: {
       handling: 'grounded-transform',

@@ -82,7 +82,7 @@ export function formatWorldviewBlock(wv: Worldview | null): string {
     : ''
   const fields = [
     wv.worldOrigin && `世界来源：${wv.worldOrigin}`,
-    wv.powerHierarchy && `力量体系：${wv.powerHierarchy}`,
+    wv.powerHierarchy && `力量体系概述：${wv.powerHierarchy}`,
     divine,
     wv.worldStructure && `世界结构：${wv.worldStructure}`,
     wv.worldDimensions && `世界尺寸：${wv.worldDimensions}`,
@@ -118,21 +118,25 @@ export function formatStoryCoreBlock(sc: StoryCore | null): string {
   return parts.length ? `【故事核心】\n${parts.join('\n')}` : ''
 }
 
-/** 格式化力量体系为【力量体系】块（含等级阶梯 + 规则）。 */
+/** The origin editor owns both the overview and these structured details.
+ * Preserve free-form legacy levels and JSON attributes; never drop rules-only data. */
 export function formatPowerSystemBlock(ps: PowerSystem | null): string {
-  if (!ps?.name && !ps?.description && !ps?.levels) return ''
+  if (!ps) return ''
   const parts: string[] = []
-  if (ps.name) parts.push(`${ps.name}：${ps.description || ''}`)
-  else if (ps.description) parts.push(ps.description)
-  try {
-    const levels = JSON.parse(ps.levels || '[]')
-    if (Array.isArray(levels) && levels.length) {
-      const names = levels.map((l: { name?: string } | string) => typeof l === 'string' ? l : (l.name || '')).filter(Boolean)
-      if (names.length) parts.push(`等级阶梯：${names.join(' → ')}`)
-    }
-  } catch { /* ignore */ }
+  if (ps.name) parts.push(`体系名称：${ps.name}`)
+  if (ps.description) parts.push(`体系描述：${ps.description}`)
+  if (ps.levels?.trim()) {
+    let levels = ps.levels
+    try {
+      const parsed: unknown = JSON.parse(ps.levels)
+      if (Array.isArray(parsed)) {
+        levels = parsed.map(level => typeof level === 'string' ? level : JSON.stringify(level)).join(' → ')
+      }
+    } catch { /* Author-entered newline lists are valid text, not failed JSON. */ }
+    if (levels) parts.push(`等级阶梯：${levels}`)
+  }
   if (ps.rules) parts.push(`规则：${ps.rules}`)
-  return parts.length ? `【力量体系】\n${parts.join('\n')}` : ''
+  return parts.length ? `【力量体系·规则明细】\n${parts.join('\n')}` : ''
 }
 
 /** 构建世界观上下文摘要（单世界）。 */

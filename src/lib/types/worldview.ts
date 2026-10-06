@@ -71,12 +71,12 @@ export interface StoryCore extends RagDocumentMetadata {
 }
 
 /** 力量体系 */
-export interface PowerSystem {
+export interface PowerSystem extends RagDocumentMetadata {
   id?: number
   projectId: number
   name: string            // 体系名称
   description: string     // 体系描述
-  levels: string          // 等级列表（JSON string）
+  levels: string          // 等级列表（逐行文本或已有 JSON，原样保留）
   rules: string           // 体系规则
   /** 所属世界组 ID（Phase 25.4） */
   worldGroupId?: number | null

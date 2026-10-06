@@ -1,3 +1,4 @@
+import { canonicalPowerModule } from '../lib/workspace/module-alias'
 import BrandIcon from '../components/shared/BrandIcon'
 import WorldDraftSummary from '../components/world-engine/WorldDraftSummary'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
@@ -35,7 +36,7 @@ export default function WorldEnginePage(){
  const {pageId='worlds'}=useParams();const definition=WORLD_PAGES.find(p=>p.id===pageId)??WORLD_PAGES[0]
  const [params]=useSearchParams();const navigate=useNavigate();const dialog=useDialog()
  const projectId=Number(params.get('project'))||null
- const module=definition.modules?.find(([id])=>id===params.get('module'))?.[0]??definition.modules?.[0]?.[0]
+ const module=definition.modules?.find(([id])=>id===canonicalPowerModule(params.get('module')))?.[0]??definition.modules?.[0]?.[0]
  const [rows,setRows]=useState<Row[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[busy,setBusy]=useState(false),[choosing,setChoosing]=useState(params.has('create')),[menu,setMenu]=useState(false),[title,setTitle]=useState(''),[description,setDescription]=useState(''),[search,setSearch]=useState(''),[revision,setRevision]=useState(0)
  const [contentMenu,setContentMenu]=useState(false)
  const row=rows.find(r=>r.project.id===projectId)

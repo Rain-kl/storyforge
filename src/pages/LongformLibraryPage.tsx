@@ -1,3 +1,4 @@
+import { canonicalPowerModule } from '../lib/workspace/module-alias'
 import ProjectStorageFolderField from '../components/shared/ProjectStorageFolderField'
 import { bindCreatedProjectStorageWorkspace } from '../lib/storage/project-storage-workspace'
 import ExampleLibrary from '../components/examples/ExampleLibrary'
@@ -24,14 +25,14 @@ export default function LongformLibraryPage() {
   const [params, setParams] = useSearchParams()
   const requestedSection = params.get('section')
   const section: LongformSection = LONGFORM_SECTIONS.some(([id]) => id === requestedSection) ? requestedSection as LongformSection : 'library'
-  const requestedModule = params.get('module')
+  const requestedModule = canonicalPowerModule(params.get('module'))
   const validModules = [...LONGFORM_STEPS.flatMap(step => step.modules.map(([id]) => id)), 'version-history', 'export', 'settings', 'usage-stats', 'import-doc', 'visual-workflows']
   const module = validModules.includes(requestedModule ?? '') ? requestedModule as SidebarModule : section === 'versions' ? 'version-history' : section === 'settings' ? 'settings' : section === 'import' ? 'import-doc' : 'info'
   const mode: LongformMode = params.get('mode') === 'agent' ? 'agent' : params.get('mode') === 'nodes' ? 'nodes' : 'steps'
   const [choosing, setChoosing] = useState(false)
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const chooserRef = useRef<HTMLElement>(null)
-  const destination = (projectId: number) => section === 'library' ? `/workspace/${projectId}?module=info` : `/workspace/${projectId}?section=${section}&module=${module}&mode=${mode}`
+  const destination = (projectId: number) => section === 'library' ? `/workspace/${projectId}?module=info` : `/workspace/${projectId}?section=${section}&module=${module}&mode=${mode}${params.get('module') === 'power-system' || params.get('originField') === 'power' ? '&originField=power' : ''}`
   const browse = (nextSection: LongformSection, nextModule: SidebarModule = 'info', nextMode: LongformMode = 'steps') => {
     setChoosing(false); setCreating(false); setError('')
     setParams(nextSection === 'library' ? {} : { section: nextSection, module: nextModule, mode: nextMode })

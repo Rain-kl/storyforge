@@ -195,7 +195,7 @@ describe.sequential('R-HARNESS32 · 世界基座字段 Agent Skill 与受治理�
     expect(prepared.contextEvidence.inputState).toMatchObject({
       state: 'partial',
       handling: 'reference-and-create',
-      consideredSourceKeys: ['worldview', 'storyCore', 'characters', 'storyArcs'],
+      consideredSourceKeys: ['worldview', 'powerSystem', 'storyCore', 'characters', 'storyArcs'],
     })
     expect(prompt).toContain('失忆的守灯人')
     expect(prompt).toContain('下游内容')

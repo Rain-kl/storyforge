@@ -1,3 +1,4 @@
+import { canonicalPowerModule } from '../lib/workspace/module-alias'
 import ShortNovelHistory from '../components/short-novel/ShortNovelHistory'
 import LongformCompletion from '../components/longform/LongformCompletion'
 import { worldModulePath } from '../components/world-engine/navigation'
@@ -35,7 +36,6 @@ const RagLibraryPanel = lazy(() => import('../components/retrieval/RagLibraryPan
 const DataManagementPanel = lazy(() => import('../components/data/DataManagementPanel'))
 const WorldRulesPanel = lazy(() => import('../components/worldview/WorldRulesPanel'))
 const StoryCorePanel = lazy(() => import('../components/worldview/StoryCorePanel'))
-const PowerSystemPanel = lazy(() => import('../components/worldview/PowerSystemPanel'))
 const WorldviewOriginPanel = lazy(() => import('../components/worldview/WorldviewOriginPanel'))
 const WorldviewNaturalPanel = lazy(() => import('../components/worldview/WorldviewNaturalPanel'))
 const WorldviewHumanityPanel = lazy(() => import('../components/worldview/WorldviewHumanityPanel'))
@@ -108,7 +108,8 @@ export default function WorkspacePage({ embeddedProjectId, embeddedModule }: { e
   }, [routerNavigate, embeddedProjectId])
   const toast = useToast()
   const { loadProject, projects, currentProjectId } = useProjectStore()
-  const initialModule = embeddedModule ?? new URLSearchParams(location.search).get('module')
+  const rawModule = embeddedModule ?? new URLSearchParams(location.search).get('module')
+  const initialModule = canonicalPowerModule(rawModule)
   const initialSidebarModule = initialModule && Object.prototype.hasOwnProperty.call(MODULE_CONTENT_TYPES, initialModule)
     ? initialModule as SidebarModule
     : null
@@ -208,7 +209,7 @@ export default function WorkspacePage({ embeddedProjectId, embeddedModule }: { e
       !parsed
       || project?.id == null
       || !isImpactHandoffRouteModuleV2(params.get('module'), parsed)
-      || activeModule !== parsed.targetModule
+      || activeModule !== canonicalPowerModule(parsed.targetModule)
     ) return () => { active = false }
     void resolveScopeLike(project.id)
       .then(async scope => {
@@ -405,12 +406,23 @@ export default function WorkspacePage({ embeddedProjectId, embeddedModule }: { e
             ? impactHandoffTarget.moduleRecordId
             : null}
         />
+      case 'power-system': // Read-only route alias; no separate editing surface.
       case 'worldview-origin':
         return <WorldviewOriginPanel
           project={project}
           initialWorldviewId={impactHandoff?.targetModule === 'worldview-origin' && impactHandoffTarget?.table === 'worldviews'
             ? impactHandoffTarget.moduleRecordId
             : null}
+          initialField={rawModule === 'power-system' || query.get('module') === 'power-system' || query.get('originField') === 'power'
+            ? 'power' : query.get('originField') === 'divine' ? 'divine' : 'origin'}
+          onFieldChange={(field, activate) => afterPendingEdits(() => {
+            const next = new URLSearchParams(location.search)
+            next.set('module', 'worldview-origin'); next.set('originField', field)
+            navigate(`/workspace/${projectId}?${next}`, { replace: true })
+            activate()
+          }, '当前编辑未能保存，已阻止切换设定')}
+          initialPowerTarget={impactHandoffTarget && (impactHandoffTarget.table === 'powerSystems' || impactHandoffTarget.table === 'cultivationSystems')
+            ? { table: impactHandoffTarget.table, recordId: impactHandoffTarget.moduleRecordId } : null}
         />
       case 'worldview-natural':
         return <WorldviewNaturalPanel project={project} />
@@ -422,15 +434,6 @@ export default function WorkspacePage({ embeddedProjectId, embeddedModule }: { e
         return <WorldMapPanel project={project} />
       case 'history':
         return <HistoryPanel project={project} />
-      case 'power-system':
-        return <PowerSystemPanel
-          project={project}
-          initialRecordTarget={impactHandoff?.targetModule === 'power-system'
-            && (impactHandoffTarget?.table === 'powerSystems' || impactHandoffTarget?.table === 'cultivationSystems')
-            ? { table: impactHandoffTarget.table, recordId: impactHandoffTarget.moduleRecordId }
-            : null}
-        />
-
       // ── 设定库 - 故事设计 ─────────────────────────────────────────
       case 'story-design':
         return <StoryCorePanel
