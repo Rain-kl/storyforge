@@ -111,5 +111,10 @@
     "vite-plugin-pwa": "^1.2.0",
     "vitepress": "^1.6.4",
     "vitest": "^2.1.9"
+  },
+  "overrides": {
+    "mammoth": {
+      "argparse": "2.0.1"
+    }
   }
 }
