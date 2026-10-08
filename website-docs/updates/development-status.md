@@ -18,7 +18,7 @@
 
 - `feat/plugin-workshop-v1-20261008`：主干外 1 个提交，0 个仅本地，工作区干净。
 
-  `53c276f3` 已推送到[草稿 PR #113](https://github.com/yuanbw2025/storyforge/pull/113)，尚未合并，远端 CI 核对时仍在运行。插件与本地创意工坊体验版含 12 个参考包；本地测试通过不等于上线。完整范围、试用步骤、数据保护与验收边界见[体验版简报](/updates/plugin-workshop-v1)。
+  `53c276f3` 已推送到[草稿 PR #113](https://github.com/yuanbw2025/storyforge/pull/113)，尚未合并。16:14（北京时间）补查确认[远端 CI 失败](https://github.com/yuanbw2025/storyforge/actions/runs/37734889246)：229 项浏览器用例通过、1 项失败、2 项跳过；文字开放世界完整旅程等待战斗结果失败，原因待定位。插件与本地创意工坊体验版含 12 个参考包；本地测试通过不等于上线。完整范围、试用步骤、数据保护与验收边界见[体验版简报](/updates/plugin-workshop-v1)。
 
 - `feat/builtin-3d-adventure`：主干外 9 个提交，其中 9 个仅在本地。
 
