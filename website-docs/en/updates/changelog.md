@@ -2,6 +2,10 @@
 
 Changes are organized by user impact. **Main-branch updates do not mean a new version has been released.** The package version remains 3.9.1; tagged releases retain their original content. Live deployments may lag; see [compatibility](/en/updates/compatibility).
 
+## 2026-10-08 · New development brief in the knowledge base
+
+The [Plugins and Workshop 1.0 trial brief](/en/updates/plugin-workshop-v1) documents trial steps, project changes, data protection, acceptance results, and limits. PR #113 remains unmerged. This entry records a documentation update only, not a delivered mainline feature below.
+
 ## Unreleased / current main
 
 ### 2026-10-06 · Word-import dependency security maintenance

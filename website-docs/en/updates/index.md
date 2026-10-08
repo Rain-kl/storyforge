@@ -8,3 +8,5 @@
 The changelog explains what changed and when; current product guides describe operations.
 
 - [Pending development](/en/updates/development-status): inspected local branches, unpushed or unmerged work, and uncommitted changes.
+
+- [Plugin and Workshop trial brief](/en/updates/plugin-workshop-v1): 12 reference packages, trial steps, data recovery, and validation limits; the development branch remains unmerged.
