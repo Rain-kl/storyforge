@@ -165,6 +165,7 @@ export type AgentSkillExecutionModeV1 =
   | 'short-chapter-draft'
   | 'short-continuity-review'
   | 'short-targeted-rewrite'
+  | 'extension-generate'
 
 export interface AgentSkillWriteTargetV1 {
   table: string
@@ -1303,6 +1304,19 @@ function productProductionInputPolicy(sourceKeys: readonly string[]): AgentSkill
 
 export const AGENT_SKILLS = [
   {
+    version: 1, id: 'extensions.generate', agentId: 'prose', defaultForAgent: false,
+    label: '插件自有内容候选', owner: 'extension-host', promptVersion: 'extension-generate-v1', executionMode: 'extension-generate', contextTaskKind: 'agent-prose', readToolNames: [],
+    contextSourceKeys: ['extensionRecords'], optionalContextSourceKeys: ['worldview', 'storyCore', 'characters', 'historical', 'storyTimeline'],
+    inputPolicy: { sourceKeys: ['extensionRecords'], states: {
+      empty: { handling: 'require-upstream', instruction: '缺少冻结插件任务时停止。' },
+      partial: { handling: 'grounded-transform', instruction: '依据已登记来源创作，缺失资料不得当作既有事实。' },
+      complete: { handling: 'grounded-transform', instruction: '只形成符合冻结 schema 的插件候选，由作者确认。' },
+    } },
+    contextCompression: compressionPolicy(['extensionRecords']), maxOutputTokens: 8000,
+    writeTargets: [{ table: 'extensionRecords', fields: ['payload'], adoptionExtension: 'extension-record-lifecycle' }],
+    lastVerifiedAt: '2026-10-08', regressionTests: ['R-EXTENSION1-durable-ai'],
+  },
+  {
     version: 1,
     id: 'world-origin.review',
     agentId: 'world-origin',
@@ -1363,7 +1377,7 @@ export const AGENT_SKILLS = [
       table: 'worldviews',
       fields: WORLDVIEW_GENERATABLE_FIELD_SPECS.map(spec => spec.field),
     }],
-    lastVerifiedAt: '2026-08-23',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: [
       'R-WE1-worldview-generatable-contract',
       'R-HARNESS32-worldview-field-agent',
@@ -1417,7 +1431,7 @@ export const AGENT_SKILLS = [
     },
     maxOutputTokens: 2_000,
     writeTargets: [],
-    lastVerifiedAt: '2026-08-23',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: ['R-MW1-world-link-governance'],
   },
   {
@@ -1648,7 +1662,7 @@ export const AGENT_SKILLS = [
       table: 'storyCores',
       fields: STORY_CORE_GENERATABLE_FIELD_SPECS.map(spec => spec.field),
     }],
-    lastVerifiedAt: '2026-08-23',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: [
       'R-HARNESS31-story-core-agent',
       'R-HARNESS31-story-core-panel-ui',
@@ -1914,7 +1928,7 @@ export const AGENT_SKILLS = [
         'statusProducerContractHash', 'statusProducerCandidateHash',
       ],
     }],
-    lastVerifiedAt: '2026-08-23',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: ['R-CHAR1-character-gateway-contract', 'R-CHAR1-character-lifecycle-ui'],
   },
   {
@@ -2071,7 +2085,7 @@ export const AGENT_SKILLS = [
         'lastAlignedHash', 'producerRunId', 'producerCandidateHash',
       ],
     }],
-    lastVerifiedAt: '2026-08-23',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: [
       'R-HARNESS30-story-arc-agent',
       'R-HARNESS30-story-arc-panel-ui',
@@ -4406,7 +4420,7 @@ export const AGENT_SKILLS = [
     contextGateway: PRODUCT_PRODUCTION_WORLD_GATEWAY_POLICY,
     maxOutputTokens: 8_000,
     writeTargets: [],
-    lastVerifiedAt: '2026-08-22',
+    lastVerifiedAt: '2026-10-08',
     regressionTests: ['R-TTRPG3M-campaign-proposal-harness'],
   },
   {
@@ -5252,7 +5266,7 @@ export function validateAgentSkillDefinitionsV1(
     character: new Set(['create', 'supplement', 'lifecycle', 'relationships', 'character-reply', 'memory-curator']),
     inspiration: new Set(['reference-summary', 'reference-characters', 'reverse', 'review']),
     outline: new Set(['auto', 'story-arcs', 'foreshadow-suggestions', 'storyline-progress', 'character-driven', 'character-revision', 'impact-summary-regenerate', 'volumes', 'chapters', 'details', 'adaptation-source-analysis', 'adaptation-causal-graph', 'screenplay-adaptation-brief', 'screenplay-decision-pass', 'screenplay-beat-sheet', 'screenplay-scene-card', 'screenplay-grounding-review', 'screenplay-dramaturgy-review', 'comic-adaptation-brief', 'comic-decision-pass', 'comic-script-adaptation', 'comic-page-rhythm', 'comic-panel-plan', 'comic-visual-bible', 'comic-image-request', 'comic-visual-continuity-review', 'comic-targeted-repair', 'comic-page-review', 'motion-drama-series-bible', 'motion-drama-asset-bible', 'motion-drama-episode-outline', 'motion-drama-shot-design', 'motion-drama-image-prompts', 'motion-drama-video-prompts', 'motion-drama-quality-review', 'short-intent-brief', 'short-story-design', 'short-scene-plan', 'short-continuity-review', 'character-interaction-production', 'product-production']),
-    prose: new Set(['auto', 'generate', 'continue', 'emotion-beats', 'inventory-extraction', 'story-timeline-extraction', 'cultivation-progress-extraction', 'style-learn', 'selection-edit', 'selection-check', 'review', 'revise', 'organize', 'memory', 'consistency', 'scene-director', 'ai-town-director', 'adventure-intent', 'adventure-narrator', 'open-world-briefing', 'open-world-advisor', 'open-world-outcome-narrator', 'open-world-actor-suggestion', 'open-world-expression', 'open-world-narration', 'text-open-world-runtime-intent', 'text-open-world-runtime-dialogue', 'text-open-world-runtime-expression', 'text-open-world-runtime-quest-packaging', 'text-open-world-runtime-direction', 'text-open-world-runtime-memory', 'screenplay-scene-draft', 'screenplay-targeted-rewrite', 'motion-drama-episode-script', 'short-chapter-draft', 'short-targeted-rewrite', 'ttrpg-gm-narrator', 'ttrpg-gm-actor-intent', 'ttrpg-director', 'ttrpg-private-guidance', 'ttrpg-player-intent']),
+    prose: new Set(['extension-generate', 'auto', 'generate', 'continue', 'emotion-beats', 'inventory-extraction', 'story-timeline-extraction', 'cultivation-progress-extraction', 'style-learn', 'selection-edit', 'selection-check', 'review', 'revise', 'organize', 'memory', 'consistency', 'scene-director', 'ai-town-director', 'adventure-intent', 'adventure-narrator', 'open-world-briefing', 'open-world-advisor', 'open-world-outcome-narrator', 'open-world-actor-suggestion', 'open-world-expression', 'open-world-narration', 'text-open-world-runtime-intent', 'text-open-world-runtime-dialogue', 'text-open-world-runtime-expression', 'text-open-world-runtime-quest-packaging', 'text-open-world-runtime-direction', 'text-open-world-runtime-memory', 'screenplay-scene-draft', 'screenplay-targeted-rewrite', 'motion-drama-episode-script', 'short-chapter-draft', 'short-targeted-rewrite', 'ttrpg-gm-narrator', 'ttrpg-gm-actor-intent', 'ttrpg-director', 'ttrpg-private-guidance', 'ttrpg-player-intent']),
     'text-adventure-showrunner': productProductionModes,
     'text-adventure-creative-director': productProductionModes,
     'text-adventure-source-editor': productProductionModes,
