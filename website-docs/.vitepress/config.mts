@@ -190,6 +190,7 @@ const zhSidebar = [
       { text: '项目动态概览', link: '/updates/' },
       { text: '更新日志', link: '/updates/changelog' },
       { text: '待合并开发记录', link: '/updates/development-status' },
+      { text: '插件与工坊体验版简报', link: '/updates/plugin-workshop-v1' },
       { text: '版本、升级与兼容', link: '/updates/compatibility' },
     ],
   },

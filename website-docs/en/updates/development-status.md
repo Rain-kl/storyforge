@@ -1,8 +1,8 @@
 # Pending development and branch audit
 
-> Snapshot: 2026-10-07 00:11 (UTC+8) · Remote main `da3ac75c`. This page records development evidence, not a list of released features.
+> Snapshot: 2026-10-08 15:07 (UTC+8) · Remote main `7629a7fa`. This page records development evidence, not a list of released features.
 
-This audit covers all 16 local branches (including this documentation-maintenance branch) and 41 registered worktrees, including detached worktrees and those moved into archives. Excluding maintenance, 7 of the remaining 15 branch heads are outside main. “Local-only commits” means commits not contained in any fetched origin branch; the count is not the number of missing features.
+This audit covers all 19 local branches (including this documentation-maintenance branch) and 41 registered worktrees, including detached worktrees and those moved into archives. Excluding maintenance, 8 of the remaining 18 branch heads are outside main. “Local-only commits” means commits not contained in any fetched origin branch; the count is not the number of missing features.
 
 ## Now in main
 
@@ -15,6 +15,10 @@ This audit covers all 16 local branches (including this documentation-maintenanc
 See the [changelog](/en/updates/changelog), [longform settings](/en/features/longform/planning), and [candidates and recovery](/en/guides/ai-workflow). Mainline integration, application deployment, and documentation deployment are checked separately; a merge date is not a version-release date.
 
 ## Branches still outside main
+
+- `feat/plugin-workshop-v1-20261008`: 1 commit outside main, 0 local-only; clean worktree.
+
+  `53c276f3` is pushed to [draft PR #113](https://github.com/yuanbw2025/storyforge/pull/113), still unmerged with remote CI running at review. The plugin and local Workshop trial includes 12 reference packages; local test success does not mean online availability. See the [trial brief](/en/updates/plugin-workshop-v1) for scope, trial steps, data protection, and validation limits.
 
 - `feat/builtin-3d-adventure`: 9 commits outside main; 9 local-only.
 
