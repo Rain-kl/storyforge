@@ -2,6 +2,10 @@
 
 本页按用户可感知的变化整理。**main 的功能更新不等于已经发布新版本**：当前 package 版本仍为 3.9.1，正式 Release 保持其发布时内容。在线部署可能有时差，见[版本与兼容说明](/updates/compatibility)。
 
+## 开发预览 插件与创意工坊
+
+插件体验版、安装与开发教程、AI 开发资料包和发布流程正在独立分支完善。先看[工坊指南](/workshop/)与[开发状态](/updates/development-status)；是否合并及部署以 [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) 为准，不计入下方已交付 main 更新。
+
 ## Unreleased / 当前主干
 
 ### 2026-10-06 · Word 导入依赖安全维护

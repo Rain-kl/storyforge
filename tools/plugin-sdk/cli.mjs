@@ -37,7 +37,7 @@ let manifest, validatePackage
 try { const { parseManifest, readPackage } = await import(`${pathToFileURL(checkerPath)}?t=${Date.now()}`); manifest = parseManifest(raw); validatePackage = readPackage } finally { await fs.unlink(checkerPath) }
 const zip = new JSZip()
 const date = new Date('2026-01-01T00:00:00Z')
-zip.file('manifest.json', JSON.stringify(manifest, null, 2), { date })
+zip.file('manifest.json', JSON.stringify(manifest, null, 2), { date, createFolders: false })
 if (manifest.entry) {
   const input = path.join(folder, 'src/index.tsx')
   const program = ts.createProgram([input], { noEmit: true, strict: true, skipLibCheck: true, target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, jsx: ts.JsxEmit.ReactJSX, allowSyntheticDefaultImports: true, paths: { '@storyforge/plugin-sdk': [path.join(repo, 'tools/plugin-sdk/index.d.ts')], react: [path.join(repo, 'node_modules/@types/react/index.d.ts')], 'react/jsx-runtime': [path.join(repo, 'node_modules/@types/react/jsx-runtime.d.ts')] } })
@@ -67,11 +67,11 @@ if (manifest.entry) {
     }
   }
   const code = `export default function(__sfRuntime){\nconst __sfReact=__sfRuntime.react,__sfJSX=__sfRuntime.jsxRuntime;\n${result.outputFiles[0].text}\nreturn __sfPlugin.default;\n}\n`
-  zip.file(manifest.entry, code, { date })
+  zip.file(manifest.entry, code, { date, createFolders: false })
 }
 try {
   const assets = path.join(folder, 'assets')
-  async function addFiles(dir) { for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const filename = path.join(dir, entry.name); if (entry.isSymbolicLink()) throw new Error('Symlinks are not permitted'); if (entry.isDirectory()) await addFiles(filename); else zip.file(`assets/${path.relative(assets, filename).split(path.sep).join('/')}`, await fs.readFile(filename), { date }) } }
+  async function addFiles(dir) { for (const entry of await fs.readdir(dir, { withFileTypes: true })) { const filename = path.join(dir, entry.name); if (entry.isSymbolicLink()) throw new Error('Symlinks are not permitted'); if (entry.isDirectory()) await addFiles(filename); else zip.file(`assets/${path.relative(assets, filename).split(path.sep).join('/')}`, await fs.readFile(filename), { date, createFolders: false }) } }
   await addFiles(assets)
 } catch (error) { if (error.code !== 'ENOENT') throw error }
 const bytes = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } })

@@ -32,3 +32,14 @@
 .sf-product-plugin-entry{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:38;padding:10px 18px;border:1px solid var(--border-color,#d7cdc0);border-radius:30px;background:var(--bg-surface,#fffdf8);color:var(--text-primary,#342e28);box-shadow:0 4px 20px #0002;font-size:13px;text-decoration:none}
 .sf-product-plugin-dock{position:fixed;z-index:39;right:18px;top:80px;bottom:76px;width:min(620px,calc(100vw - 36px));overflow:auto;padding:22px;background:var(--bg-surface,#fffdf8);color:var(--text-primary,#342e28);border:1px solid #d7cdc0;border-radius:16px;box-shadow:0 12px 45px #0003}
 .sf-plugin-candidate-fields{display:grid;gap:14px;margin:16px 0}.sf-plugin-candidate-fields label{display:grid;gap:6px}
+
+.sf-workshop-help { display:grid;gap:24px;min-width:0; }
+.sf-workshop-help h2 { font-size:24px;line-height:1.4;margin:8px 0 18px; }
+.sf-workshop-help h3 { margin:12px 0; }
+.sf-workshop-help p,.sf-workshop-help li { line-height:1.85; }
+.sf-workshop-help ol { padding-left:24px;list-style:decimal; }
+.sf-workshop-help li { margin:10px 0; }
+.sf-workshop-help a:not(.lf-action) { color:var(--accent-primary,#357262);text-decoration:underline;text-underline-offset:3px; }
+.sf-workshop-help textarea { display:block;width:100%;margin-top:12px;padding:14px;border:1px solid var(--border-subtle,#d4d8cd);border-radius:10px;background:var(--bg-base,#fffef9);color:inherit;line-height:1.7;resize:vertical; }
+.sf-workshop-help-note { font-size:13px;color:var(--text-secondary,#62655e); }
+.sf-workshop-help summary { cursor:pointer; }

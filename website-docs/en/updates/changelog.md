@@ -2,6 +2,10 @@
 
 Changes are organized by user impact. **Main-branch updates do not mean a new version has been released.** The package version remains 3.9.1; tagged releases retain their original content. Live deployments may lag; see [compatibility](/en/updates/compatibility).
 
+## Development preview Plugins and Workshop
+
+The plugin preview, installation/development tutorials, AI development kit and publication workflow are being completed on a separate branch. See [Workshop guides](/en/workshop/) and [development status](/en/updates/development-status). Check [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for merge/deployment status; this is separate from the delivered main changes below.
+
 ## Unreleased / current main
 
 ### 2026-10-06 · Word-import dependency security maintenance
