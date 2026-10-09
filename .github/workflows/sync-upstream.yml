@@ -1,0 +1,39 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    # 10:17 Asia/Shanghai (02:17 UTC) every day.
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge upstream main into this repository's main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out fork main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure sync identity and upstream
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/yuanbw2025/storyforge.git
+
+      - name: Fetch and merge upstream main
+        run: |
+          git fetch --no-tags upstream refs/heads/main:refs/remotes/upstream/main
+          git merge --no-edit upstream/main
+
+      - name: Push synchronized main
+        run: git push origin HEAD:refs/heads/main
