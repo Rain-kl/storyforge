@@ -56,7 +56,7 @@ packages/yourname.chapter-checklist-0.1.0.sfplugin
 
 ## 路径三 申请官方收录
 
-在 [StoryForge 仓库](https://github.com/yuanbw2025/storyforge) 创建 PR，目标为维护者指定的分支。预览阶段先在 [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) 确认接收位置，不能把未合并预览包当作 main 已支持的插件。
+在 [StoryForge 仓库](https://github.com/yuanbw2025/storyforge) 创建 PR，目标为 `main`。请先确认宿主包含 [PR #113](https://github.com/yuanbw2025/storyforge/pull/113)，并注明实际测试的宿主提交与 API／SDK 版本。
 
 在 `public/workshop/catalog.json` 的 `entries` 中追加准确元数据，不改已有条目。建议指向你控制的不可变 HTTPS 文件，附源码、许可、截图、实测版本、依赖、网络能力、迁移与验收记录。PR 只是申请，维护者核对作者许可、功能、数据与分发条件后决定收录；没有自动发布承诺。
 

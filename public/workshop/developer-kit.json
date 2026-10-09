@@ -146,11 +146,11 @@
     },
     "guides/develop.md": {
       "source": "website-docs/workshop/develop.md",
-      "sha256": "1ff5c667efb67e0d465ce952e2e629527419f9e1889cbfda92a87ede64a053a5"
+      "sha256": "d27005a8d49153e4a6f151b98d8ec8c7e72c57a79491ea07c59cc9534eeed0c0"
     },
     "guides/index.md": {
       "source": "website-docs/workshop/index.md",
-      "sha256": "03426d9de775842b5d99479c1e66a4d481c12b96eecdb08fcafa9f4f33c81c1a"
+      "sha256": "c8056a49a687c68f0e019e958c51f4689968b1be07f24c2e491cee298c37da0f"
     },
     "guides/install.md": {
       "source": "website-docs/workshop/install.md",
@@ -158,7 +158,7 @@
     },
     "guides/publish.md": {
       "source": "website-docs/workshop/publish.md",
-      "sha256": "95465d63f8e66e11eaf8fa832a2914b6feade064ac8b2c89e12ca6f97c51a754"
+      "sha256": "bc181aa4acb3c7f8a7f801e50ec60aa8476bc6db960c29cbf029dfccffc5e2fb"
     },
     "guides/troubleshooting.md": {
       "source": "website-docs/workshop/troubleshooting.md",
@@ -170,11 +170,11 @@
     },
     "guides/en/develop.md": {
       "source": "website-docs/en/workshop/develop.md",
-      "sha256": "a30f63f0ec80dce9067f085e0dd2cf41c89b8b694596ff3d480c1856d689b1d1"
+      "sha256": "62c10cdebf575537f5da1221dcf48d06cad477893ad01a147ec6defae4e9cbf4"
     },
     "guides/en/index.md": {
       "source": "website-docs/en/workshop/index.md",
-      "sha256": "752c5ed348c516b75a1a0003b1658d1e8942c3f1d4048b441cefee628903e342"
+      "sha256": "e5e15feea1a07238f3a8403a0db016e127413105e3643469885fbb8a8f44ecc8"
     },
     "guides/en/install.md": {
       "source": "website-docs/en/workshop/install.md",
@@ -182,7 +182,7 @@
     },
     "guides/en/publish.md": {
       "source": "website-docs/en/workshop/publish.md",
-      "sha256": "53309e4bcd1ac5cbd6ac8d0948176149401303a62c910f05f558cde459cfccdd"
+      "sha256": "3a7afbd306f5887614dbde31973d12da0345dc7a7d6a4acd716b6faeaabe45d7"
     },
     "guides/en/troubleshooting.md": {
       "source": "website-docs/en/workshop/troubleshooting.md",

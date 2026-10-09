@@ -6,16 +6,16 @@ lastVerified: 2026-10-09
 
 Goal: build independent chapter-checklist notes for a work, retaining saved content after reload and reinstallation. This teaches the delivery process; substitute any supported idea afterward.
 
-This guide targets API 1 / SDK 0.1. Read [capabilities](./), then consult the [technical contract](https://github.com/yuanbw2025/storyforge/blob/feat/plugin-workshop-v1-20261008/docs/guides/PLUGIN-DEVELOPMENT.md) and local `tools/plugin-sdk/index.d.ts` for exact fields and lifecycle rules. The SDK is not published to npm: do not expect `npm install @storyforge/plugin-sdk` to find an official release.
+This guide targets API 1 / SDK 0.1. Read [capabilities](./), then consult the [technical contract](https://github.com/yuanbw2025/storyforge/blob/main/docs/guides/PLUGIN-DEVELOPMENT.md) and local `tools/plugin-sdk/index.d.ts` for exact fields and lifecycle rules. The SDK is not published to npm: do not expect `npm install @storyforge/plugin-sdk` to find an official release.
 
 ## 1 Prepare the environment
 
 Use Git, Node.js 24, npm, and an editor or coding AI that can edit files. A chat-only assistant can draft code but cannot complete local packaging and installation checks for you.
 
-Clone the preview branch into a new folder. Do not overwrite or force-switch an existing checkout with unsaved work:
+Clone main into a new folder. Do not overwrite or force-switch an existing checkout with unsaved work:
 
 ```sh
-git clone --branch feat/plugin-workshop-v1-20261008 --single-branch https://github.com/yuanbw2025/storyforge.git storyforge-plugin-dev
+git clone --branch main --single-branch https://github.com/yuanbw2025/storyforge.git storyforge-plugin-dev
 cd storyforge-plugin-dev
 npm ci
 ```

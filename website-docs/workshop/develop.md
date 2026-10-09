@@ -6,16 +6,16 @@ lastVerified: 2026-10-09
 
 目标：制作一个独立的“章节检查便笺”，保存当前作品的修改清单，刷新和重新安装后仍能读取。这个例子用于学会完整交付流程，之后可换成你的任何受支持需求。
 
-当前为 API 1／SDK 0.1。先阅读[能力范围](./)，完整字段与生命周期以[技术约定](https://github.com/yuanbw2025/storyforge/blob/feat/plugin-workshop-v1-20261008/docs/guides/PLUGIN-DEVELOPMENT.md)和本地 `tools/plugin-sdk/index.d.ts` 为准。SDK 尚未发布到 npm，不要执行 `npm install @storyforge/plugin-sdk` 并期待找到官方发布包。
+当前为 API 1／SDK 0.1。先阅读[能力范围](./)，完整字段与生命周期以[技术约定](https://github.com/yuanbw2025/storyforge/blob/main/docs/guides/PLUGIN-DEVELOPMENT.md)和本地 `tools/plugin-sdk/index.d.ts` 为准。SDK 尚未发布到 npm，不要执行 `npm install @storyforge/plugin-sdk` 并期待找到官方发布包。
 
 ## 1 准备开发环境
 
 需要 Git、Node.js 24 和 npm，以及能编辑文件的代码编辑器或编程 AI。只有普通聊天能力、不能运行命令的 AI 可以帮助写代码，但无法替你完成打包和安装验收。
 
-新目录中获取当前预览分支；已有仓库不要覆盖或强行切换其中的未保存改动：
+新目录中获取当前主干；已有仓库不要覆盖或强行切换其中的未保存改动：
 
 ```sh
-git clone --branch feat/plugin-workshop-v1-20261008 --single-branch https://github.com/yuanbw2025/storyforge.git storyforge-plugin-dev
+git clone --branch main --single-branch https://github.com/yuanbw2025/storyforge.git storyforge-plugin-dev
 cd storyforge-plugin-dev
 npm ci
 ```

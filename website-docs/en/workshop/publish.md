@@ -56,7 +56,7 @@ Enter the full JSON URL in Workshop's community catalog field, click **读取目
 
 ## Route three Request official listing
 
-Create a PR in the [StoryForge repository](https://github.com/yuanbw2025/storyforge), targeting the branch designated by maintainers. During preview, confirm the destination through [PR #113](https://github.com/yuanbw2025/storyforge/pull/113); do not assume main already supports preview packages.
+Create a PR in the [StoryForge repository](https://github.com/yuanbw2025/storyforge), targeting `main`. First confirm your host includes [PR #113](https://github.com/yuanbw2025/storyforge/pull/113), and state the tested host commit and API/SDK versions.
 
 Append accurate metadata to `entries` in `public/workshop/catalog.json`, preserving existing entries. Prefer an immutable HTTPS file you control. Include source, license, screenshots, tested versions, dependencies, network capabilities, migration and acceptance results. Maintainers review permission, functionality, data behavior and distribution before deciding whether to list it. A PR is an application, not an automatic publication promise.
 

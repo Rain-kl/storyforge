@@ -1564,7 +1564,7 @@ export const AGENT_SKILLS = [
       table: 'codexEntries',
       fields: [...CODEX_CANDIDATE_WRITE_FIELDS],
     }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: [
       'R-HARNESS70-codex-extraction-durable',
       'R-RACE5-codex-extraction-enrichment',
@@ -1618,7 +1618,7 @@ export const AGENT_SKILLS = [
       table: 'codexEntries',
       fields: [...CODEX_CANDIDATE_WRITE_FIELDS],
     }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-RACE5-codex-extraction-enrichment', 'R-CODEX1-gateway-provenance'],
   },
   {
@@ -2645,7 +2645,7 @@ export const AGENT_SKILLS = [
     contextGateway: OUTLINE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 12_000,
     writeTargets: [{ table: 'outlineNodes', fields: ['parentId', 'type', 'title', 'summary', 'order'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-AGENT1-chat-copilot-outline', 'R-HARNESS11-outline-batch-durable', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -2666,7 +2666,7 @@ export const AGENT_SKILLS = [
     contextGateway: OUTLINE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 8_000,
     writeTargets: [{ table: 'outlineNodes', fields: ['parentId', 'type', 'title', 'summary', 'order'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS14-workflow-classifier', 'R-AGENT1-chat-copilot-outline', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -2687,7 +2687,7 @@ export const AGENT_SKILLS = [
     contextGateway: OUTLINE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 12_000,
     writeTargets: [{ table: 'outlineNodes', fields: ['parentId', 'type', 'title', 'summary', 'order'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS14-workflow-classifier', 'R-AGENT1-chat-copilot-outline', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -2734,7 +2734,7 @@ export const AGENT_SKILLS = [
         'lastUsedSummary',
       ],
     }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: [
       'R-HARNESS8-detailed-outline-generation-durable',
       'R-HARNESS37-detailed-outline-entry',
@@ -2758,7 +2758,7 @@ export const AGENT_SKILLS = [
     contextGateway: PROSE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 16_000,
     writeTargets: [{ table: 'chapters', fields: ['content', 'wordCount'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS7-prose-generation-durable', 'R-HARNESS9-information-boundary', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -2779,7 +2779,7 @@ export const AGENT_SKILLS = [
     contextGateway: PROSE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 16_000,
     writeTargets: [{ table: 'chapters', fields: ['content', 'wordCount'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS14-workflow-classifier', 'R-HARNESS7-prose-generation-durable', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS17-context-compression-eval', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -2800,7 +2800,7 @@ export const AGENT_SKILLS = [
     contextGateway: PROSE_CONTEXT_GATEWAY_POLICY,
     maxOutputTokens: 16_000,
     writeTargets: [{ table: 'chapters', fields: ['content', 'wordCount'] }],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS14-workflow-classifier', 'R-HARNESS7-prose-generation-durable', 'R-HARNESS16-semantic-context-compression', 'R-HARNESS18-execution-version-freshness'],
   },
   {
@@ -3015,7 +3015,7 @@ export const AGENT_SKILLS = [
     contextGateway: { ...PROSE_CONTEXT_GATEWAY_POLICY, requiredWriteTargets: [] },
     maxOutputTokens: 3_000,
     writeTargets: [],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS19-prose-semantic-review'],
   },
   {
@@ -3036,7 +3036,7 @@ export const AGENT_SKILLS = [
     contextGateway: { ...PROSE_CONTEXT_GATEWAY_POLICY, requiredWriteTargets: [] },
     maxOutputTokens: 16_000,
     writeTargets: [],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-WEH0-skill-runtime-contract', 'R-HARNESS19-prose-semantic-review'],
   },
   {
@@ -3066,7 +3066,7 @@ export const AGENT_SKILLS = [
       { table: 'storylineCrossings', fields: ['arcIdA', 'arcIdB', 'chapterId', 'chapterTitle', 'note', 'evidenceQuote'] },
       { table: 'storyArcs', fields: ['name', 'type', 'description', 'stages'] },
     ],
-    lastVerifiedAt: '2026-08-24',
+    lastVerifiedAt: '2026-10-09',
     regressionTests: ['R-AGENT5-chapter-organization', 'R-HARNESS20-chapter-post-adoption-durable', 'R-PROGRESS1-post-adoption-policy'],
   },
   {

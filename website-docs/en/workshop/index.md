@@ -7,7 +7,7 @@ lastVerified: 2026-10-09
 **Add the features you want to your own StoryForge.** A plugin can be a new historical timeline, a writing board, a collection of content cards, or a complete tool with UI, data and AI capabilities. Different works can enable different plugins.
 
 ::: warning Development preview
-These guides cover plugin preview 1.0, API 1 and SDK 0.1. Implementation is on a development branch; check [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for merge and deployment status. Reading this guide does not add Workshop to an older application. Preview availability is not a public launch or long-term compatibility promise.
+These guides cover plugin preview 1.0, API 1 and SDK 0.1. The feature is delivered by [PR #113](https://github.com/yuanbw2025/storyforge/pull/113); use an application version that includes it. Check merge and online deployment status separately. Reading this guide does not add Workshop to an older application. Preview availability is not a public launch or long-term compatibility promise.
 :::
 
 ## Start here

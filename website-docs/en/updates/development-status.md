@@ -1,12 +1,12 @@
 # Pending development and branch audit
 
-> Snapshot: 2026-10-07 00:11 (UTC+8) · Remote main `da3ac75c`. This page records development evidence, not a list of released features.
+> Snapshot: 2026-10-08 15:07 (UTC+8) · Remote main `7629a7fa`. This page records development evidence, not a list of released features.
 
-This audit covers all 16 local branches (including this documentation-maintenance branch) and 41 registered worktrees, including detached worktrees and those moved into archives. Excluding maintenance, 7 of the remaining 15 branch heads are outside main. “Local-only commits” means commits not contained in any fetched origin branch; the count is not the number of missing features.
+This audit covers all 19 local branches (including this documentation-maintenance branch) and 41 registered worktrees, including detached worktrees and those moved into archives. Excluding maintenance, 8 of the remaining 18 branch heads are outside main. “Local-only commits” means commits not contained in any fetched origin branch; the count is not the number of missing features.
 
 ## October 9 targeted update Plugins and Workshop
 
-Plugin preview 1.0 is developed on `feat/plugin-workshop-v1-20261008`; the base implementation is [53c276f3](https://github.com/yuanbw2025/storyforge/commit/53c276f3). See [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for delivery and review. New [Workshop guides](/en/workshop/) cover capabilities, installation, development, an AI prompt and Skill kit, publishing, maintenance and recovery, with in-app help/download entry points. This is not a main-merge or website-deployment claim and does not revise the historical branch-audit snapshot below.
+Plugin preview 1.0 is delivered through PR #113; the base implementation is [53c276f3](https://github.com/yuanbw2025/storyforge/commit/53c276f3). See [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for delivery and review. New [Workshop guides](/en/workshop/) cover capabilities, installation, development, an AI prompt and Skill kit, publishing, maintenance and recovery, with in-app help/download entry points. Use the latest PR checks and merge state to assess delivery; verify website deployment separately. The branch snapshot below preserves the 2026-10-08 review, so its unmerged status and old CI result do not describe the current state.
 
 ## Now in main
 
@@ -19,6 +19,10 @@ Plugin preview 1.0 is developed on `feat/plugin-workshop-v1-20261008`; the base 
 See the [changelog](/en/updates/changelog), [longform settings](/en/features/longform/planning), and [candidates and recovery](/en/guides/ai-workflow). Mainline integration, application deployment, and documentation deployment are checked separately; a merge date is not a version-release date.
 
 ## Branches still outside main
+
+- `feat/plugin-workshop-v1-20261008`: 1 commit outside main, 0 local-only; clean worktree.
+
+  `53c276f3` is pushed to [draft PR #113](https://github.com/yuanbw2025/storyforge/pull/113), still unmerged. A follow-up at 16:14 (UTC+8) confirmed [remote CI failure](https://github.com/yuanbw2025/storyforge/actions/runs/37734889246): 229 browser tests passed, 1 failed, and 2 were skipped. The complete text-open-world journey failed while waiting for the combat result; the cause needs investigation. The plugin and local Workshop trial includes 12 reference packages; local test success does not mean online availability. See the [trial brief](/en/updates/plugin-workshop-v1) for scope, trial steps, data protection, and validation limits.
 
 - `feat/builtin-3d-adventure`: 9 commits outside main; 9 local-only.
 

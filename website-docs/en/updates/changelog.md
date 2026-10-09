@@ -4,7 +4,11 @@ Changes are organized by user impact. **Main-branch updates do not mean a new ve
 
 ## Development preview Plugins and Workshop
 
-The plugin preview, installation/development tutorials, AI development kit and publication workflow are being completed on a separate branch. See [Workshop guides](/en/workshop/) and [development status](/en/updates/development-status). Check [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for merge/deployment status; this is separate from the delivered main changes below.
+[PR #113](https://github.com/yuanbw2025/storyforge/pull/113) delivers the plugin preview, installation/development tutorials, AI development kit and publication workflow. See [Workshop guides](/en/workshop/) and [development status](/en/updates/development-status). Check [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for merge/deployment status; the feature still requires explicitly enabling the developer preview and is not a new tagged release.
+
+## 2026-10-08 · New development brief in the knowledge base
+
+The [Plugins and Workshop 1.0 trial brief](/en/updates/plugin-workshop-v1) documents trial steps, project changes, data protection, acceptance results, and limits. PR #113 was unmerged at the 2026-10-08 review. This entry preserves that documentation update; consult the guides and PR above for current status.
 
 ## Unreleased / current main
 

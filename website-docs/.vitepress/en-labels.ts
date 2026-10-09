@@ -126,6 +126,7 @@ export const enLabels: Record<string, string> = {
   '项目动态概览': 'Updates overview',
   '更新日志': 'Changelog',
   '待合并开发记录': 'Pending development',
+  '插件与工坊体验版简报': 'Plugins and Workshop trial brief',
   '版本、升级与兼容': 'Versions, upgrades, and compatibility',
   'Bug、功能与文档纠错反馈': 'Bugs, features, and doc corrections',
   '反馈中心': 'Feedback center',
