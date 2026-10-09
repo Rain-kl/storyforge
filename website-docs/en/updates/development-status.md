@@ -4,6 +4,10 @@
 
 This audit covers all 19 local branches (including this documentation-maintenance branch) and 41 registered worktrees, including detached worktrees and those moved into archives. Excluding maintenance, 8 of the remaining 18 branch heads are outside main. “Local-only commits” means commits not contained in any fetched origin branch; the count is not the number of missing features.
 
+## October 9 targeted update Plugins and Workshop
+
+Plugin preview 1.0 is delivered through PR #113; the base implementation is [53c276f3](https://github.com/yuanbw2025/storyforge/commit/53c276f3). See [PR #113](https://github.com/yuanbw2025/storyforge/pull/113) for delivery and review. New [Workshop guides](/en/workshop/) cover capabilities, installation, development, an AI prompt and Skill kit, publishing, maintenance and recovery, with in-app help/download entry points. Use the latest PR checks and merge state to assess delivery; verify website deployment separately. The branch snapshot below preserves the 2026-10-08 review, so its unmerged status and old CI result do not describe the current state.
+
 ## Now in main
 
 - [PR #107](https://github.com/yuanbw2025/storyforge/pull/107): game-production responsibilities and lifecycle documentation, plus review protection until longform candidates are saved.
