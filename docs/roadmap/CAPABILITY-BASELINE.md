@@ -22,7 +22,7 @@
 | BASE-HARNESS-01 | implemented | Run contract、ledger、checkpoint、candidate/stale、receipt 及多个 durable use case | 并非所有旧按钮都统一到同样成熟度 |
 | BASE-CTX-01 | implemented | Context Gateway、稳定 resource descriptor、manifest、长尾检索和规模夹具存在 | 真实百万字作者长期质量未验证 |
 | BASE-MEDIA-01 | partial | 共享 blob/OPFS、媒资需求/资产与 build 绑定基础存在 | 跨 provider 生产、一致性、license 和完整 UI 仍不统一 |
-| BASE-PROVIDER-01 | partial | 多 provider 配置、任务路由、能力/上下文配置和连接测试存在 | 市面模型兼容、错误分类与持续契约测试不完整 |
+| BASE-PROVIDER-01 | partial | 多 provider 配置、任务路由、能力/上下文配置和连接测试存在；Codex 本机订阅适配见 [施工契约](./CODEX-PROVIDER.md)，需运行本地服务 | 市面模型兼容、错误分类与持续契约测试不完整 |
 
 > UI 展示预览（2026-09-14）：首页可显式进入 `/storyforge/ui-preview/index.html`，查看正在调整的 199 个示例页面。该入口独立于正式业务，不读取/写入作品数据库或调用 AI，不改变以下产品能力状态。
 
@@ -39,7 +39,7 @@
 | B-LF-05 | implemented | 原文/事实/摘要/索引、Context Gateway、遗漏/充分性、远中近与长尾回查已进入长篇主链 | 隐喻、双关和作者未登记伏笔仍需人机协作，是文学边界而非基础设施缺失 |
 | B-LF-06 | implemented | 10万/30万/100万字符工程规模门、远距事实/伏笔召回、错世界/未来隔离和真实模型纵切面已通过 | 只能声明理论工程支撑；真实作者长期文学一致性是持续质量研究，不是未完成功能 |
 | B-NODE-01 | implemented | 官方节点动作通过类型化 binding 调用分步骤正式领域 action/Skill；正式模板不能落入通用 `chat()`，实验草稿不能采纳 Canon | 未来新增官方动作必须同时登记映射并补同源回归 |
-| B-NODE-02 | partial | 节点表进入 PROJECT_TABLES，具备删除/导入导出基础 | 缺完整跨模式互操作、stale、非法连接和真实 E2E |
+| B-NODE-02 | partial | 节点表进入 PROJECT_TABLES；节点维护已补作者要求、候选修订/拒绝持久化、局部执行、运行证据恢复、跨模式字段与角色采纳、非法连接、备份往返/删除隔离与窄屏 E2E；自由编排维护覆盖双向拖线搜索、前后建点、已有端口连接、提示词版本和参数实际生效 | 仍须逐个官方长篇模板完成跨模式生产验收，不据局部维护提升整体成熟度 |
 
 ## C · 独立创作产品
 
