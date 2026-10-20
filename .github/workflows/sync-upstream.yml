@@ -33,7 +33,25 @@ jobs:
       - name: Fetch and merge upstream main
         run: |
           git fetch --no-tags upstream refs/heads/main:refs/remotes/upstream/main
-          git merge --no-edit upstream/main
+          if git merge --no-edit upstream/main; then
+            exit 0
+          fi
+
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U)
+          if [[ ${#conflicts[@]} -eq 1 ]] &&
+             [[ "${conflicts[0]}" == "package-lock.json" ]] &&
+             git diff --quiet upstream/main -- package.json; then
+            # The npm lockfile is generated. When the merged manifest exactly
+            # matches upstream, keep its matching lockfile to avoid lock-only conflicts.
+            git checkout --theirs -- package-lock.json
+            git add package-lock.json
+            git commit --no-edit
+          else
+            echo "::error::Upstream merge has conflicts outside a package-lock-only update."
+            printf '%s\n' "${conflicts[@]}"
+            git merge --abort
+            exit 1
+          fi
 
       - name: Push synchronized main
         run: git push origin HEAD:refs/heads/main
