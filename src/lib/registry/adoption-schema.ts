@@ -5,9 +5,12 @@
  * 自动盖章 / FK 校验策略。
  */
 import type { AdoptionExtensionSpec, CollectionAdoptionSpec } from './types'
-import { REGISTRY_BY_NAME } from './project-tables'
+import { PROJECT_TABLES, REGISTRY_BY_NAME } from './project-tables'
 
 const ADOPTION_SCHEMAS_RAW: CollectionAdoptionSpec[] = [
+  {target: 'chatAuthoringDrafts', identity: 'id', recordOnly: true, duplicatePolicy: 'error', required: [], autoStamps: ['updatedAt'], ownerFrom: 'work'},
+  { target: 'ttrpgAuthoringDrafts', identity: 'id', recordOnly: true, duplicatePolicy: 'error', required: ['settingsJson'],
+    autoStamps: [], ownerFrom: 'work', writePolicy: 'ttrpg-open-authoring-design-v1' },
   // Existing singleton records also support exact author edits by ID. Creation
   // still uses the singleton boundary; these entries never permit collection adds.
   { target: 'worldviews', identity: 'id', recordOnly: true, duplicatePolicy: 'error', required: [], autoStamps: ['updatedAt'] },
@@ -475,7 +478,24 @@ const ADOPTION_SCHEMAS_RAW: CollectionAdoptionSpec[] = [
   },
 ]
 
-export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.freeze([
+const ADOPTION_EXTENSION_REGISTRATIONS: readonly AdoptionExtensionSpec[] = [
+  {
+    id: 'chat-authoring-draft-lifecycle', target: 'chatAuthoringDrafts',
+    entrypoints: ['src/lib/character-interaction/draft-service.ts', 'src/lib/character-interaction/role-profile-store.ts', 'src/lib/character-interaction/consultation-store.ts', 'src/lib/character-interaction/source-unit-store.ts'],
+    policyRegistry: 'PROJECT_TABLES + WorkspaceScope + draft revision CAS + FIELD_REGISTRY roleProfilesJson/settingsJson/sourceUnitsJson + immutable identity/source/permission guard',
+    reason: 'S2作者方案创建、资料权限确认、会谈和revision属于普通领域生命周期。draft-service仅保留整理字段，不生成或改写；role-profile-store、consultation-store和source-unit-store的正文须经adopt()，直接更新仅限同事务revision。事实整理须绑定完整原文、逐项权限复核和作者确认，不得借此改写来源分类或世界。',
+    reviewAfter: '2027-10-01',
+  },
+  { id: 'ttrpg-authoring-draft-lifecycle', target: 'ttrpgAuthoringDrafts', entrypoints: ['src/lib/ttrpg/authoring-service.ts'],
+    policyRegistry: 'parseTtrpgSettings + revision CAS + PROJECT_TABLES + ttrpg-open-authoring-design-v1 adopt writePolicy',
+    reason: '原人工配置、出口选择和制作指针生命周期继续由领域服务处理；模型设计必须经原始回答/来源证明、作者确认和adopt事务委托同一保存服务。', reviewAfter: '2027-04-19' },
+  {
+    id: 'ttrpg-human-memory-lifecycle', target: 'ttrpgNarrativeMemories',
+    entrypoints: ['src/lib/ttrpg/runtime-commands.ts', 'src/lib/ttrpg/runtime-branch.ts'],
+    policyRegistry: 'parseTtrpgOpenMemoryReceipt + verifyTtrpgOpenBriefCandidateProofV1 + verifyTtrpgOpenMemoryReceiptsV1 + E15 + PROJECT_TABLES',
+    reason: '同一表唯一领域治理入口：原人工 V1 只接受手写来源；模型 V2 必须经正式 CreativeArtifact、真人明确确认与实际来源证明，E15和唯一记忆投影原子追加。分支只复制切点前已确认记录；原始观察者/可靠性与model-reviewed保留，不授予规则、知识或世界权威。',
+    reviewAfter: '2027-08-21',
+  },
   { id: 'extension-record-lifecycle', target: 'extensionRecords', entrypoints: ['src/lib/extensions/store.ts'], policyRegistry: 'ExtensionRegistrySnapshot + PROJECT_TABLES + bounded DataSchema', reason: '普通作者编辑、内容包、迁移与历史代恢复通过命名空间、schema 和 revision CAS；模型候选必须由 adopt 委托同一事务写入。', reviewAfter: '2027-01-01' },
   {
     id: 'reference-analysis-run-lifecycle',
@@ -640,9 +660,10 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
       'src/lib/world-engine/derivation.ts',
       'src/lib/world-engine/promotion.ts',
       'src/lib/world-engine/draft.ts',
+      'src/lib/world-engine/narrative-derivation.ts',
     ],
     policyRegistry: 'PROJECT_TABLES refs + world package trust + world release lifecycle',
-    reason: 'World 根创建、版本推进和引用级联是注册表约束的领域生命周期；draft.ts 仅允许作者显式修改名称与简介，校验 scope 和 updatedAt，不接受模型自由字段写回。',
+    reason: 'World 根创建、版本推进和引用级联是注册表约束的领域生命周期；narrative-derivation.ts 只在来源 CAS 和已验证编译均匹配的注册导入事务中推进本次新建目标的发布版本；draft.ts 仅允许作者显式修改名称与简介，校验 scope 和 updatedAt，不接受模型自由字段写回。',
     reviewAfter: '2027-08-01',
   },
   {
@@ -977,6 +998,7 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
       'src/lib/product-production/media-blob-store.ts',
       'src/lib/product-production/adoption.ts',
       'src/lib/product-production/scheduler.ts',
+      'src/lib/avg/author-artifacts.ts',
     ],
     policyRegistry: 'PRODUCT_PRODUCTION_COMMAND_POLICY + PRODUCT_PRODUCTION_ARTIFACT_POLICY + PROJECT_TABLES',
     reason: 'Production 状态、Brief 授权、幂等命令、Build/Artifact 和共享媒资必须维持 CAS、hash、scope、epoch 与引用完整性，不能由组件或 provider 直接散写。',
@@ -993,7 +1015,7 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
     id: 'product-production-commands', target: 'productProductionCommands',
     entrypoints: ['src/lib/product-production/commands.ts', 'src/lib/product-production/adoption.ts'],
     policyRegistry: 'PRODUCT_PRODUCTION_COMMAND_POLICY + PROJECT_TABLES',
-    reason: '生产控制与发布必须先 claim 唯一 command receipt，再原子提交或记录失败。',
+    reason: '生产控制、AVG 作者专业工件采用与发布必须先 claim 唯一 command receipt，再原子提交或记录失败。',
     reviewAfter: '2027-08-21',
   },
   {
@@ -1004,6 +1026,7 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
       'src/lib/product-production/adoption.ts',
       'src/lib/product-production/scheduler.ts',
       'src/lib/product-production/quality-receipts.ts',
+      'src/lib/avg/author-artifacts.ts',
     ],
     policyRegistry: 'PRODUCT_PRODUCTION_COMMAND_POLICY + PRODUCT_PRODUCTION_ARTIFACT_POLICY + PRODUCT_QUALITY_GATE_RECEIPT_V1 + PROJECT_TABLES',
     reason: 'Build 状态、epoch、hash 与发布指针必须通过登记的控制、Artifact 或整包采用事务变更；商业可发布状态只能由不可变性能与作者主路线回执的最新投影推进或降级。',
@@ -1015,11 +1038,12 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
       'src/lib/product-production/commands.ts',
       'src/lib/product-production/artifact-store.ts',
       'src/lib/product-production/text-adventure-artifact-store.ts',
+      'src/lib/avg/author-artifacts.ts',
       'src/lib/product-production/adoption.ts',
       'src/lib/product-production/scheduler.ts',
     ],
-    policyRegistry: 'PRODUCT_PRODUCTION_ARTIFACT_POLICY + PROJECT_TABLES',
-    reason: '候选、验收、沿用与 orphan 状态必须校验 Build epoch、receipt、hash、scope 和唯一版本。',
+    policyRegistry: 'PRODUCT_PRODUCTION_ARTIFACT_POLICY + AVG_PROFESSIONAL_OUTPUTS_V1 + assertAvgMediaRawProducerAdmissionV2 + PROJECT_TABLES',
+    reason: '候选、验收、沿用与 orphan 状态必须校验 Build epoch、receipt、hash、scope 和唯一版本；AVG 作者输入先经冻结 human-import 写域、源/输入版本和命令确认，专业 AI 岗位未就绪时禁止借用旧通用写口。',
     reviewAfter: '2027-08-21',
   },
   {
@@ -1040,6 +1064,31 @@ export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.free
     reason: '规则包安装是人工或内置来源的版本化领域生命周期：写入前必须完成结构解析、行为夹具、许可声明与内容 hash 校验，并按 Work 与规则版本原子更新；模型候选字段仍统一走 adopt。',
     reviewAfter: '2027-08-21',
   },
+]
+
+const NARRATIVE_ADOPTION_ENTRYPOINTS = ['src/lib/world-engine/narrative-domain-authoring.ts', 'src/lib/narrative-domain/lifecycle.ts', 'src/lib/agent/run/narrative-annotation-durable.ts']
+const NARRATIVE_ADOPTION_POLICY = 'PROJECT_TABLES.worldSemantic.projector + FIELD_REGISTRY + source hash CAS'
+const NARRATIVE_ADOPTION_REVIEW_AFTER = '2027-01-01'
+
+/** One domain extension per target; current narrative fields are derived from
+ * PROJECT_TABLES, while existing lifecycle entrypoints retain their policies. */
+export const ADOPTION_EXTENSIONS: readonly AdoptionExtensionSpec[] = Object.freeze([
+  ...ADOPTION_EXTENSION_REGISTRATIONS.map(extension => {
+    if (!REGISTRY_BY_NAME.get(extension.target)?.worldSemantic?.projector) return extension
+    return { ...extension,
+      entrypoints: [...extension.entrypoints, ...NARRATIVE_ADOPTION_ENTRYPOINTS],
+      policyRegistry: `${extension.policyRegistry} + ${NARRATIVE_ADOPTION_POLICY}`,
+    }
+  }),
+  ...PROJECT_TABLES.filter(spec => spec.worldSemantic?.projector
+    && !ADOPTION_EXTENSION_REGISTRATIONS.some(extension => extension.target === spec.name))
+    .map((spec): AdoptionExtensionSpec => ({
+      id: `narrative-annotation-${spec.name}`, target: spec.name,
+      entrypoints: NARRATIVE_ADOPTION_ENTRYPOINTS,
+      policyRegistry: NARRATIVE_ADOPTION_POLICY,
+      reason: '叙事注释必须经作者确认、严格字段/引用/证据校验与来源 CAS；系统生成确认凭据，删除/合并保留证据并使旧确认失效。',
+      reviewAfter: NARRATIVE_ADOPTION_REVIEW_AFTER,
+    })),
 ])
 
 /** C3: owner policy is derived from the same PROJECT_TABLES domainOwner metadata. */

@@ -143,6 +143,31 @@ function extractContextSources() {
 }
 
 // ── ④ FIELD_REGISTRY 可写字段(target → field 列表) ──
+function narrativeProjectorFields() {
+  const sourceFile = parseSource('src/lib/registry/project-tables.ts')
+  const byTarget = new Map()
+  let metadata = []
+  visit(sourceFile, node => {
+    if (ts.isVariableDeclaration(node) && node.name.getText(sourceFile) === 'NARRATIVE_METADATA_FIELDS_V1') {
+      const initializer = ts.isAsExpression(node.initializer) ? node.initializer.expression : node.initializer
+      metadata = stringArrayValue(initializer)
+    }
+  })
+  if (!metadata.length) throw new Error('Narrative metadata declaration missing')
+  visit(sourceFile, node => {
+    if (!ts.isObjectLiteralExpression(node)) return
+    const target = stringValue(objectProperty(node, 'name')?.initializer)
+    const semantic = objectProperty(node, 'worldSemantic')?.initializer
+    if (!target || !semantic || !ts.isObjectLiteralExpression(semantic)) return
+    for (const property of semantic.properties) {
+      const call = ts.isSpreadAssignment(property) ? property.expression : null
+      if (!call || !ts.isCallExpression(call) || call.expression.getText(sourceFile) !== 'NARRATIVE_PROJECTOR_V1') continue
+      byTarget.set(target, [...metadata, ...stringArrayValue(call.arguments[3])].filter(field => field !== 'narrativeAuthorityV1'))
+    }
+  })
+  return byTarget
+}
+
 function extractFields() {
   const sourceFile = parseSource('src/lib/registry/field-registry.ts')
   const byTarget = {}
@@ -153,6 +178,7 @@ function extractFields() {
     const field = stringValue(node.arguments[1])
     if (target && field) (byTarget[target] ??= new Set()).add(field)
   })
+  for (const [target, fields] of narrativeProjectorFields()) for (const field of fields) (byTarget[target] ??= new Set()).add(field)
   for (const target of Object.keys(byTarget)) {
     byTarget[target] = [...byTarget[target]].sort()
   }
@@ -175,6 +201,23 @@ function extractAdoptionExtensions() {
       reviewAfter: stringValue(objectProperty(node, 'reviewAfter')?.initializer) ?? '',
     })
   })
+  const constants = new Map()
+  visit(sourceFile, node => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text.startsWith('NARRATIVE_ADOPTION_')) {
+      constants.set(node.name.text, node.initializer)
+    }
+  })
+  const entrypoints = stringArrayValue(constants.get('NARRATIVE_ADOPTION_ENTRYPOINTS'))
+  const policyRegistry = stringValue(constants.get('NARRATIVE_ADOPTION_POLICY'))
+  const reviewAfter = stringValue(constants.get('NARRATIVE_ADOPTION_REVIEW_AFTER'))
+  if (!entrypoints.length || !policyRegistry || !reviewAfter) throw new Error('Narrative adoption contract missing')
+  for (const target of narrativeProjectorFields().keys()) {
+    const existing = extensions.find(extension => extension.target === target)
+    if (existing) {
+      existing.entrypoints.push(...entrypoints)
+      existing.policyRegistry += ` + ${policyRegistry}`
+    } else extensions.push({ id: `narrative-annotation-${target}`, target, policyRegistry, entrypoints, reviewAfter })
+  }
   return extensions
 }
 
@@ -269,6 +312,25 @@ function extractFormalAIEntries() {
   return registry.entries
 }
 
+function extractOpenWorldResponsibilities() {
+  const source = parseSource('src/lib/open-world/responsibility-contract.ts')
+  const objects = new Map()
+  visit(source, node => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)
+      && node.initializer && ts.isObjectLiteralExpression(node.initializer)) {
+      objects.set(node.name.text, node.initializer)
+    }
+  })
+  const labels = objects.get('TEXT_OPEN_WORLD_RESPONSIBILITY_LABELS_V1')
+  const tasks = objects.get('TASK_TRACKS')
+  if (!labels || !tasks) throw new Error('开放世界责任合同缺少可生成的标签或任务映射')
+  return labels.properties.map(property => {
+    const key = propertyName(property)
+    return { key, label: stringValue(property.initializer), tasks: tasks.properties
+      .filter(task => stringValue(task.initializer) === key).map(propertyName) }
+  })
+}
+
 function buildMarkdown() {
   const keys = extractModuleKeys()
   const seeds = extractSeeds()
@@ -324,7 +386,7 @@ function buildMarkdown() {
   // 三、可写字段
   lines.push('## 三、AI 可写字段（FIELD_REGISTRY · adopt 写什么）')
   lines.push('')
-  lines.push('AI 输出经 `adopt({ target, data })` 写回,只有这里登记的字段可写(别名自动归一)。')
+  lines.push('AI 输出只可提议这里登记的规范字段。普通写回经 `adopt({ target, data })`；标注领域政策的字段必须经过相应扩展的确认、引用和来源 CAS 校验。叙事确认凭据是系统字段，模型不得签发或嵌套提供。')
   lines.push('')
   lines.push('| 目标表 | 可写字段 |')
   lines.push('|---|---|')
@@ -371,7 +433,7 @@ function buildMarkdown() {
   // 五、正式 AI 入口机器绑定
   lines.push('## 五、正式 AI 入口（FormalAIEntryBindingV1）')
   lines.push('')
-  lines.push(`共 ${formalEntries.length} 个操作级绑定。运行时按 entryId 校验 category 和 Skill；采纳权限不由文字说明决定。`)
+  lines.push(`共 ${formalEntries.length} 个操作级绑定。运行时按 entryId 校验 category 和 Skill；采纳权限不由文字说明决定。显式 outputModality=audio 使用独立冻结音频执行器，文本入口不补默认字段。`)
   lines.push('')
   lines.push('| entryId | Skill | category | 边界 | 候选 | 采纳目标 | 调用方 |')
   lines.push('|---|---|---|---|---|---|---|')
@@ -381,8 +443,21 @@ function buildMarkdown() {
       ? entry.adoptionTargets.map(item => `\`${item}\``).join('<br/>')
       : '禁止'
     const callers = entry.allowedCallers.map(item => `\`${item}\``).join('<br/>')
-    lines.push(`| \`${entry.entryId}\` | \`${entry.skillId}\` | ${categories} | ${entry.entryKind} / ${entry.executionBoundary} | \`${entry.candidateKind}\` | ${targets} | ${callers} |`)
+    lines.push(`| \`${entry.entryId}\` | \`${entry.skillId}\` | ${categories} | ${entry.entryKind} / ${entry.executionBoundary}${entry.outputModality ? ` / ${entry.outputModality}` : ''} | \`${entry.candidateKind}\` | ${targets} | ${callers} |`)
   }
+  lines.push('')
+
+  lines.push('### 文字开放世界：三线职责与人工边界')
+  lines.push('')
+  lines.push('从 `src/lib/open-world/responsibility-contract.ts` 生成任务主责；跨线产物的唯一 owner 和消费者以同文件矩阵为准。责任线不是新增 Agent，也不改写原六类调度 lane、冻结计划或模型权限。')
+  lines.push('')
+  lines.push('| 责任线 | 主责任任务（可选媒资任务仅在冻结计划选用时执行） |')
+  lines.push('|---|---|')
+  for (const track of extractOpenWorldResponsibilities()) {
+    lines.push('| ' + track.label + ' / `' + track.key + '` | ' + track.tasks.map(key => '`' + key + '`').join('、') + ' |')
+  }
+  lines.push('')
+  lines.push('三线状态只读正式 scheduler/Artifact 证据，V3 在既有校验后冻结来源 Hash。逐图图片确认由作者明确操作，不能由模型或统计代签；本地体验统计只读取当前分支事件与已核验意图候选，不新增模型调用、运行写入或世界回写。参见 [产品化实施计划](roadmap/TEXT-OPEN-WORLD-IMPLEMENTATION-PLAN.md)。')
   lines.push('')
 
   lines.push('---')

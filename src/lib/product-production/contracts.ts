@@ -1,7 +1,24 @@
-import { parseChatAuthoringSettingsV1 } from '../character-interaction/authoring-contract'
-import { parseAvgAuthoringSettingsV1 } from '../avg/authoring-contract'
+import { parseAvgAssemblyBrief, AVG_ASSEMBLY_GATE_IDS_V1 } from '../avg/assembly-contract'
+import { assertAvgVisualProductionPolicyV2 } from '../avg/media-production-policy'
+import { parseAvgStoredAssemblyBriefV3 } from '../avg/voice-assembly-storage'
+import { assertAvgVoiceProductionPolicyV3 } from '../avg/voice-production-policy'
+import { parseAvgSettingsForLegacyProduction } from '../avg/settings-v2'
+import { parseAvgVisualPlanningBrief } from '../avg/visual-planning-brief-codec'
+import { assertAvgVisualPlanningPolicyV5 } from '../avg/visual-planning-policy-v5'
+import { assertAvgVisualPlanningPolicyV4 } from '../avg/visual-planning-policy'
+import { parseAvgSoundPlanningBrief } from '../avg/sound-production-brief'
+import { assertAvgSoundProductionPolicy } from '../avg/sound-production-policy'
+import { parseAvgAudioProductionProcessingPlan } from '../avg/audio-production-contract'
+import { assertAvgAudioProcessingBriefV1 } from '../avg/audio-production-brief'
+import {chatVisualMediaProfileV1} from '../character-interaction/visual-intent'
+import { parseChatAuthoringSettings } from '../character-interaction/authoring-contract'
+import {parseChatMediaProductionDecisionV1} from '../character-interaction/media-selection'
+import {parseChatRoleProfileSetV1} from '../character-interaction/role-profile'
+import {parseChatSourceUnitSetV1} from '../character-interaction/source-unit-authorization'
 import type {
   TextAdventureContentRevisionV1,
+  TtrpgOpenContentRevisionV1,
+  TextOpenWorldContentRevisionV1,
   ProductConsultationBudgetV1,
   ProductProductionBlockerResolutionV1,
   ProductProductionBriefV3,
@@ -20,8 +37,9 @@ import type {
 } from '../types'
 import { PRODUCT_MEDIA_KINDS, PRODUCT_PRODUCTION_COMMAND_TYPES, PRODUCTION_PRODUCT_KINDS_V1 } from '../types'
 import { isSha256Hash, canonicalProductProductionJsonV2 } from './hash'
-import { parseProductRuntimePackageV1, parseProductWorldSourceSelectionV1 } from './runtime-package'
+import { parseProductRuntimePackageV1, parseProductWorldSourceSelection } from './runtime-package'
 import { parseTtrpgProductionBriefV2 } from '../ttrpg/production-brief'
+import { parseTtrpgProductionBriefContentShapeV3 } from '../ttrpg/production-brief-v3'
 import { parseAiTownProductionBriefV1 } from '../ai-town/contracts'
 import { parseTextAdventureProductionBriefV1 } from '../adventure/production-brief'
 import {
@@ -271,9 +289,16 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
     'productionBudget', 'qualityProfile', 'capabilityRequirements', 'externalDataPolicy',
     'fallbackPolicy', 'completionContract', 'unresolvedDecisionKeys',
     ...(Object.prototype.hasOwnProperty.call(row, 'characterChat') ? ['characterChat'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'characterChatProfiles') ? ['characterChatProfiles'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'characterChatSourceUnits') ? ['characterChatSourceUnits'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'avg') ? ['avg'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'avgRevision') ? ['avgRevision'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgAssembly') ? ['avgAssembly'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgVisualPlanning') ? ['avgVisualPlanning'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgSoundPlanning') ? ['avgSoundPlanning'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgAudioProcessing') ? ['avgAudioProcessing'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'ttrpg') ? ['ttrpg'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'ttrpgOpen') ? ['ttrpgOpen'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'aiTown') ? ['aiTown'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'textAdventure') ? ['textAdventure'] : []),
     ...(Object.prototype.hasOwnProperty.call(row, 'authorConfirmations') ? ['authorConfirmations'] : []),
@@ -283,7 +308,7 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
   const source = record(row.source, 'source')
   exactKeys(source, ['worldReleaseId', 'worldContentHash', 'selection', 'startingPoint'], 'source')
   if (!isSha256Hash(source.worldContentHash)) fail('source.worldContentHash 无效')
-  const selection = parseProductWorldSourceSelectionV1(source.selection)
+  const selection = parseProductWorldSourceSelection(source.selection)
 
   const intent = record(row.intent, 'intent')
   exactKeys(intent, [
@@ -297,6 +322,8 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
   if (new Set(capabilityRequirements.map(item => item.requirementKey)).size !== capabilityRequirements.length) fail('capability requirementKey 重复')
 
   if (row.characterChat && productType !== 'character-interaction') fail('角色聊天设置不能用于其他产品')
+  if (row.characterChatProfiles !== undefined && (productType !== 'character-interaction' || !row.characterChat || parseChatAuthoringSettings(row.characterChat).version === 1)) fail('人物整理仅适用于带完整来源的角色聊天')
+  if (row.characterChatSourceUnits !== undefined && (productType !== 'character-interaction' || !row.characterChat || parseChatAuthoringSettings(row.characterChat).version !== 3)) fail('逐项事实仅适用于实验角色聊天方案')
   if (row.avg && productType !== 'avg') fail('AVG 设置只能用于 AVG')
   let avgRevision: ProductProductionBriefV3['avgRevision']
   if (row.avgRevision != null) {
@@ -309,8 +336,14 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
   }
   const parsed: ProductProductionBriefV3 = {
     ...(avgRevision ? { avgRevision } : {}),
-    ...(row.characterChat ? { characterChat: parseChatAuthoringSettingsV1(row.characterChat) } : {}),
-    ...(row.avg ? { avg: parseAvgAuthoringSettingsV1(row.avg) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgAssembly') ? { avgAssembly: parseAvgAssemblyBrief(row.avgAssembly) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgVisualPlanning') ? { avgVisualPlanning: parseAvgVisualPlanningBrief(row.avgVisualPlanning) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgSoundPlanning') ? { avgSoundPlanning: parseAvgSoundPlanningBrief(row.avgSoundPlanning) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'avgAudioProcessing') ? { avgAudioProcessing: parseAvgAudioProductionProcessingPlan(row.avgAudioProcessing) } : {}),
+    ...(row.avg ? { avg: parseAvgSettingsForLegacyProduction(row.avg) } : {}),
+    ...(row.characterChat ? { characterChat: parseChatAuthoringSettings(row.characterChat) } : {}),
+    ...(row.characterChatProfiles !== undefined ? {characterChatProfiles: parseChatRoleProfileSetV1(row.characterChatProfiles)} : {}),
+    ...(row.characterChatSourceUnits !== undefined ? {characterChatSourceUnits: parseChatSourceUnitSetV1(row.characterChatSourceUnits)} : {}),
     schema: 'storyforge.product-production-brief', version: 3,
     source: {
       worldReleaseId: positiveId(source.worldReleaseId, 'source.worldReleaseId'),
@@ -340,6 +373,9 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
     ...(Object.prototype.hasOwnProperty.call(row, 'ttrpg')
       ? { ttrpg: parseTtrpgProductionBriefV2(row.ttrpg) }
       : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'ttrpgOpen')
+      ? { ttrpgOpen: parseTtrpgProductionBriefContentShapeV3(row.ttrpgOpen) }
+      : {}),
     ...(Object.prototype.hasOwnProperty.call(row, 'aiTown')
       ? { aiTown: parseAiTownProductionBriefV1(row.aiTown) }
       : {}),
@@ -362,11 +398,52 @@ export function parseProductProductionBriefV3(value: unknown): ProductProduction
       ? { evolution: parseEvolutionImpact(row.evolution) }
       : {}),
   }
+  assertAvgAudioProcessingBriefV1(parsed)
+  if (parsed.avgSoundPlanning) assertAvgSoundProductionPolicy(parsed)
+  if (parsed.avgVisualPlanning) {
+    if(parsed.avgVisualPlanning.version===5)assertAvgVisualPlanningPolicyV5(parsed)
+    else assertAvgVisualPlanningPolicyV4(parsed)
+  }
+  if (parsed.avgAssembly?.version === 2) assertAvgVisualProductionPolicyV2(parsed)
+  if (parsed.avgAssembly?.version === 3) {
+    const { assembly } = parseAvgStoredAssemblyBriefV3(parsed.avgAssembly)
+    assertAvgVoiceProductionPolicyV3({ ...parsed, avgAssembly: assembly })
+  }
+  if (parsed.avgAssembly?.version === 1 && (productType !== 'avg' || parsed.avgRevision || parsed.qualityProfile === 'commercial-candidate'
+    || parsed.capabilityRequirements.length || parsed.productionBudget.maximumModelCalls !== 0 || parsed.productionBudget.maximumMediaCalls !== 0
+    || parsed.productionBudget.maximumOutputTokens !== 0 || parsed.productionBudget.maximumCostUsd !== 0
+    || canonicalProductProductionJsonV2([...parsed.completionContract.requiredGateIds].sort()) !== canonicalProductProductionJsonV2([...AVG_ASSEMBLY_GATE_IDS_V1].sort()))) {
+    fail('AVG 作者组装必须使用独立零 Provider 预算、准确技术门与 prototype/internal 质量边界')
+  }
+  if (productType === 'character-interaction' && (parsed.media.imageCount > 0 || parsed.media.visualLevel !== 'none')) {
+    const expected = chatVisualMediaProfileV1(parsed.characterChat, parsed.media.visualLevel)
+    const imageRequirements = parsed.capabilityRequirements.filter(item => item.mediaClass === 'image')
+    if (parsed.media.imageCount !== expected.imageCount
+      || canonicalProductProductionJsonV2([...parsed.media.requiredMediaKinds].sort()) !== canonicalProductProductionJsonV2([...expected.requiredMediaKinds].sort())
+      || parsed.media.audioLevel !== 'none' || parsed.media.musicTrackCount + parsed.media.sfxCount + parsed.media.voiceLineCount !== 0
+      || imageRequirements.length !== 1 || imageRequirements[0].requirementKey !== 'media.visual' || !imageRequirements[0].required
+      || canonicalProductProductionJsonV2(imageRequirements[0].allowedDataClasses) !== '["author-intent"]'
+      || !parsed.externalDataPolicy.allowedDataClasses.includes('author-intent')
+      || parsed.externalDataPolicy.forbiddenDataClasses.includes('author-intent')) fail('角色聊天图片必须对应明确的画面数量、类型与作者输入授权')
+  }
   if (parsed.intent.protagonistRefs.some(ref => !parsed.source.startingPoint.protagonistRefs.includes(ref))) {
     fail('intent.protagonistRefs 必须来自 startingPoint 候选')
   }
-  if ((parsed.intent.productType === 'ttrpg') !== (parsed.ttrpg != null)) {
-    fail('ttrpg 产品与 TtrpgProductionBriefV2 不闭合')
+  if ((parsed.intent.productType === 'ttrpg') !== (parsed.ttrpg != null || parsed.ttrpgOpen != null)
+    || (parsed.ttrpg != null && parsed.ttrpgOpen != null)) {
+    fail('ttrpg 产品必须且只能绑定一个 scripted/open 制作契约')
+  }
+  if (parsed.ttrpgOpen) {
+    const open = parsed.ttrpgOpen
+    if (open.worldReference.localReleaseRecordId !== parsed.source.worldReleaseId
+      || open.worldReference.releaseHash !== parsed.source.worldContentHash
+      || open.worldReference.referenceHash !== parsed.source.selection.worldReferenceHash
+      || open.sourcePlan.productType !== parsed.intent.productType
+      || open.settings.openingSituation !== parsed.intent.openingSituation
+      || open.settings.playerRole !== parsed.intent.playerRole
+      || parsed.scale.targetEndingCount !== 0) {
+      fail('open 跑团方向/来源与共同制作合同不一致，不能伪造结局下限')
+    }
   }
   if ((parsed.intent.productType === 'ai-town') !== (parsed.aiTown != null)) {
     fail('ai-town 产品与 AiTownProductionBriefV1 不闭合')
@@ -441,13 +518,25 @@ function expectedRevision(value: unknown): number {
 
 function parseResolution(value: unknown): ProductProductionBlockerResolutionV1 {
   const row = record(value, 'resolution')
+  const hasOriginalSource = Object.prototype.hasOwnProperty.call(row, 'originalResponseSource')
   const hasUnknownReservation = Object.prototype.hasOwnProperty.call(row, 'unknownResultReservation')
+  if (row.action === 'confirm-chat-media' && hasUnknownReservation) fail('图片确认不能同时处置未知费用')
   exactKeys(row, [
     'action', 'note',
     ...(row.action === 'author-edit' ? ['authorDraftJson'] : []),
+    ...(row.action === 'confirm-chat-situation' ? ['chatSituation'] : []),
+    ...(row.action === 'confirm-chat-media' ? ['chatMedia'] : []),
     ...(hasUnknownReservation ? ['unknownResultReservation'] : []),
+    ...(hasOriginalSource ? ['originalResponseSource'] : []),
   ], 'resolution')
   if (row.action === 'author-edit') record(JSON.parse(text(row.authorDraftJson, 'resolution.authorDraftJson', 120000)), 'authorDraft')
+  const originalResponseSource = hasOriginalSource ? (() => {
+    if (row.action !== 'author-edit') fail('原完整回答来源只允许明确作者修订')
+    const source = record(row.originalResponseSource, 'resolution.originalResponseSource')
+    exactKeys(source, ['captureRunId', 'captureReceiptHash'], 'resolution.originalResponseSource')
+    if (!isSha256Hash(source.captureReceiptHash)) fail('原回答来源缺少准确终验 hash')
+    return { captureRunId: positiveId(source.captureRunId, 'originalResponseSource.captureRunId'), captureReceiptHash: source.captureReceiptHash }
+  })() : undefined
   const unknownResultReservation = hasUnknownReservation
     ? (() => {
         const reservation = record(row.unknownResultReservation, 'resolution.unknownResultReservation')
@@ -465,11 +554,19 @@ function parseResolution(value: unknown): ProductProductionBlockerResolutionV1 {
   return {
     action: enumValue(row.action, [
       'retry', 'author-edit', 'fallback', 'waive-soft-gate', 'change-capability',
-      'accept-product-private-expansion', 'confirm-character-anchors', 'cancel',
+      'accept-product-private-expansion', 'confirm-character-anchors', 'confirm-chat-situation', 'confirm-chat-media', 'cancel',
     ], 'resolution.action'),
     note: text(row.note, 'resolution.note', 4000),
+    ...(row.action === 'confirm-chat-media' ? {chatMedia: parseChatMediaProductionDecisionV1(row.chatMedia)} : {}),
     ...(row.action === 'author-edit' ? { authorDraftJson: text(row.authorDraftJson, 'resolution.authorDraftJson', 120000) } : {}),
+    ...(row.action === 'confirm-chat-situation' ? {chatSituation: (() => {
+      const choice = record(row.chatSituation, 'resolution.chatSituation')
+      exactKeys(choice, ['candidatesHash', 'sourceHash', 'selectedOptionKey'], 'resolution.chatSituation')
+      if (!isSha256Hash(choice.candidatesHash) || !isSha256Hash(choice.sourceHash)) fail('情境选择需要精确候选与来源 hash')
+      return {candidatesHash: choice.candidatesHash, sourceHash: choice.sourceHash, selectedOptionKey: stableKey(choice.selectedOptionKey, 'selectedOptionKey')}
+    })()} : {}),
     ...(unknownResultReservation ? { unknownResultReservation } : {}),
+    ...(originalResponseSource ? { originalResponseSource } : {}),
   }
 }
 
@@ -487,6 +584,49 @@ export function parseTextAdventureContentRevisionV1(value: unknown): TextAdventu
     note: text(revision.note, 'contentRevision.note', 2000),
     authorDraftJson,
   }
+}
+
+export function parseTtrpgOpenContentRevisionV1(value: unknown): TtrpgOpenContentRevisionV1 {
+  const r = record(value, 'ttrpgContentRevision')
+  exactKeys(r, ['artifactKey', 'expectedArtifactVersion', 'expectedArtifactHash', 'expectedPlanHash',
+    'expectedControlEpoch', 'note', 'authorDraftJson',
+    ...(Object.prototype.hasOwnProperty.call(r, 'expectedImpactHash') ? ['expectedImpactHash'] : [])], 'ttrpgContentRevision')
+  const expectedArtifactHash = text(r.expectedArtifactHash, 'expectedArtifactHash', 64)
+  const expectedPlanHash = text(r.expectedPlanHash, 'expectedPlanHash', 64)
+  if (!isSha256Hash(expectedArtifactHash) || !isSha256Hash(expectedPlanHash)) fail('跑团内容修订 Hash 无效')
+  if (Object.prototype.hasOwnProperty.call(r, 'expectedImpactHash') && !isSha256Hash(r.expectedImpactHash)) fail('跑团修订影响 Hash 无效')
+  const authorDraftJson = text(r.authorDraftJson, 'authorDraftJson', 120_000)
+  try { record(JSON.parse(authorDraftJson), 'authorDraftJson') } catch { fail('authorDraftJson 必须是 JSON 对象') }
+  return {
+    artifactKey: enumValue(r.artifactKey, ['ttrpg.open.source-facts', 'ttrpg.open.rule-system', 'ttrpg.open.situation-layer'], 'artifactKey'),
+    expectedArtifactVersion: positiveId(r.expectedArtifactVersion, 'expectedArtifactVersion'),
+    expectedArtifactHash, expectedPlanHash,
+    expectedControlEpoch: expectedRevision(r.expectedControlEpoch),
+    ...(isSha256Hash(r.expectedImpactHash) ? { expectedImpactHash: r.expectedImpactHash } : {}),
+    note: text(r.note, 'note', 2000), authorDraftJson,
+  }
+}
+
+export function parseTextOpenWorldContentRevisionV1(value: unknown): TextOpenWorldContentRevisionV1 {
+  const revision = record(value, 'openWorldContentRevision')
+  exactKeys(revision, ['taskKey', 'expectedPlanHash', 'expectedControlEpoch', 'expectedArtifacts', 'note', 'authorDraftJson'], 'openWorldContentRevision')
+  const expectedPlanHash = text(revision.expectedPlanHash, 'openWorldContentRevision.expectedPlanHash', 64)
+  if (!isSha256Hash(expectedPlanHash)) fail('openWorldContentRevision.expectedPlanHash 无效')
+  const authorDraftJson = text(revision.authorDraftJson, 'openWorldContentRevision.authorDraftJson', 120_000)
+  try { record(JSON.parse(authorDraftJson), 'openWorldContentRevision.authorDraftJson') } catch { fail('完整修订稿必须是 JSON 对象') }
+  if (!Array.isArray(revision.expectedArtifacts) || !revision.expectedArtifacts.length || revision.expectedArtifacts.length > 64) fail('修订必须绑定 1～64 个原稿输出')
+  const expectedArtifacts = revision.expectedArtifacts.map(value => {
+    const item = record(value, 'openWorldContentRevision.expectedArtifacts')
+    exactKeys(item, ['artifactKey', 'version', 'contentHash'], 'openWorldContentRevision.expectedArtifacts')
+    const contentHash = text(item.contentHash, 'expectedArtifacts.contentHash', 64)
+    if (!isSha256Hash(contentHash)) fail('expectedArtifacts.contentHash 无效')
+    return { artifactKey: stableKey(item.artifactKey, 'expectedArtifacts.artifactKey'),
+      version: positiveId(item.version, 'expectedArtifacts.version'), contentHash }
+  })
+  if (new Set(expectedArtifacts.map(item => item.artifactKey)).size !== expectedArtifacts.length) fail('修订原稿输出重复')
+  return { taskKey: stableKey(revision.taskKey, 'openWorldContentRevision.taskKey'), expectedPlanHash,
+    expectedControlEpoch: finite(revision.expectedControlEpoch, 'openWorldContentRevision.expectedControlEpoch', Number.MAX_SAFE_INTEGER, true),
+    expectedArtifacts, note: text(revision.note, 'openWorldContentRevision.note', 2000), authorDraftJson }
 }
 
 export function parseProductProductionCommandV1(value: unknown): ProductProductionCommandV1 {
@@ -538,6 +678,15 @@ export function parseProductProductionCommandV1(value: unknown): ProductProducti
     const commandId = commandHeader(row, type, ['expectedStateRevision', 'briefRevision', 'briefHash', 'authorizationNonce'])
     if (!isSha256Hash(row.briefHash)) fail('briefHash 无效')
     return { type, commandId, expectedStateRevision: expectedRevision(row.expectedStateRevision), briefRevision: positiveId(row.briefRevision, 'briefRevision'), briefHash: row.briefHash, authorizationNonce: stableKey(row.authorizationNonce, 'authorizationNonce') }
+  }
+  if (type === 'adopt-avg-artifact') {
+    const commandId = commandHeader(row, type, ['expectedStateRevision', 'expectedBuildRevision', 'controlEpoch',
+      'buildNumber', 'artifactKey', 'candidateVersion', 'candidateHash'])
+    if (!isSha256Hash(row.candidateHash)) fail('AVG candidateHash 无效')
+    return { type, commandId, expectedStateRevision: expectedRevision(row.expectedStateRevision),
+      expectedBuildRevision: expectedRevision(row.expectedBuildRevision), controlEpoch: expectedRevision(row.controlEpoch),
+      buildNumber: positiveId(row.buildNumber, 'buildNumber'), artifactKey: stableKey(row.artifactKey, 'artifactKey'),
+      candidateVersion: positiveId(row.candidateVersion, 'candidateVersion'), candidateHash: row.candidateHash }
   }
   if (type === 'authorize-text-open-world-creator-start') {
     const commandId = commandHeader(row, type, [
@@ -604,6 +753,23 @@ export function parseProductProductionCommandV1(value: unknown): ProductProducti
       authorizedAt: finite(row.authorizedAt, 'authorizedAt', Number.MAX_SAFE_INTEGER, true),
     }
   }
+  if (type === 'authorize-text-open-world-creator-budget-recovery') {
+    const commandId = commandHeader(row, type, [
+      'expectedStateRevision', 'baseBuildNumber', 'expectedBasePlanHash',
+      'expectedPrefixHash', 'expectedTargetPlanHash', 'authorizationNonce', 'authorizedAt',
+    ])
+    for (const key of ['expectedBasePlanHash', 'expectedPrefixHash', 'expectedTargetPlanHash'] as const) {
+      if (!isSha256Hash(row[key])) fail(`Creator budget recovery 的 ${key} 无效`)
+    }
+    return { type, commandId, expectedStateRevision: expectedRevision(row.expectedStateRevision),
+      baseBuildNumber: positiveId(row.baseBuildNumber, 'baseBuildNumber'),
+      expectedBasePlanHash: row.expectedBasePlanHash as string,
+      expectedPrefixHash: row.expectedPrefixHash as string,
+      expectedTargetPlanHash: row.expectedTargetPlanHash as string,
+      authorizationNonce: stableKey(row.authorizationNonce, 'authorizationNonce'),
+      authorizedAt: finite(row.authorizedAt, 'authorizedAt', Number.MAX_SAFE_INTEGER, true),
+    }
+  }
   if (type === 'authorize-text-open-world-creator-media') {
     const commandId = commandHeader(row, type, [
       'expectedStateRevision', 'baseBuildNumber', 'expectedBasePlanHash',
@@ -647,13 +813,20 @@ export function parseProductProductionCommandV1(value: unknown): ProductProducti
   if (type === 'pause') return { type, commandId: commandHeader(row, type, ['expectedStateRevision', 'reason']), expectedStateRevision: expectedRevision(row.expectedStateRevision), reason: text(row.reason, 'reason', 4000) }
   if (type === 'resume') {
     const hasContentRevision = Object.prototype.hasOwnProperty.call(row, 'contentRevision')
+    const hasTtrpgContentRevision = Object.prototype.hasOwnProperty.call(row, 'ttrpgContentRevision')
+    const hasOpenWorldRevision = Object.prototype.hasOwnProperty.call(row, 'openWorldContentRevision')
+    if ([hasContentRevision, hasTtrpgContentRevision, hasOpenWorldRevision].filter(Boolean).length > 1) fail('一次恢复只能修订一个产品的内容，不能混用不同产品的修订')
     const hasPausedReservations = Object.prototype.hasOwnProperty.call(row, 'pausedReservationDispositions')
     const commandId = commandHeader(row, type, [
       'expectedStateRevision',
       ...(hasPausedReservations ? ['pausedReservationDispositions'] : []),
       ...(hasContentRevision ? ['contentRevision'] : []),
+      ...(hasTtrpgContentRevision ? ['ttrpgContentRevision'] : []),
+      ...(hasOpenWorldRevision ? ['openWorldContentRevision'] : []),
     ])
     const contentRevision = hasContentRevision ? parseTextAdventureContentRevisionV1(row.contentRevision) : undefined
+    const ttrpgContentRevision = hasTtrpgContentRevision ? parseTtrpgOpenContentRevisionV1(row.ttrpgContentRevision) : undefined
+    const openWorldContentRevision = hasOpenWorldRevision ? parseTextOpenWorldContentRevisionV1(row.openWorldContentRevision) : undefined
     const pausedReservationDispositions = hasPausedReservations
       ? (() => {
           if (!Array.isArray(row.pausedReservationDispositions)
@@ -694,11 +867,44 @@ export function parseProductProductionCommandV1(value: unknown): ProductProducti
       expectedStateRevision: expectedRevision(row.expectedStateRevision),
       ...(pausedReservationDispositions ? { pausedReservationDispositions } : {}),
       ...(contentRevision ? { contentRevision } : {}),
+      ...(ttrpgContentRevision ? { ttrpgContentRevision } : {}),
+      ...(openWorldContentRevision ? { openWorldContentRevision } : {}),
     }
   }
   if (type === 'stop') return { type, commandId: commandHeader(row, type, ['expectedStateRevision', 'retention']), expectedStateRevision: expectedRevision(row.expectedStateRevision), retention: enumValue(row.retention, ['keep-build', 'discard-unreleased'], 'retention') }
   if (type === 'archive') return { type, commandId: commandHeader(row, type, ['expectedStateRevision', 'reason']), expectedStateRevision: expectedRevision(row.expectedStateRevision), reason: text(row.reason, 'reason', 4000) }
   if (type === 'restore') return { type, commandId: commandHeader(row, type, ['expectedStateRevision']), expectedStateRevision: expectedRevision(row.expectedStateRevision) }
+  if (type === 'book-local-no-dispatch') {
+    const commandId = commandHeader(row, type, ['expectedStateRevision', 'buildNumber', 'controlEpoch', 'planHash', 'ledgerHash', 'anchor', 'proofs'])
+    const anchor = record(row.anchor, 'anchor')
+    exactKeys(anchor, ['artifactKey', 'version', 'contentHash'], 'anchor')
+    if (!isSha256Hash(row.planHash) || !isSha256Hash(row.ledgerHash) || !isSha256Hash(anchor.contentHash)) fail('未发送记账必须绑定原计划、账本和原稿 Hash')
+    if (!Array.isArray(row.proofs) || row.proofs.length < 1 || row.proofs.length > 16) fail('未发送记账必须明确核对 1～16 条证明')
+    const proofs = row.proofs.map(value => {
+      const proof = record(value, 'proof')
+      exactKeys(proof, ['attemptKeyHash', 'proofHash'], 'proof')
+      if (!isSha256Hash(proof.attemptKeyHash) || !isSha256Hash(proof.proofHash)) fail('未发送记账证明 Hash 无效')
+      return { attemptKeyHash: proof.attemptKeyHash, proofHash: proof.proofHash }
+    })
+    if (new Set(proofs.map(proof => proof.attemptKeyHash)).size !== proofs.length) fail('未发送记账证明重复')
+    return { type, commandId, expectedStateRevision: expectedRevision(row.expectedStateRevision),
+      buildNumber: positiveId(row.buildNumber, 'buildNumber'), controlEpoch: expectedRevision(row.controlEpoch),
+      planHash: row.planHash, ledgerHash: row.ledgerHash,
+      anchor: { artifactKey: enumValue(anchor.artifactKey, ['ttrpg.open.source-facts', 'ttrpg.open.rule-system', 'ttrpg.open.situation-layer'], 'anchor.artifactKey'),
+        version: positiveId(anchor.version, 'anchor.version'), contentHash: anchor.contentHash }, proofs }
+  }
+  if (type === 'book-original-response') {
+    const commandId = commandHeader(row, type, ['expectedStateRevision', 'buildNumber', 'controlEpoch', 'planHash',
+      'taskKey', 'originalRunId', 'originalAttempt', 'captureRunId', 'captureReceiptHash', 'disposition'])
+    if (!isSha256Hash(row.planHash) || !isSha256Hash(row.captureReceiptHash)) fail('原回答记账必须绑定准确 Plan 与保留回执 hash')
+    return { type, commandId, expectedStateRevision: expectedRevision(row.expectedStateRevision),
+      buildNumber: positiveId(row.buildNumber, 'buildNumber'),
+      controlEpoch: finite(row.controlEpoch, 'controlEpoch', Number.MAX_SAFE_INTEGER, true),
+      planHash: row.planHash, taskKey: stableKey(row.taskKey, 'taskKey'),
+      originalRunId: positiveId(row.originalRunId, 'originalRunId'), originalAttempt: positiveId(row.originalAttempt, 'originalAttempt'),
+      captureRunId: positiveId(row.captureRunId, 'captureRunId'), captureReceiptHash: row.captureReceiptHash,
+      disposition: enumValue(row.disposition, ['use-native-token-usage', 'charge-reservation-upper-bound'], 'disposition') }
+  }
   if (type === 'resolve-blocker') return { type, commandId: commandHeader(row, type, ['expectedStateRevision', 'blockerKey', 'resolution']), expectedStateRevision: expectedRevision(row.expectedStateRevision), blockerKey: stableKey(row.blockerKey, 'blockerKey'), resolution: parseResolution(row.resolution) }
   if (type === 'request-preview') return { type, commandId: commandHeader(row, type, ['expectedStateRevision', 'buildNumber']), expectedStateRevision: expectedRevision(row.expectedStateRevision), buildNumber: positiveId(row.buildNumber, 'buildNumber') }
   if (type === 'revise-text-content') {

@@ -1,18 +1,18 @@
-import type { ProductBuildCompatibilityReportV1, ProductRuntimePackageV1 } from '../types'
+import type { ProductBuildCompatibilityReportV1, AnyProductRuntimePackage } from '../types'
 import { TEXT_OPEN_WORLD_RUNTIME_MODULE_KEYS_V1 } from '../types'
 import { canonicalProductProductionJsonV2, hashProductProductionValueV2, isSha256Hash } from './hash'
 
 interface RuntimePackageBuildRefV1 {
   buildNumber: number
   packageHash: string
-  runtimePackage: ProductRuntimePackageV1
+  runtimePackage: AnyProductRuntimePackage
 }
 
 function fail(message: string): never {
   throw new Error(`[product-production-compatibility] ${message}`)
 }
 
-function stableValues(pkg: ProductRuntimePackageV1): Map<string, string> {
+function stableValues(pkg: AnyProductRuntimePackage): Map<string, string> {
   const values = new Map<string, string>()
   const add = (prefix: string, key: string, value: unknown) => {
     const stableKey = `${prefix}:${key}`
@@ -24,7 +24,15 @@ function stableValues(pkg: ProductRuntimePackageV1): Map<string, string> {
     capabilities: pkg.definition.enabledCapabilities, rulesetVersion: pkg.definition.rulesetVersion,
     entryNodeKey: pkg.narrative.entryNodeKey,
     narrativeModuleKind: pkg.narrative.moduleKind,
+    ...(pkg.ttrpg?.campaign.version === 2 ? { ttrpgProtocol: 2, runFormat: 'open' } : {}),
   })
+  if (pkg.ttrpg?.campaign.version === 2) {
+    // Conservative until an explicit open-save migration contract is available.
+    // No rule, owner, knowledge, pressure or source change may be mislabeled as cosmetic.
+    add('ttrpg-open', 'rule-pack', pkg.ttrpg.rulePack)
+    add('ttrpg-open', 'campaign', pkg.ttrpg.campaign)
+    add('ttrpg-open', 'source', pkg.sourceWorld)
+  }
   for (const [key, value] of Object.entries(pkg.definition.initialVariables)) {
     add('runtime.initial-variable', key, value)
   }
@@ -37,6 +45,12 @@ function stableValues(pkg: ProductRuntimePackageV1): Map<string, string> {
     displayConditionJson: choice.displayConditionJson, availableConditionJson: choice.availableConditionJson,
     effectsJson: choice.effectsJson,
   })
+  if (pkg.version === 2) {
+    // Native AVG reading/history, typed rules and media remain bound to their
+    // exact immutable package. No automatic cross-package save migration exists.
+    add('avg.native', 'frozen-package', pkg)
+    return values
+  }
   for (const profile of pkg.interaction?.profiles ?? []) add('interaction.profile', profile.participantKey, {
     characterKey: profile.characterKey, relationshipDimensions: profile.relationshipDimensions,
   })

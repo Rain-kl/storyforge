@@ -1,4 +1,9 @@
+import { canonicalProductProductionJsonV2 } from './hash'
+import { deriveAvgAssemblyRecoveryBaseV1 } from '../avg/assembly-recovery'
+import { AVG_VISUAL_TEXT_CAPABILITY_V4 } from '../avg/visual-planning-roles'
+import { isTtrpgCompatibleOpeningTextFreeProfileV1 } from '../ttrpg/open-compatible-opening-contract'
 import { db } from '../db/schema'
+import type {ChatMediaProductionDecisionV1} from '../character-interaction/media-selection'
 import { readAgentRunV1 } from '../agent/run/event-store'
 import { readAgentRunArtifactExactV1 } from '../memory/artifact-store'
 import type {
@@ -17,10 +22,11 @@ import type {
   TextOpenWorldCreatorSourceLocatorV1,
   TextOpenWorldSourceRightsBasisV1,
   WorkspaceScope,
-  WorldReferenceCatalogEntryV1,
+  WorldReferenceCatalogEntry,
 } from '../types'
 import { assertRecordInScope, resolveScope } from '../workspace/scope'
 import { listWorldReferenceCatalogV1 } from '../product/source'
+import { listWorldReferenceCatalog } from '../world-engine/world-reference-v2'
 import { prepareProductProductionAdoption, publishProductProductionBuild } from './adoption'
 import {
   canReviseTextAdventureContentBeforeMediaV1,
@@ -40,6 +46,7 @@ import {
 } from './recovery-policy'
 import { draftProductProductionBriefV3, suggestProductStartingPoints } from './consultation'
 import { parseProductProductionBriefV3 } from './contracts'
+import { parseProductProductionSourcePlanV1 } from './source-contracts'
 import {
   inspectConfiguredTextCapabilityV1,
   resolveConfiguredTextCapabilityV1,
@@ -83,6 +90,7 @@ import { detectProductImageDimensionsV1, detectProductMediaMimeTypeV1 } from './
 import { useAIConfigStore } from '../../stores/ai-config'
 import {
   assertProductProductionBudgetLedgerV1,
+  productProductionFailureNeedsProviderAccountingV1,
   prepareLegacyPausedProductBuildV1,
   projectProductProductionSchedulerV1,
   recoverImportedProductProductionProofsV1 as recoverImportedProductProductionProofsCoreV1,
@@ -91,6 +99,8 @@ import {
   type ProductProductionSchedulerProjectionV1,
 } from './scheduler'
 import { createProductRuntimeInstanceFromSource } from '../product/runtime-instances'
+import { avgSoundProductionExecutionReadyV1 } from '../avg/sound-production-brief'
+import { avgAudioProcessingExecutionReadyV1 } from '../avg/audio-production-brief'
 import { startAiTownInitialSceneV1 } from '../ai-town/runtime-api'
 import {
   listProductMediaProviderCapabilitiesV1,
@@ -277,6 +287,33 @@ export async function authorizeTextOpenWorldCreatorMediaV1(input: {
   })
 }
 
+/** Read-only preparation; the subsequent command rechecks this exact prefix. */
+export async function previewTextOpenWorldCreatorBudgetRecoveryV1(input: {
+  scope: WorkspaceScope; productionId: number; buildId: number
+}) {
+  const { prepareTextOpenWorldBudgetRecoveryV1 } = await import('../open-world/creator-budget-recovery')
+  return prepareTextOpenWorldBudgetRecoveryV1(input)
+}
+
+export async function authorizeTextOpenWorldCreatorBudgetRecoveryV1(input: {
+  prepared: Awaited<ReturnType<typeof previewTextOpenWorldCreatorBudgetRecoveryV1>>
+}): Promise<ProductProductionCommandReceiptV1> {
+  const { prepared } = input
+  return executeProductProductionCommand({
+    scope: prepared.scope, productionId: prepared.source.production.id,
+    command: {
+      type: 'authorize-text-open-world-creator-budget-recovery',
+      commandId: `tow-creator-budget:${crypto.randomUUID()}`,
+      expectedStateRevision: prepared.source.production.stateRevision,
+      baseBuildNumber: prepared.source.build.buildNumber,
+      expectedBasePlanHash: prepared.source.build.planHash,
+      expectedPrefixHash: prepared.prefix.prefixHash,
+      expectedTargetPlanHash: prepared.targetPlanHash,
+      authorizationNonce: crypto.randomUUID(), authorizedAt: Date.now(),
+    },
+  })
+}
+
 export async function previewTextOpenWorldCreatorArtifactRepairV1(input: {
   scope: WorkspaceScope
   productionId: number
@@ -448,10 +485,21 @@ export async function readProductProductionTaskEvidenceV1(input: {
     || snapshot.run.parentRelation !== `task:${input.taskKey}`
     || !boundary
     || boundary.productBuildId !== progress.buildId
-    || boundary.controlEpoch !== progress.controlEpoch
     || boundary.planHash !== progress.planHash
     || boundary.taskKey !== input.taskKey) {
     throw new Error('任务证据不属于当前 Build/task Run')
+  }
+  if (boundary.controlEpoch !== progress.controlEpoch) {
+    const build = await db.productBuilds.get(progress.buildId)
+    if (build?.status !== 'recovery-required') throw new Error('任务证据不属于当前 Build/task Run')
+    const { validateProductProductionRecoveryDirectiveV1 } = await import('./context')
+    const recovery = await validateProductProductionRecoveryDirectiveV1({ scope,
+      productProductionId: input.productionId, productBuildId: progress.buildId,
+      productProductionTaskKey: input.taskKey, expectedState: 'blocked' })
+    if (recovery.snapshot?.run.id !== snapshot.run.id
+      || recovery.snapshot.run.contractHash !== snapshot.run.contractHash) {
+      throw new Error('任务证据不属于当前失败 Run')
+    }
   }
   const isCurrentGovernedAttempt = (stepId: string | undefined, attempt: number | undefined) => {
     if (stepId == null || attempt == null) return false
@@ -552,6 +600,8 @@ export function isTextAdventureMediaAnchorBlockerV1(details: ProductProductionDe
 export function canRetryProductProductionBlockerV1(details: ProductProductionDetailsV1): boolean {
   return (details.build?.status === 'recovery-required'
       && !isTextAdventureSourceDecisionBlockerV1(details)
+      && !isChatSituationDecisionBlockerV1(details)
+      && !isChatMediaDecisionBlockerV1(details)
       && !isTextAdventureMediaAnchorBlockerV1(details))
     || !!details.build && isRepairRetryableFailedProductBuildV1(details.build)
 }
@@ -584,6 +634,7 @@ export function canRepairTextAdventureRuntimeCopyV1(details: ProductProductionDe
 }
 
 const AUTHOR_REVIEW_ARTIFACT_KEYS = new Set([
+  'content.chat-candidates', 'content.chat-selection', 'quality.chat-openings',
   'production.supervision',
   'design.game',
   'content.source-sufficiency',
@@ -861,19 +912,31 @@ export function inspectProductProductionCapabilityReadinessV1(input: {
  * capability required by that frozen Brief is bound.
  */
 export function evaluateProductProductionAuthorizationReadinessV1(input: {
-  brief: Pick<ProductProductionBriefV3, 'capabilityRequirements' | 'avgRevision'>
+  brief: Pick<ProductProductionBriefV3, 'capabilityRequirements' | 'avgRevision' | 'avgAssembly' | 'avgVisualPlanning' | 'avgSoundPlanning' | 'avgAudioProcessing'> & Partial<Pick<ProductProductionBriefV3, 'qualityProfile' | 'intent' | 'ttrpgOpen' | 'media'>>
   readiness: ProductProductionCapabilityReadinessV1
 }): ProductProductionAuthorizationReadinessV1 {
   const blockerMessages: string[] = []
-  if (!input.brief.avgRevision && !input.readiness.text.ready) {
+  if (input.brief.avgAudioProcessing && !avgAudioProcessingExecutionReadyV1()) blockerMessages.push('本地声音加工链尚未就绪，原件和当前方案保留。')
+  if (input.brief.avgSoundPlanning && !avgSoundProductionExecutionReadyV1()) blockerMessages.push('声音正式制作尚未开放，已保存需求与原有产物保留。')
+  // The parsed V4 Brief derives this requirement from its unreused roles.
+  // A missing text configuration must not block an entirely local role plan.
+  const visualTextNotRequired = !!input.brief.avgVisualPlanning && input.brief.capabilityRequirements.some(requirement => (
+    requirement.requirementKey === AVG_VISUAL_TEXT_CAPABILITY_V4 && requirement.mediaClass === 'text' && !requirement.required
+  ))
+  const authoredWithoutText = isTtrpgCompatibleOpeningTextFreeProfileV1(input.brief)
+    && !input.brief.capabilityRequirements.some(r => r.required && r.mediaClass === 'text')
+  if (!input.brief.avgRevision && !input.brief.avgAssembly && input.brief.avgSoundPlanning?.version !== 2 && !visualTextNotRequired && !authoredWithoutText && !input.readiness.text.ready) {
     blockerMessages.push(input.readiness.text.issue || '设置中的文本生成能力尚未就绪。')
   }
   const requiredMediaRequirementKeys = input.brief.capabilityRequirements
     .filter(requirement => requirement.required && ['image', 'music', 'sfx'].includes(requirement.mediaClass))
     .map(requirement => requirement.requirementKey)
-  const requiresImage = input.brief.capabilityRequirements
+  const image = input.brief.avgAssembly?.version === 3 ? input.brief.avgAssembly.image
+    : input.brief.avgAssembly?.version === 2 ? input.brief.avgAssembly : null
+  const retainedOnly = image?.imageRecovery?.rerunRequirementKeys.length === 0
+  const requiresImage = !retainedOnly&&input.brief.capabilityRequirements
     .some(requirement => requirement.required && requirement.mediaClass === 'image')
-  const requiresAudio = input.brief.capabilityRequirements
+  const requiresAudio = !input.brief.avgSoundPlanning && input.brief.capabilityRequirements
     .some(requirement => requirement.required && ['music', 'sfx'].includes(requirement.mediaClass))
   if (requiresImage && !input.readiness.image.ready && !input.readiness.mediaRelayReady) {
     blockerMessages.push(input.readiness.image.issue || '全局 Agnes 图片能力尚未就绪。')
@@ -960,13 +1023,15 @@ export async function authorizeTextOpenWorldCreatorProductionStartV1(
 export async function listProductProductionWorkspaceV1(
   scopeInput: WorkspaceScope,
   allowedProducts: readonly ProductionProductKindV1[],
+  option: { narrativePreview?: boolean } = {},
 ): Promise<{
-  worldReleases: WorldReferenceCatalogEntryV1[]
+  worldReleases: WorldReferenceCatalogEntry[]
   productions: ProductProductionRecordV1[]
 }> {
   const scope = await resolveScope({ scope: scopeInput })
   const [worldReleases, rows] = await Promise.all([
-    listWorldReferenceCatalogV1(scope),
+    option.narrativePreview && allowedProducts.length === 1 && ['character-interaction', 'avg'].includes(allowedProducts[0])
+      ? listWorldReferenceCatalog(scope) : listWorldReferenceCatalogV1(scope),
     db.productProductions.where('workId').equals(scope.workId).toArray(),
   ])
   const productions: ProductProductionRecordV1[] = []
@@ -1032,6 +1097,17 @@ export async function readProductProductionDetailsV1(
     }
     buildHistory.push(row)
   }
+  const storedOpenTtrpgBrief = (() => {
+    if (!brief || brief.briefKind === 'text-open-world-creator-v1') return false
+    try {
+      const value = JSON.parse(brief.briefJson) as Record<string, unknown>
+      return value.schema === 'storyforge.ttrpg-production-brief'
+        && value.version === 3
+        && value.runFormat === 'open'
+    } catch {
+      return false
+    }
+  })()
   const executionBrief = brief?.briefKind === 'text-open-world-creator-v1'
     ? brief.status === 'authorized' && build
       ? (await readTextOpenWorldCreatorDerivedBuildAuthorityV1({
@@ -1039,7 +1115,7 @@ export async function readProductProductionDetailsV1(
           buildId: build.id!,
         })).contracts.executionBrief
       : null
-    : brief ? parseProductProductionBriefV3(brief.briefJson) : null
+    : storedOpenTtrpgBrief ? null : brief ? parseProductProductionBriefV3(brief.briefJson) : null
   return {
     production,
     brief: brief ?? null,
@@ -1055,6 +1131,7 @@ export async function readProductProductionDetailsV1(
 export async function consultProductProductionStartV1(input: {
   scope: WorkspaceScope
   worldReleaseId: number
+  productType?: ProductionProductKindV1
 }) {
   return suggestProductStartingPoints(input)
 }
@@ -1264,6 +1341,11 @@ export async function authorizeProductProductionStartV1(input: {
   const brief = input.details.brief
   if (!brief) throw new Error('[product-production-service] 缺少当前 Brief')
   const parsedBrief = parseProductProductionBriefV3(brief.briefJson)
+  if (parsedBrief.avgSoundPlanning) {
+    await (await import('../avg/sound-planning-workspace')).assertAvgSoundPreparationMatchesBriefV1({
+      scope: input.scope, productionId: input.details.production.id!, brief: parsedBrief,
+    })
+  }
   const readiness = evaluateProductProductionAuthorizationReadinessV1({
     brief: parsedBrief,
     readiness: inspectProductProductionCapabilityReadinessV1({ projectId: input.scope.projectId }),
@@ -1289,10 +1371,13 @@ export async function setProductProductionPausedV1(input: {
   build?: ProductBuildRecordV1 | null
   pausedReservationDisposition?: 'confirmed-not-charged' | 'charge-reservation-upper-bound'
   contentRevision?: import('../types').TextAdventureContentRevisionV1
+  openWorldContentRevision?: import('../types').TextOpenWorldContentRevisionV1
 }): Promise<'paused' | 'resumed'> {
   if (input.build) input = { ...input, build: await prepareLegacyPausedProductBuildV1(input.scope, input.build) }
   const paused = input.production.status === 'paused'
-  if (input.contentRevision && !paused) throw new Error('[product-production-service] 请先暂停制作再修订内容')
+  if ((input.contentRevision || input.openWorldContentRevision) && !paused) throw new Error('[product-production-service] 请先暂停制作再修订内容')
+  const openWorldContentRevision = input.openWorldContentRevision ?? (paused && input.build && input.production.productType === 'text-open-world'
+    ? (await import('../open-world/production-content-revision')).pendingTextOpenWorldRevisionV1(input.build.failureJson) : undefined)
   let pausedReservationDispositions: Extract<
     import('../types').ProductProductionCommandV1,
     { type: 'resume' }
@@ -1388,6 +1473,7 @@ export async function setProductProductionPausedV1(input: {
           expectedStateRevision: input.production.stateRevision,
           ...(pausedReservationDispositions ? { pausedReservationDispositions } : {}),
           ...(input.contentRevision ? { contentRevision: input.contentRevision } : {}),
+          ...(openWorldContentRevision ? { openWorldContentRevision } : {}),
         }
       : {
           type: 'pause', commandId: commandId('pause'), expectedStateRevision: input.production.stateRevision,
@@ -1447,6 +1533,7 @@ export async function retryProductProductionBlockerV1(input: {
   afterCapabilityChange?: boolean
   repairNote?: string
   authorDraftJson?: string
+  originalResponseSource?: import('../types').ProductProductionBlockerResolutionV1['originalResponseSource']
   unknownResultDisposition?: 'confirmed-not-charged' | 'charge-reservation-upper-bound'
 }): Promise<
   | 'provider-actual-charge'
@@ -1461,6 +1548,8 @@ export async function retryProductProductionBlockerV1(input: {
   const blockerKey = taskKey ?? 'build-recovery'
   const repairNote = input.repairNote?.trim() || undefined
   const authorDraftJson = input.authorDraftJson?.trim() || undefined
+  if (input.originalResponseSource && (!authorDraftJson || input.details.production.productType !== 'ttrpg'
+    || input.afterCapabilityChange || input.unknownResultDisposition)) throw new Error('[product-production-service] 原回答来源只用于已核对的明确作者修订，不能混用其他费用或能力处置')
   if (repairNote || authorDraftJson) {
     if (!taskKey) throw new Error('[product-production-service] 当前 blocker 不支持作者引导修复')
     const policy = inspectProductProductionBuildRecoveryPolicyV1({
@@ -1488,9 +1577,8 @@ export async function retryProductProductionBlockerV1(input: {
       failure = parsed as Record<string, unknown>
     }
   } catch { /* command boundary will reject corrupt failure evidence */ }
-  const providerReservationFailure = failure.code === 'unknown-result'
-    || failure.code === 'provider-response-uncheckpointed'
-  if (providerReservationFailure) {
+  const providerReservationFailure = productProductionFailureNeedsProviderAccountingV1(input.details.build)
+  if (providerReservationFailure && !input.originalResponseSource) {
     if (!input.unknownResultDisposition) {
       throw new Error(failure.code === 'provider-response-uncheckpointed'
         ? '[product-production-service] 已收到供应商响应证据；请按冻结预留上限封账后重试'
@@ -1528,6 +1616,7 @@ export async function retryProductProductionBlockerV1(input: {
       resolution: {
         action: authorDraftJson ? 'author-edit' : input.afterCapabilityChange ? 'change-capability' : 'retry',
         ...(authorDraftJson ? { authorDraftJson } : {}),
+        ...(input.originalResponseSource ? { originalResponseSource: input.originalResponseSource } : {}),
         ...(unknownResultReservation ? { unknownResultReservation } : {}),
         note: repairNote || (input.afterCapabilityChange ? '作者已调整全局能力配置并要求重试' : '作者从制作工作台要求重试'),
       },
@@ -1546,6 +1635,44 @@ export async function retryProductProductionBlockerV1(input: {
     throw new Error('[product-production-service] unknown-result 结算回执缺少有效处置')
   }
   return effectiveDisposition
+}
+
+export function isChatSituationDecisionBlockerV1(details: ProductProductionDetailsV1): boolean {
+  return details.production.productType === 'character-interaction'
+    && details.build?.status === 'recovery-required'
+    && productProductionFailureTaskKey(details.build) === 'content.chat-author-gate'
+}
+
+export async function confirmChatSituationDecisionV1(input: {
+  scope: WorkspaceScope; details: ProductProductionDetailsV1
+  candidatesHash: string; sourceHash: string; selectedOptionKey: string
+}): Promise<void> {
+  if (!isChatSituationDecisionBlockerV1(input.details)) throw new Error('当前制作没有待选择的初始情境')
+  const receipt = await executeProductProductionCommand({scope: input.scope, productionId: input.details.production.id!, command: {
+    type: 'resolve-blocker', commandId: commandId('chat-situation-selection'),
+    expectedStateRevision: input.details.production.stateRevision, blockerKey: 'content.chat-author-gate',
+    resolution: {action: 'confirm-chat-situation', note: '作者已比较并选定初始情境，后续剧情由玩家与角色共同演绎。',
+      chatSituation: {candidatesHash: input.candidatesHash, sourceHash: input.sourceHash, selectedOptionKey: input.selectedOptionKey}},
+  }})
+  if (!receipt.ok) throw new Error(String(receipt.result.message ?? receipt.errorCode ?? '初始情境选择失败'))
+}
+
+export function isChatMediaDecisionBlockerV1(details: ProductProductionDetailsV1): boolean {
+  return details.production.productType === 'character-interaction'
+    && details.build?.status === 'recovery-required'
+    && productProductionFailureTaskKey(details.build) === 'media.chat-author-gate'
+}
+
+export async function confirmChatMediaDecisionV1(input: {
+  scope: WorkspaceScope; details: ProductProductionDetailsV1; decision: ChatMediaProductionDecisionV1
+}): Promise<void> {
+  if (!isChatMediaDecisionBlockerV1(input.details)) throw new Error('当前制作没有待确认的图片')
+  const receipt = await executeProductProductionCommand({scope: input.scope, productionId: input.details.production.id!, command: {
+    type: 'resolve-blocker', commandId: commandId('chat-media-selection'), expectedStateRevision: input.details.production.stateRevision,
+    blockerKey: 'media.chat-author-gate', resolution: {action: 'confirm-chat-media',
+      note: '作者已查看当前原图、来源与许可，确认用于对应角色和开场场景。', chatMedia: input.decision},
+  }})
+  if (!receipt.ok) throw new Error(String(receipt.result.message ?? receipt.errorCode ?? '图片确认失败'))
 }
 
 export async function resolveTextAdventureSourceDecisionV1(input: {
@@ -1645,6 +1772,11 @@ export async function runAuthorizedProductProductionV1(input: {
   const scope = await resolveScope({ scope: input.scope })
   const details = await readProductProductionDetailsV1(scope, input.productionId)
   if (!details.brief || !details.build) throw new Error('[product-production-service] Production 尚未授权 Build')
+  if (details.executionBrief?.avgSoundPlanning) {
+    return (await import('../avg/sound-production-service')).runAvgSoundProductionV1({
+      ...input, scope, expectedBuildId: details.build.id!,
+    })
+  }
   if (!['producing', 'preview-ready'].includes(details.production.status)) {
     throw new Error(`[product-production-service] Production 状态 ${details.production.status} 不允许自动制作`)
   }
@@ -1678,10 +1810,17 @@ export async function runAuthorizedProductProductionV1(input: {
   }
   const brief = creatorContracts?.executionBrief
     ?? parseProductProductionBriefV3(details.brief.briefJson)
+  if (brief.avgSoundPlanning) throw new Error('[avg-sound] 声音实际生产、审听和采用闭环尚未接通，未解析凭据或创建调用')
   if (brief.avgRevision) return (await import('../avg/revision-production')).runAvgRevisionV1({ ...input, scope, details, brief })
+  if (brief.avgAssembly) {
+    const projection = await (await import('../avg/assembly-service')).runAvgAssemblyV1({ scope, productionId: input.productionId, signal: input.signal })
+    if (input.onProgress) await input.onProgress(projection)
+    return projection
+  }
+  const authoredWithoutText = isTtrpgCompatibleOpeningTextFreeProfileV1(brief) && !brief.capabilityRequirements.some(r => r.required && r.mediaClass === 'text')
   const textRequirements = brief.capabilityRequirements.filter(requirement => requirement.mediaClass === 'text')
   if (textRequirements.length !== 1) throw new Error('[product-production-service] 正式制作需要唯一文本 capability requirement')
-  const textCapability = await resolveConfiguredTextCapabilityV1({
+  const textCapability = authoredWithoutText ? null : await resolveConfiguredTextCapabilityV1({
     projectId: scope.projectId, category: 'product-production', requirementKey: textRequirements[0].requirementKey,
     ...(creatorContracts ? {
       expectedProviderIdentity: {
@@ -1695,13 +1834,13 @@ export async function runAuthorizedProductProductionV1(input: {
       },
     } : {}),
   })
-  const capabilityBindings: ProductProductionCapabilityBindingV1[] = [{
+  const capabilityBindings: ProductProductionCapabilityBindingV1[] = textCapability ? [{
     requirementKey: textRequirements[0].requirementKey,
     adapterId: textCapability.receipt.adapterId,
     bindingHash: textCapability.receipt.capabilityHash,
     provider: textCapability.receipt.provider,
     model: textCapability.receipt.model,
-  }]
+  }] : []
   const mediaCapabilities = new Map<string, ResolvedProductMediaCapabilityV1>()
   const relayUrl = configuredMediaRelayUrlV1()
   const authoredImagePackUrl = configuredAuthoredImagePackUrlV1()
@@ -1712,6 +1851,11 @@ export async function runAuthorizedProductProductionV1(input: {
     || creatorMediaPlan?.mode === 'provider-generate'
   for (const requirement of brief.capabilityRequirements) {
     if (!['image', 'music', 'sfx'].includes(requirement.mediaClass)) continue
+    // A chat preview is a real illustrated experience. Its quality profile
+    // changes acceptance gates, never permission to substitute placeholder art.
+    const requiresChatImageProvider = brief.intent.productType === 'character-interaction'
+      && requirement.mediaClass === 'image'
+    const useProviderForRequirement = useExternalMedia || requiresChatImageProvider
     if (requirement.mediaClass === 'image'
       && creatorMediaPlan?.mode === 'author-import'
       && creatorMediaPlan.capability.requirementKey === requirement.requirementKey) {
@@ -1740,15 +1884,15 @@ export async function runAuthorizedProductProductionV1(input: {
       const resolved = await resolveAuthoredImagePackCapabilityV1({ requirement, manifestUrl: authoredImagePackUrl })
       mediaCapabilities.set(requirement.requirementKey, resolved)
       capabilityBindings.push(resolved.binding)
-    } else if (requirement.mediaClass === 'image' && useExternalMedia && agnesImageReadiness.ready) {
+    } else if (requirement.mediaClass === 'image' && useProviderForRequirement && agnesImageReadiness.ready) {
       const resolved = await resolveConfiguredAgnesImageCapabilityV1({ projectId: scope.projectId, requirement })
       mediaCapabilities.set(requirement.requirementKey, resolved)
       capabilityBindings.push(resolved.binding)
-    } else if (useExternalMedia && relayUrl != null) {
+    } else if (useProviderForRequirement && relayUrl != null) {
       const resolved = await resolveTrustedRelayMediaCapabilityV1({ requirement, relayUrl })
       mediaCapabilities.set(requirement.requirementKey, resolved)
       capabilityBindings.push(resolved.binding)
-    } else if (brief.qualityProfile === 'commercial-candidate') {
+    } else if (requiresChatImageProvider || brief.qualityProfile === 'commercial-candidate') {
       throw new Error(`[product-production-service] capability-unbound: ${requirement.mediaClass === 'image'
         ? agnesImageReadiness.issue || '全局 Agnes 图片能力尚未就绪。'
         : '商业音乐与音效可信中继尚未绑定。'}`)
@@ -1765,10 +1909,12 @@ export async function runAuthorizedProductProductionV1(input: {
   const executor = brief.intent.productType === 'text-open-world'
     ? createTextOpenWorldProductionExecutorV1({
       production: details.production, brief, mediaCapabilities,
-      textCapabilityReceipt: textCapability.receipt,
+      textCapabilityReceipt: textCapability!.receipt,
     })
     : createConfiguredProductProductionExecutorV1({
       production: details.production, brief, mediaCapabilities,
+      ...(authoredWithoutText ? { runText: async () => { throw new Error('[product-production-service] 作者确认的兼容开局不允许文本模型调用，请保留当前制作证据') } } : {}),
+      sourcePlan: await parseProductProductionSourcePlanV1(details.brief),
     })
   const projection = await runProductProductionUntilBlockedV1({
     scope, productionId: input.productionId, executor, capabilityBindings, signal: input.signal,
@@ -1908,9 +2054,14 @@ export async function beginProductProductionEvolutionV1(input: {
     && affectedLanes.includes('content') && affectedLanes.includes('visual')
   const runtimeCopyRecovery = currentTextAdventureRecovery
     && affectedLanes.length === 1 && affectedLanes[0] === 'runtime'
+  const nativeRecovery = (details.executionBrief?.avgAssembly || details.executionBrief?.avgVisualPlanning) && !details.build.previewHash
+    && ['cancelled','failed','recovery-required'].includes(details.build.status)
+    && canonicalProductProductionJsonV2([...affectedLanes].sort()) === canonicalProductProductionJsonV2(['audio','content','product','visual'])
   const recoveryEvolution = budgetRecovery || planUpgradeRecovery || visualContractRecovery
     || preMediaContentRecovery || runtimeCopyRecovery
-  if (recoveryEvolution) {
+  if (nativeRecovery) {
+    base = await deriveAvgAssemblyRecoveryBaseV1(details.build,details.executionBrief!,scope)
+  } else if (recoveryEvolution) {
     const rejectedAnchorRecovery = rejectedAnchorRecoveryCandidate
     if (details.production.productType !== 'text-adventure'
       || (!rejectedAnchorRecovery && (details.production.status !== 'producing'

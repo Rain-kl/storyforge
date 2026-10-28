@@ -31,6 +31,7 @@ import {
   hashMemoryArtifactIndexV1,
 } from '../../memory/settlement-core'
 import { pruneUnreferencedAgentRunArtifactsInCurrentTransactionV1 } from '../../memory/artifact-retention-store'
+import { exactArtifactOwnerTablesV1 } from '../../memory/artifact-root-registry'
 
 export class AgentRunStoreError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -56,6 +57,9 @@ export interface CreateAgentRunV1Input {
   scope: WorkspaceScope
   /** Runtime runs are Instance-owned; omitted runs remain Work-owned. */
   productRuntimeSessionId?: number | null
+  /** Optional creation precondition, checked atomically against the complete
+   * Instance owner row. Never persisted in or added to the RunContract. */
+  expectedRuntimeSessionHash?: string
   /** Production runs stay Work-owned but are additionally bound to one immutable Build. */
   productBuildId?: number | null
   worldGroupId?: number | null
@@ -419,6 +423,30 @@ async function verifyMaterializedProjection(
   return projection
 }
 
+const readonlyWorkRunSnapshots = new WeakMap<IDBTransaction, Map<number, Promise<AgentRunSnapshotV1>>>()
+
+function readonlyWorkRunSnapshotMapV1() {
+  const transaction = Dexie.currentTransaction
+  // A readonly Dexie child can share a native readwrite transaction. Reuse
+  // requires the actual native readonly snapshot, never the child's mode.
+  // It adds no transaction, table lock, durable authority or cross-call cache.
+  if (!transaction?.active || transaction.db !== db || transaction.idbtrans?.mode !== 'readonly'
+    || ![db.agentRuns, db.agentRunEvents].every(table => transaction.idbtrans.objectStoreNames.contains(table.name))) return undefined
+  let snapshots = readonlyWorkRunSnapshots.get(transaction.idbtrans)
+  if (!snapshots) {
+    snapshots = new Map()
+    readonlyWorkRunSnapshots.set(transaction.idbtrans, snapshots)
+  }
+  return snapshots
+}
+
+async function verifyRunSnapshotV1(run: AgentRunRecord & { id: number }): Promise<AgentRunSnapshotV1> {
+  const contract = await verifyContractRecord(run)
+  const events = await readRunEvents(run)
+  const projection = await verifyMaterializedProjection(run, events)
+  return { run, contract, events, projection }
+}
+
 /** @internal Checkpoint code reuses this inside the same Dexie transaction. */
 export async function readVerifiedAgentRunInTransactionV1(
   scope: WorkspaceScope,
@@ -436,10 +464,26 @@ export async function readVerifiedAgentRunInTransactionV1(
     if (run.productRuntimeSessionId == null) fail('owner', '运行必须且只能绑定 Work 或运行实例')
     await assertProductRuntimeSessionScope(scope, run.productRuntimeSessionId, run.worldGroupId ?? null)
   }
-  const contract = await verifyContractRecord(run as AgentRunRecord & { id: number })
-  const events = await readRunEvents(run as AgentRunRecord & { id: number })
-  const projection = await verifyMaterializedProjection(run as AgentRunRecord & { id: number }, events)
-  return { run: run as AgentRunRecord & { id: number }, contract, events, projection }
+  // Owner validation above remains per read, including after another scope
+  // has read this Run. Instance reads and all writable snapshots keep their
+  // original complete replay. The two immutable native stores make a second
+  // successful Work replay in this same transaction redundant.
+  const snapshots = run.workId != null ? readonlyWorkRunSnapshotMapV1() : undefined
+  if (!snapshots) return verifyRunSnapshotV1(run as AgentRunRecord & { id: number })
+  let pending = snapshots.get(runId)
+  if (!pending) {
+    if (snapshots.size >= 32) snapshots.delete(snapshots.keys().next().value!)
+    pending = verifyRunSnapshotV1(run as AgentRunRecord & { id: number })
+    snapshots.set(runId, pending)
+  }
+  try {
+    // Keep the verified cache private. Callers have always owned the returned
+    // snapshot and may edit nested objects while preparing later commands.
+    return structuredClone(await pending)
+  } catch (error) {
+    if (snapshots.get(runId) === pending) snapshots.delete(runId)
+    throw error
+  }
 }
 
 function eventRecord(event: AnyAgentRunEventV1): AgentRunEventRecord {
@@ -531,7 +575,10 @@ export async function appendAgentRunEventWithSettlementInTransactionV1(input: {
   workspaceDirty?: boolean
 }): Promise<AgentRunSnapshotV1> {
   const { snapshot, event } = input
-  const next = await appendPrivilegedAgentRunEventInTransactionV1(snapshot, event)
+  // Rejoin the caller's Dexie zone before settlement performs scoped reads and
+  // hashes. A deep native-promise return may otherwise lose that zone in
+  // Chromium, allowing the original write transaction to commit early.
+  const next = await Dexie.Promise.resolve(appendPrivilegedAgentRunEventInTransactionV1(snapshot, event))
   const terminalStates = ['completed', 'failed', 'cancelled'] as const
   const enteredMemoryTerminal = !terminalStates.includes(
     input.snapshot.projection.state as (typeof terminalStates)[number],
@@ -568,7 +615,7 @@ export async function appendAgentRunEventWithSettlementInTransactionV1(input: {
       workspaceDirty: input.workspaceDirty ?? true,
     },
   })
-  return appendPrivilegedAgentRunEventInTransactionV1(next, settlementEvent)
+  return await Dexie.Promise.resolve(appendPrivilegedAgentRunEventInTransactionV1(next, settlementEvent))
 }
 
 /**
@@ -623,6 +670,11 @@ export async function verifyRecordedMemorySettlementV1(input: {
 }
 
 export async function createAgentRunV1(input: CreateAgentRunV1Input): Promise<AgentRunSnapshotV1> {
+  const expectedRuntimeSessionHash = input.expectedRuntimeSessionHash
+  if (expectedRuntimeSessionHash !== undefined && (typeof expectedRuntimeSessionHash !== 'string'
+    || !/^[a-f0-9]{64}$/.test(expectedRuntimeSessionHash) || input.productRuntimeSessionId == null)) {
+    fail('runtime_snapshot_precondition', '实例创建快照要求准确 hash 和 Instance owner')
+  }
   const accepted = await acceptAgentRunContract(input.contract)
   const worldGroupId = input.worldGroupId ?? null
   if (!sameNullableId(worldGroupId, accepted.contract.scope.worldGroupId)) {
@@ -657,6 +709,12 @@ export async function createAgentRunV1(input: CreateAgentRunV1Input): Promise<Ag
     async () => {
       await assertContractScope(input.scope, accepted.contract, worldGroupId, productRuntimeSessionId, productBuildId)
       await assertOptionalConversationScope(input.scope, conversationId, worldGroupId)
+      if (expectedRuntimeSessionHash !== undefined) {
+        const session = await db.productRuntimeSessions.get(productRuntimeSessionId!)
+        if (!session || await waitForHash(session) !== expectedRuntimeSessionHash) {
+          fail('runtime_snapshot_stale', '实例快照在创建运行前已变化；未创建新的运行或事件')
+        }
+      }
       await assertParentRelationForCreationV1(input.scope, accepted.contract, productRuntimeSessionId, productBuildId)
 
       const parent = contractParent(accepted.contract)
@@ -1019,6 +1077,7 @@ export async function deleteAgentRunV1(
       db.agentRunEvents,
       db.agentRunCheckpoints,
       db.agentRunArtifacts,
+      ...exactArtifactOwnerTablesV1(),
     ),
     async () => {
       const run = await db.agentRuns.get(runId)

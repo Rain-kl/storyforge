@@ -1,5 +1,6 @@
 /** 当前架构唯一的结构化采纳入口。只接受 FIELD_REGISTRY 的规范字段与规范类型。 */
 import Dexie from 'dexie'
+import {assertChatPlanAdoptionV1} from '../character-interaction/consultation-plan'
 import { db } from '../db/schema'
 import {
   assertRecordInScope,
@@ -76,19 +77,38 @@ export async function adopt(input: AdoptInput): Promise<AdoptResult> {
   const tableSpec = REGISTRY_BY_NAME.get(input.target)
   if (!tableSpec) throw new Error(`[adopt] target ${input.target} 不在 PROJECT_TABLES`)
 
+  if (input.narrativeCandidate) {
+    const scope = await resolveScope(input)
+    const narrative = await Dexie.waitFor(import('../agent/run/narrative-annotation-durable'))
+    return narrative.commitNarrativeAnnotationFromAdoptV1({ ...input, scope })
+  }
+
   const payloads = Array.isArray(input.data) ? input.data : [input.data]
+  if (payloads.some(payload => payload && (tableSpec.worldSemantic?.projector?.annotationFields ?? [])
+    .some(field => Object.prototype.hasOwnProperty.call(payload, field)))) {
+    result.skipped.push({ reason: '叙事注释必须经过领域候选确认与来源 CAS；模型不能自行签发确认凭据', data: input.data })
+    return result
+  }
   if (payloads.some(payload => payload && (Object.prototype.hasOwnProperty.call(payload, 'worldId')
     || Object.prototype.hasOwnProperty.call(payload, 'workId')))) {
     result.skipped.push({ reason: 'AI/结构化输入不得携带 World/Work owner ID；owner 由 WorkspaceScope 派生', data: input.data })
     return result
   }
 
+  if (input.target === 'chatAuthoringDrafts' && payloads.some(payload => payload && Object.prototype.hasOwnProperty.call(payload, 'settingsJson'))) {
+    if (Array.isArray(input.data) || input.recordId == null || input.mode !== 'replace' || input.compareAndSet) throw new Error('角色聊天方案须通过同事务的指定记录确认写入')
+    if (!Dexie.currentTransaction) return db.transaction('rw', scopeTransactionTables(db.chatAuthoringDrafts), () => adopt(input))
+  }
   const scope = await resolveScope(input)
   const scopedInput: AdoptInput = { ...input, projectId: scope.projectId, scope }
 
   if (ADOPTION_BY_TARGET.get(input.target)?.writePolicy === 'extension-record-v1') {
     const extensionPolicy = await Dexie.waitFor(import('../extensions/ai-registry'))
     return extensionPolicy.adoptExtensionPayload(scopedInput)
+  }
+  if (ADOPTION_BY_TARGET.get(input.target)?.writePolicy === 'ttrpg-open-authoring-design-v1') {
+    const policy = await Dexie.waitFor(import('../ttrpg/open-authoring-design-adoption'))
+    return policy.adoptTtrpgOpenAuthoringDesignPayloadV1(scopedInput)
   }
 
   if (scopedInput.recordId != null) {
@@ -225,6 +245,7 @@ async function adoptCollectionRecord(
   }
   let patch = normalizeAndValidate(input.data, fieldSpecs, result, { preserveEmptyStrings: input.preserveAuthorText, preserveAuthorText: input.preserveAuthorText })
   if (!patch || Object.keys(patch).length === 0) return result
+  if (input.target === 'chatAuthoringDrafts' && Object.prototype.hasOwnProperty.call(patch, 'settingsJson')) assertChatPlanAdoptionV1(target.settingsJson, patch.settingsJson)
   if (input.target === 'characters') patch = normalizeCharacterAxes(patch, target)
 
   if (input.mode === 'append') {

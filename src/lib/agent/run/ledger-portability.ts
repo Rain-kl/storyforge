@@ -13,6 +13,7 @@ import { canonicalStringify, hashCanonicalValue } from './hash'
 import {
   replayAgentRunEventsV1,
   toAgentRunProjectionBodyV1,
+  completedAgentRunEvidencePrefixV1,
 } from './projection'
 import {
   portableizeAgentRunContractV1,
@@ -126,11 +127,8 @@ export async function verifyPortableCompletedAgentRunEvidenceV1(
     || last.payload.reason !== 'project-import-scope-rebound') {
     fail(`run ${run._exportId} 不含可接受的完成态证据`)
   }
-  const completed = replayAgentRunEventsV1(verified.events.slice(0, -1))
-  if (completed.errors.length > 0
-    || completed.state !== 'completed'
-    || !completed.terminalReceiptHash
-    || completed.terminalReceiptHash !== last.payload.previousReceiptHash) {
+  const completed = completedAgentRunEvidencePrefixV1(verified.events)
+  if (!completed) {
     fail(`run ${run._exportId} 的导入失效事件没有匹配完成态前缀`)
   }
   return { projection: completed, events: verified.events.slice(0, -1) }
@@ -179,6 +177,7 @@ async function portableGenerationHashes(input: {
 export async function portableizeAgentRunLedgerExportV1(
   data: ProjectExportData,
   idMaps: IdMaps,
+  options: { freezeContextEvidence?: boolean } = {},
 ): Promise<void> {
   const runs = (data.agentRuns ?? []) as ExportRow[]
   const events = (data.agentRunEvents ?? []) as ExportRow[]
@@ -187,6 +186,7 @@ export async function portableizeAgentRunLedgerExportV1(
   // Buckets retain row identity while leaving the exported arrays in their original order.
   const eventsByRun = indexRowsByRun(events)
   const checkpointsByRun = indexRowsByRun(checkpoints)
+  const localRunIds = new Map([...(idMaps.get('agentRuns') ?? [])].map(([local,portable]) => [portable,local]))
   for (const run of runs) {
     if (!Number.isInteger(run._exportId)) fail('agentRuns 缺少便携 _exportId')
     const runEvents = eventsByRun.get(run._exportId) ?? []
@@ -194,6 +194,21 @@ export async function portableizeAgentRunLedgerExportV1(
       fail(`run ${run._exportId} 事件世界组与运行不一致`)
     }
     await verifyPortableAgentRunProjectionV1(run, runEvents)
+    // World封存 preserves existing upper-product evidence as data; only a full
+    // workspace backup may enter those owners to freeze additional proof.
+    if (options.freezeContextEvidence !== false) {
+      const localRunId = localRunIds.get(run._exportId)
+      if (localRunId == null) fail(`run ${run._exportId} 缺少原始导出映射`)
+      const { freezeTtrpgWorldContextBindingsForExportV1 } = await import('../../product/world-context-portability')
+      const worldBindings = await freezeTtrpgWorldContextBindingsForExportV1(localRunId)
+      if (worldBindings !== undefined) run.portableWorldContextBindingsJson = worldBindings
+      const { freezeTtrpgOpenRunOriginForExportV1 } = await import('../../ttrpg/open-run-portability')
+      const runtimeOrigin = await freezeTtrpgOpenRunOriginForExportV1(localRunId, { contractHash: run.contractHash, lastSequence: run.lastSequence })
+      if (runtimeOrigin !== undefined) run.portableRuntimeOriginJson = runtimeOrigin
+      const { freezePublishedRootOriginForExportV1 } = await import('../../product-production/published-root-origin')
+      const rootOrigin = await freezePublishedRootOriginForExportV1(localRunId)
+      if (rootOrigin !== undefined) run.portablePublishedRootOriginJson = rootOrigin
+    }
     const hashes = await portableGenerationHashes({ run, events: runEvents, idMaps })
     for (const event of runEvents) {
       const pair = hashes.get(event.generation)
@@ -310,6 +325,18 @@ function hasNonPortableCheckpoint(checkpoints: AgentRunCheckpointRecord[]): bool
   })
 }
 
+/** A prior import invalidated the local receipt, not the completed history.
+ * Re-import must not treat that exact, verifiable prefix as pending execution.
+ * Keep the stale event and checkpoint; this grants no fresh receipt or resume. */
+function hasImportedCompletedPrefix(projection: AgentRunProjectionV1, events: AnyAgentRunEventV1[]): boolean {
+  const last = events[events.length - 1]
+  if (projection.state !== 'running' || last?.type !== 'verification.staled'
+    || last.payload.reason !== 'project-import-scope-rebound') return false
+  const prefix = replayAgentRunEventsV1(events.slice(0, -1))
+  return prefix.errors.length === 0 && prefix.state === 'completed' && !!prefix.terminalReceiptHash
+    && prefix.terminalReceiptHash === last.payload.previousReceiptHash
+}
+
 async function rebindGenerationHashes(input: {
   run: AgentRunRecord & { id: number }
   events: AgentRunEventRecord[]
@@ -352,6 +379,18 @@ export async function finalizeImportedAgentRunLedgersV1(input: {
   for (const runId of input.runIds) {
     const run = await db.agentRuns.get(runId)
     if (!run || run.id == null) fail(`导入 run ${runId} 不存在`)
+    if (run.portableWorldContextBindingsJson !== undefined) {
+      await Dexie.waitFor((async () => {
+        const { assertPortableWorldContextBindingsV1 } = await import('../../product/world-context-portability')
+        await assertPortableWorldContextBindingsV1(run.portableWorldContextBindingsJson)
+      })())
+    }
+    if (run.portablePublishedRootOriginJson !== undefined) {
+      await Dexie.waitFor((async () => {
+        const { assertImportedPublishedRootOriginOwnerV1 } = await import('../../product-production/published-root-origin')
+        await assertImportedPublishedRootOriginOwnerV1(run)
+      })())
+    }
     const events = await db.agentRunEvents.where('runId').equals(runId).sortBy('sequence')
     const hashes = await Dexie.waitFor(rebindGenerationHashes({
       run: run as AgentRunRecord & { id: number },
@@ -427,7 +466,8 @@ export async function finalizeImportedAgentRunLedgersV1(input: {
       domainEvents = [...domainEvents, staled]
       projection = replayAgentRunEventsV1(domainEvents)
       appendedImportTerminalEvent = true
-    } else if (hasNonPortableCheckpoint(checkpoints) && !['failed', 'cancelled'].includes(projection.state)) {
+    } else if (hasNonPortableCheckpoint(checkpoints) && !['failed', 'cancelled'].includes(projection.state)
+      && !hasImportedCompletedPrefix(projection, domainEvents)) {
       const cancelled = parseAgentRunEventV1({
         version: 1,
         runId,
@@ -468,5 +508,10 @@ export async function finalizeImportedAgentRunLedgersV1(input: {
       // cancellation event that changes the durable run lifecycle.
       updatedAt: appendedImportTerminalEvent ? Date.now() : run.updatedAt,
     })
+    if (run.portableRuntimeOriginJson !== undefined) {
+      const { readTtrpgOpenRunOriginV1 } = await Dexie.waitFor(import('../../ttrpg/open-run-portability'))
+      await readTtrpgOpenRunOriginV1(runId, 'archive')
+    }
+
   }
 }

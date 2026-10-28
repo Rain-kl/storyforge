@@ -4,8 +4,9 @@ import type { AIProvider } from '../types/ai'
 import type { ContextLayer, ContextSegment } from '../ai/context-budget'
 import type { PreparedContinuityContext } from '../ai/chapter-memory/continuity-context'
 import type { InspirationResultMode } from '../types/inspiration-workspace'
-import type { RagSelectionTraceCollector } from '../types/rag-library'
+import type { RagAnnotationTargetSelectionV1, RagSelectionTraceCollector } from '../types/rag-library'
 import type { WorkspaceScope } from '../types/world-ownership'
+import type { NarrativeDomainFieldsV1 } from '../types/narrative-domain'
 import type {
   ExactRunArtifactKindV1,
   WorkspaceDocumentCodecV1,
@@ -56,6 +57,15 @@ export interface WorldSemanticResourceSpec {
   canonPolicy: 'authoritative-table' | 'confirmed-rows-only'
   statusField?: string
   confirmedStatusValues?: readonly string[]
+  /** Current source eligibility; historical release decoders freeze their own snapshot. */
+  projector?: {
+    version: 1
+    kind: 'entity' | 'event' | 'assertion' | 'relation' | 'epistemic-event' | 'development' | 'disclosure'
+    sourceFields: readonly string[]
+    annotationFields: readonly (keyof NarrativeDomainFieldsV1)[]
+    provenanceField: string
+  }
+  publishPolicy?: 'reviewed-narrative-v1'
 }
 
 /** WORLD-2C product ownership, separate from the physical project lifecycle owner. */
@@ -186,7 +196,15 @@ export interface BlobOwnerRef {
   onDelete: 'cascade'
 }
 
-export type RefSpec = SimpleRef | JsonRef | ArrayRef | IndirectRef | BlobOwnerRef
+export interface NarrativeSourceRefSpecV1 {
+  kind: 'narrative-source-refs-v1'
+  field: keyof NarrativeDomainFieldsV1
+  /** Typed FK vocabulary; deletion retains source UID and evidence. */
+  targetTables: readonly string[]
+  onDelete: 'tombstone'
+}
+
+export type RefSpec = SimpleRef | JsonRef | ArrayRef | IndirectRef | BlobOwnerRef | NarrativeSourceRefSpecV1
 
 /** 导出时的 ID 重映射声明 */
 export interface ExportRemapField {
@@ -224,6 +242,10 @@ export interface ExportRemapField {
  * exportAs 是当前便携协议的稳定影子坐标；导入时只用该坐标重映射。
  */
 export type ExportRefRemap = {
+  kind: 'narrative-source-refs-v1'
+  field: keyof NarrativeDomainFieldsV1
+  exportAs: string
+} | {
   field: string
   remapVia: string
   kind: 'portals'
@@ -290,6 +312,10 @@ export type PortableDataSpec = {
   /** CTXG-2 immutable UTF-8 body or a verified evidence-pruned tombstone. */
   kind: 'exact-run-artifact'
 } | {
+  /** Preserves a verified root preimage while live ledger references are remapped. */
+  kind: 'product-build-root-budget'
+  evidenceField: 'rootBudgetEvidenceJson'
+} | {
   /** Content-addressed media object exported as verified inline binary. */
   kind: 'shared-media-object'
   dataField: string
@@ -307,6 +333,15 @@ export type PortableDataSpec = {
 /**
  * 单张表的元信息。
  */
+export interface ExactArtifactRootSpecV1 {
+  /** Existing JSON string field on a project-scoped, exportable owner table. */
+  field: string
+  /** Own-property names and '*' for an array; the endpoint is an exact identity list. */
+  path: readonly string[]
+  /** Optional literal owner discriminator on this row (for shared product/event tables). */
+  when?: { field: string; equals: string }
+}
+
 export interface TableSpec<T = any> {
   /** Dexie 表对象(可直接操作) */
   table: Table<T, number>
@@ -342,6 +377,8 @@ export interface TableSpec<T = any> {
     version: 1
     field: 'ragDocumentId'
     resourceKind: string
+    /** NW-1A entity identity classification, not a writable IR/Canon field. */
+    narrativeEntityType?: 'character' | 'location' | 'codex-entry' | 'world-group'
     /** Context Gateway catalog metadata remains on this registry entry. */
     contextKind: ContextResourceKind
     label: string
@@ -362,6 +399,9 @@ export interface TableSpec<T = any> {
   validateImportRow?: (row: Record<string, unknown>) => void
   /** First portable backup version containing this table; older imports use an explicit converter. */
   introducedBackupVersion?: number
+  /** Explicit version collision: this table may be absent in that legacy format.
+   * A present table still receives full validation; current backups stay strict. */
+  optionalInBackupVersions?: readonly number[]
   /** 导出时需要的 ID 重映射 */
   exportRemap?: ExportRemapField[]
   /**
@@ -377,6 +417,8 @@ export interface TableSpec<T = any> {
   exportRefRemap?: ExportRefRemap[]
   /** Embedded structured data / integrity rebind behavior during export/import. */
   portableData?: PortableDataSpec
+  /** Confirmed owners pin exact evidence through their own registered lifecycle, independently of source Runs. */
+  exactArtifactRoots?: readonly ExactArtifactRootSpecV1[]
   /** Product-neutral stable reference to a governed binary object table, used by shared GC. */
   mediaRef?: { blobTable: string; field: string }
   /**
@@ -401,6 +443,8 @@ export interface FieldSpec {
   field: string
   /** Optional stable CreativeArtifact output id resolved through this same registry. */
   candidateId?: string
+  /** This field requires the registered domain confirmation/CAS boundary. */
+  adoptionPolicy?: 'narrative-annotation-v1'
   type: 'string' | 'longtext' | 'json' | 'object' | 'number' | 'boolean' | 'enum' | 'array'
   enums?: string[]
   worldScoped?: boolean
@@ -446,7 +490,7 @@ export interface CollectionAdoptionSpec {
   identity: 'id' | 'name' | CompositeIdentity
   /** 只允许通过 recordId 定点更新，禁止 AI 新增集合行。 */
   recordOnly?: boolean
-  writePolicy?: 'extension-record-v1'
+  writePolicy?: 'extension-record-v1' | 'ttrpg-open-authoring-design-v1'
   duplicatePolicy: 'skip' | 'update' | 'merge' | 'error'
   /** 必填字段;缺失则跳过该条 */
   required: string[]
@@ -478,6 +522,9 @@ export interface AdoptionExtensionSpec {
 }
 
 export interface AdoptInput {
+  /** NW-1C: author-selected durable candidate. Payload is loaded from verified
+   * ledger state; caller-provided fields are never trusted on this route. */
+  narrativeCandidate?: { runId: number; candidateHash: string }
   /** Author-operated, registry-allowlisted exact text edits; never set from model payloads. */
   preserveAuthorText?: boolean
   extensionSnapshot?: import('../extensions/types').ExtensionRegistrySnapshot
@@ -614,6 +661,10 @@ export interface AssembleContextInput {
   productRuntimeSessionId?: number
   /** TTRPG R7: exact player character POV for the isolated AI-player reader. */
   ttrpgPlayerActorKey?: string
+  /** One original human-selected speech request; never an actor/Chapter alias. */
+  ttrpgVoiceRequest?: { viewerKey: string; requestKey: string; intentReceiptHash: string }
+  /** S2 exact saved draft revision; the registered reader resolves its real source. */
+  ttrpgAuthoringDesignRevision?: number
   /** PRODUCTPROD-1 registered production context anchors. */
   productProductionId?: number
   /** Exact task identity for registered, Build-bound repair feedback. */
@@ -630,6 +681,22 @@ export interface AssembleContextInput {
   textOpenWorldSourceUnitKeys?: string[]
   /** Character interaction: exactly one viewpoint for the registered reader. */
   interactionParticipantKey?: string
+  /** Exact durable situation candidate being reviewed within its owning instance. */
+  chatSituationCandidateRunId?: number
+  /** Current situation producer; registered reader resolves its frozen contract. */
+  chatSituationConstructionRunId?: number
+  chatActionCandidateRunId?: number
+  /** Current actor producer; its frozen contract selects the dialogue wire format. */
+  chatActionContextRunId?: number
+  chatMemoryCandidateRunId?: number
+  /** Current explicit revision Run; used only to verify its source read. */
+  chatActionRevisionCurrentRunId?: number
+  /** S2 author-only source review: exact saved draft, projection and selected passages. */
+  chatConsultationRequest?: import('../character-interaction/consultation-context').ChatConsultationRequestV2
+  chatSourceReviewRequest?: import('../character-interaction/source-review-context').ChatSourceReviewRequestV1
+  chatSourceUnitsRequest?: import('../character-interaction/source-review-context').ChatSourceReviewRequestV1
+  chatSourceUnitsReviewRequest?: import('../character-interaction/source-units-context').ChatSourceUnitsReviewRequestV1
+  chatSourceUnitConfirmationRequest?: import('../character-interaction/source-unit-confirmation-context').ChatSourceUnitConfirmationRequestV1
   /** Character interaction: frozen product source + confirmed product Brief. */
   /** CM-1: 本次明确参与增量融合的碎片；由 inspirationWorkspace source 读取。 */
   inspirationFragmentIds?: string[]
@@ -655,6 +722,11 @@ export interface AssembleContextInput {
   searchKinds?: string[]
   /** RAG-1: 节点/Agent 明确选择的稳定资料字段键。 */
   ragEntryKeys?: string[]
+  /** Exact original evidence through the same Canon provider; refuses loss. */
+  ragReadMode?: 'original-evidence-v1'
+  /** Authoring target state through ragSelection; target must also be one of
+   * the explicitly selected original sources. Never a product runtime read. */
+  ragAnnotationTarget?: RagAnnotationTargetSelectionV1
   /** RAG-1 内部执行证据收集器；调用结束后由节点运行快照冻结。 */
   ragSelectionTrace?: RagSelectionTraceCollector
   /** assembleContext 内部批量预取；调用方无需传。 */
@@ -722,6 +794,8 @@ export interface ContextResourceDescriptorV1 {
     /** Exact upper-product instance when the resource is derived from a
      * ProductRuntimeSession rather than mutable authoring Canon. */
     productRuntimeSessionId?: number
+    /** Stable instance actor POV. Membership and read authority are checked by the owning provider. */
+    runtimeActorKey?: string
     /** Immutable release locator when the resource comes from WorldReference. */
     worldReleaseId?: number
     worldReleaseHash?: string
@@ -733,6 +807,17 @@ export interface ContextResourceDescriptorV1 {
     resourceKind: string
     /** Release-scoped portable row identity; never a Dexie id. */
     resourceCoordinate: string
+    /** Frozen directory provenance, not semantic evidence. Only the verified
+     * narrative provider may attach this under author-review author access. */
+    authorSource?: import('../types/world-query').WorldQueryAuthorSourceV1
+    /** Verified v4 neutral dependency contract. Contains only identities
+     * visible in this grant, including records sharing an original span. */
+    narrative?: {
+      version: 1
+      resolverVersion: 'narrative-neutral-closure-v1'
+      requiredResourceKeys: string[]
+      relationEndpoints: [string, string] | null
+    }
   }
   relations: ContextResourceRelationV1[]
   timeRange?: ContextTimeRangeV1
@@ -755,6 +840,8 @@ export interface FrozenResourceScopeV1 {
    * provider fingerprint still freezes Release/sequence/state/visibility; an
    * id by itself never grants access to another WorkspaceScope. */
   productRuntimeSessionId?: number
+  /** Stable instance actor POV; this string never grants permission by itself. */
+  runtimeActorKey?: string
   /** Optional operation boundary. Providers may expose target-specific
    * aggregate resources without materializing one aggregate for every chapter. */
   chapterId?: number
@@ -834,6 +921,18 @@ export interface ContextResourceProviderV1 {
   read(input: ResourceReadInputV1): Promise<ContextResourceReadV1>
   readOriginal(input: OriginalEvidenceReadInputV1): Promise<OriginalEvidenceReadV1>
   fingerprint(scope: FrozenResourceScopeV1): Promise<string>
+  /** Optional owner-created immutable read view; executor MUST verify freshness before using its result. */
+  openReadSession?(scope: FrozenResourceScopeV1): Promise<{ provider: ContextResourceProviderV1; assertCurrent(): Promise<void> }>
+  /** Optional, explicitly registered v4 protocol. Author/controller capability
+   * creation is never exposed as a model tool argument. */
+  worldQuery?: import('../types/world-query').WorldQueryProviderProtocolV1
+  /** Metadata query only; actual reads still use read/readOriginal and their
+   * existing Manifest evidence. Present only on a verified v4 binding. */
+  queryWorldMetadata?(input: { scope: FrozenResourceScopeV1; query: import('../types/world-query').WorldQueryV1 }): Promise<{
+    result: import('../types/world-query').WorldQueryResultV1; descriptors: ContextResourceDescriptorV1[]
+  }>
+  /** Non-cacheable revocation/stale check for an opaque bound permission. */
+  assertAccessCurrent?(scope: FrozenResourceScopeV1): Promise<void>
 }
 
 export interface ContextAccessPolicyV1 {
@@ -993,6 +1092,8 @@ export interface ContextSource {
   enabled?: (input: AssembleContextInput) => boolean | Promise<boolean>
   /** CTXG resource navigation extension. It is the only Provider registration point. */
   resources?: ContextResourceProviderV1
+  /** Instance role providers refuse broad reads without the kernel's exact resource allow-list. */
+  requiresResourceKeyAllowList?: boolean
   read: (input: AssembleContextInput) => Promise<string>
 }
 

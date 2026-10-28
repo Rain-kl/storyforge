@@ -1,5 +1,6 @@
 node_modules
 dist/
+.vite-e2e-cache/
 dist-android/
 *.jks
 *.keystore
@@ -20,6 +21,7 @@ test-results/
 playwright-report/
 website-docs/.vitepress/cache/
 website-docs/.vitepress/dist/
+.vite-e2e-cache/
 
 # 公司内部资料（仅保留在本地，不进入仓库）
 application-materials/
@@ -40,3 +42,10 @@ public/player/adventure-player-template.zip
 
 # Isolated packaged-client browser verification
 dist-client-verification/
+
+# Frozen E2E Vite optimizer cache
+/.vite-e2e-cache/
+
+# Local Python inference/test bytecode
+__pycache__/
+*.py[cod]

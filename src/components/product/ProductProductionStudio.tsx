@@ -1,6 +1,21 @@
+import MediaSelection from '../character-interaction/MediaSelection'
+import {chatVisualMediaProfileV1} from '../../lib/character-interaction/visual-intent'
+import type {ChatMediaProductionDecisionV1} from '../../lib/character-interaction/media-selection'
+import type { ChatAuthoringSettings } from '../../lib/character-interaction/authoring-contract'
+import SituationSelection from '../character-interaction/SituationSelection'
+import { ttrpgOpenOriginalBookingSummaryV1 } from '../../lib/ttrpg/open-original-response-review-service'
+import { readTextOpenWorldSceneScriptsRepairCandidatesV1, readTextOpenWorldCraftingEconomyRepairCandidatesV1, readTextOpenWorldNpcRuntimeRepairCandidatesV1, type TextOpenWorldCatalogRepairCandidatePageV1 } from '../../lib/open-world/catalog-author-repair'
+import { SCENE_SCRIPTS_REPAIR_SECTIONS_V1, type SceneScriptsRepairSectionV1 } from '../../lib/open-world/scene-scripts-production'
+import { CRAFTING_ECONOMY_REPAIR_SECTIONS_V1, type CraftingEconomyRepairSectionV1 } from '../../lib/open-world/crafting-economy-catalog-production'
+import { NPC_RUNTIME_REPAIR_SECTIONS_V1, type NpcRuntimeRepairSectionV1 } from '../../lib/open-world/npc-runtime-catalog-production'
+import { readTextOpenWorldItemRewardRepairCandidatesV1, type TextOpenWorldItemRewardRepairCandidatePageV1 } from '../../lib/open-world/item-reward-author-repair'
+import { ITEM_REWARD_REPAIR_SECTIONS_V1, type ItemRewardRepairSectionV1 } from '../../lib/open-world/item-reward-catalog-production'
+import { readTextOpenWorldQuestFinalizeRepairCandidatesV1, type TextOpenWorldQuestFinalizeRepairCandidatePageV1 } from '../../lib/open-world/quest-finalize-author-repair'
+import { QUEST_FINALIZE_REPAIR_SECTIONS_V1, type QuestFinalizeRepairSectionV1 } from '../../lib/open-world/quest-finalize-production'
 import { canReviseTextContentBuildV1 } from '../../lib/product-production/text-content-revision'
+import { productProductionFailureNeedsProviderAccountingV1 } from '../../lib/product-production/scheduler'
+import { supportsProductProductionLocalRequestV1 } from '../../lib/product-production/local-request'
 import TextAdventureContentRevisionPanel from './TextAdventureContentRevisionPanel'
-import type { ChatAuthoringSettingsV1 } from '../../lib/character-interaction/authoring-contract'
 import type { AvgAuthoringSettingsV1 } from '../../lib/avg/authoring-contract'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -26,6 +41,10 @@ import {
   isTextAdventureCommunityCandidateRepairRequiredV1,
   isTextAdventureMediaAnchorBlockerV1,
   isTextAdventureSourceDecisionBlockerV1,
+  isChatSituationDecisionBlockerV1,
+  confirmChatSituationDecisionV1,
+  isChatMediaDecisionBlockerV1,
+  confirmChatMediaDecisionV1,
   listProductProductionReviewArtifactsV1,
   listTextAdventureMediaAssetsV1,
   listProductProductionWorkspaceV1,
@@ -58,7 +77,7 @@ import type {
   ProductBuildCompatibilityReportV1, ProductEvolutionAffectedLaneV1, ProductProductionBriefV3, ProductProductionRecordV1,
   ProductProductionScaleV1, ProductProductionSourceOptionsV1, ProductProductionSourceSelectionV1,
   ProductStartingPointSuggestionV1, ProductionProductKindV1, TtrpgCampaignProposalSectionV2, WorkspaceScope,
-  ProductProductionHandoffV1, WorldReferenceCatalogEntryV1,
+  ProductProductionHandoffV1, WorldReferenceCatalogEntry,
   AiTownBriefSettingsV1,
 } from '../../lib/types'
 import { PRODUCT_BROWSER_PERFORMANCE_POLICY_V1 } from '../../lib/product-production/browser-performance'
@@ -90,6 +109,9 @@ import {
 import { downloadTextFile } from '../../lib/export/text-export'
 import { hashProductProductionValueV2 } from '../../lib/product-production/hash'
 import { isTextAdventureReadableGlyphViolationV1 } from '../../lib/product-production/text-adventure-quality'
+import { isTextOpenWorldBudgetRecoveryFailureV1 } from '../../lib/open-world/creator-budget-recovery-policy'
+
+type RepairCandidateSectionV1 = SceneScriptsRepairSectionV1 | QuestFinalizeRepairSectionV1 | ItemRewardRepairSectionV1 | CraftingEconomyRepairSectionV1 | NpcRuntimeRepairSectionV1
 
 export function visualReviewRepairTargets(artifact: ProductProductionReviewArtifactV1 | undefined): Array<{
   artifactKey: string
@@ -128,9 +150,12 @@ import {
   readProductProductionRecoveryTaskKeyV1,
 } from '../../lib/product-production/recovery-policy'
 import TextOpenWorldCreatorArtifactBrowser from '../text-game/TextOpenWorldCreatorArtifactBrowser'
+import TextOpenWorldResponsibilityOverview from '../text-game/TextOpenWorldResponsibilityOverview'
 import TextOpenWorldCreatorMediaStudio from '../text-game/TextOpenWorldCreatorMediaStudio'
+import TextOpenWorldVisualReview from '../text-game/TextOpenWorldVisualReview'
 import TextOpenWorldCreatorQualityStudio from '../text-game/TextOpenWorldCreatorQualityStudio'
 import TextOpenWorldCreatorReleaseStudio from '../text-game/TextOpenWorldCreatorReleaseStudio'
+import { canReviseStoppedTextOpenWorldCreatorBriefV1 } from '../../lib/open-world/creator-brief-lifecycle'
 type SupportedProduct = ProductionProductKindV1
 
 const PRODUCT_LABELS: Record<SupportedProduct, string> = {
@@ -153,7 +178,13 @@ interface CommandActivityV1 {
 const loadProductQualityReceiptsV1 = () => import('../../lib/product-production/quality-receipts')
 const loadTtrpgProductionWizardV2 = () => import('../ttrpg/TtrpgProductionWizard')
 const TtrpgProductionWizard = lazy(loadTtrpgProductionWizardV2)
+const TtrpgOpenProductionReview = lazy(() => import('../ttrpg/TtrpgOpenProductionReview'))
+const TtrpgOpenOriginalResponseHandoff = lazy(() => import('../ttrpg/TtrpgOpenOriginalResponseHandoff'))
+const TtrpgOpenProductionBudgetRevision = lazy(() => import('../ttrpg/TtrpgOpenProductionBudgetRevision'))
+const TtrpgOpenContentRevision = lazy(() => import('../ttrpg/TtrpgOpenContentRevision'))
 const TextAdventurePackagePanel = lazy(() => import('./TextAdventurePackagePanel'))
+const TextOpenWorldPausedTaskRevision = lazy(() => import('../text-game/TextOpenWorldPausedTaskRevision'))
+const TextOpenWorldBudgetRecovery = lazy(() => import('../text-game/TextOpenWorldBudgetRecovery'))
 
 const SOURCE_SELECTION_FACETS = [
   ['storySources', 'storyResourceKeys', '故事来源'],
@@ -261,7 +292,7 @@ function statusLabel(value: string): string {
     'release-ready': '可发布', 'recovery-required': '需要处理', cancelled: '已取消',
     draft: '草稿', superseded: '已取代',
     waiting: '等待依赖', ready: '可执行', running: '执行中', 'retry-ready': '等待重试', completed: '已完成',
-    blocked: '阻塞', stale: '旧 epoch',
+    blocked: '阻塞', stale: '旧 epoch', 'verification-required': '待核对',
   } as Record<string, string>)[value] ?? value
 }
 
@@ -369,6 +400,11 @@ function productionTaskPresentation(taskKey: string): { label: string; owner: st
     'integration.narrative': ['三幕叙事确定性装配', '叙事装配器'],
     'content.narrative': ['装配后的主线与分支叙事', '叙事装配器'],
     'content.adventure-quality-review': ['叙事质量确定性总报告', '确定性质量汇总器'],
+    'system.chat-config': ['对话、记忆与互动规则', '产品系统配置'],
+    'media.chat-context': ['交接角色与场景依据', '内容与系统交接'],
+    'media.chat-design': ['统一人物造型与场景设计', '媒资设计'],
+    'media.chat-review': ['核对原图与故事用途', '媒资检查'],
+    'media.chat-author-gate': ['确认图片与绑定用途', '作者确认'],
     'media.requirements': ['美术需求清单', '美术总监'],
     'media.visual-bible.compile': ['冻结视觉圣经与角色锚点', '确定性视觉圣经编译器'],
     'media.vision-preflight': ['真实图片输入能力预检', '图片能力审计员 · 独立 Run'],
@@ -633,10 +669,11 @@ export default function ProductProductionStudio(props: {
   initialProductionId?: number | null
   /** Embedded continuation used by product-specific creator workflows. */
   productionOnly?: boolean
+  onReviseCreatorBrief?: (productionId: number) => Promise<void>
   initialSource?: ProductProductionHandoffV1 | null
   managedCreation?: boolean
   embedded?: boolean
-  chatSetup?: {settings:ChatAuthoringSettingsV1;title:string;worldReleaseId:number|null}
+  chatSetup?: {settings:ChatAuthoringSettings;title:string;worldReleaseId:number|null}
   avgSetup?: { settings: AvgAuthoringSettingsV1; title: string; worldReleaseId: number | null }
   onProductionSelected?: (id: number | null) => void
   authorOptIn?: boolean
@@ -650,7 +687,7 @@ export default function ProductProductionStudio(props: {
   }
   const initialProduct = props.initialProduct && props.allowedProducts.includes(props.initialProduct)
     ? props.initialProduct : props.allowedProducts[0]
-  const [releases, setReleases] = useState<WorldReferenceCatalogEntryV1[]>([])
+  const [releases, setReleases] = useState<WorldReferenceCatalogEntry[]>([])
   const [productions, setProductions] = useState<ProductProductionRecordV1[]>([])
   const [selectedProductionId, setSelectedProductionId] = useState<number | null>(null)
   const [details, setDetails] = useState<ProductProductionDetailsV1 | null>(null)
@@ -673,7 +710,7 @@ export default function ProductProductionStudio(props: {
   const [qualityProfile, setQualityProfile] = useState<ProductProductionBriefV3['qualityProfile']>(props.chatSetup?.settings.qualityProfile ?? props.avgSetup?.settings.qualityProfile ?? 'prototype')
   const [visualLevel, setVisualLevel] = useState<'none' | 'key-scenes' | 'illustrated'>(
     props.avgSetup?.settings.visualLevel
-      ?? (initialProduct === 'avg' || initialProduct === 'ai-town' || initialProduct === 'text-adventure'
+      ?? (initialProduct === 'character-interaction' && props.chatSetup?.settings.version === 3 && props.chatSetup.settings.visuals?.version === 2 ? 'key-scenes' : initialProduct === 'avg' || initialProduct === 'ai-town' || initialProduct === 'text-adventure'
         ? 'key-scenes' : 'none'),
   )
   const [audioLevel, setAudioLevel] = useState<'none' | 'music-sfx'>(props.avgSetup?.settings.audioLevel ?? (initialProduct === 'avg' ? 'music-sfx' : 'none'))
@@ -688,45 +725,67 @@ export default function ProductProductionStudio(props: {
     productionId: number
     brief: ProductProductionBriefV3
   } | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [commandBusy, setBusy] = useState(false)
+  const [ttrpgBudgetBusyOwner, setTtrpgBudgetBusyOwner] = useState<string | null>(null)
+  const [ttrpgContentBusyOwner, setTtrpgContentBusyOwner] = useState<string | null>(null)
+  const ttrpgBudgetBusyKey = JSON.stringify([props.scope.projectId, props.scope.worldId, props.scope.workId, details?.production.id ?? null])
+  const busy = commandBusy || ttrpgBudgetBusyOwner === ttrpgBudgetBusyKey || ttrpgContentBusyOwner === ttrpgBudgetBusyKey
   const [productionRunning, setProductionRunning] = useState(false)
   const [campaignProposalRunning, setCampaignProposalRunning] = useState(false)
   const [progress, setProgress] = useState<ProductProductionProgressV1 | null>(null)
   const [taskEvidence, setTaskEvidence] = useState<{ taskKey: string; text: string } | null>(null)
+  const [responsibilityArtifactFocus, setResponsibilityArtifactFocus] = useState<{
+    productionId: number; artifactKey: string; requestId: number
+  } | null>(null)
   const [repairNote, setRepairNote] = useState('')
   const [authorDraftJson, setAuthorDraftJson] = useState('')
+  const [originalResponseDraftSource, setOriginalResponseDraftSource] = useState<{ ownerKey: string;
+    source: import('../../lib/ttrpg/open-original-response-review-service').TtrpgOpenOriginalResponseRefV1 } | null>(null)
+  const [originalHandoffBusyOwner, setOriginalHandoffBusyOwner] = useState<string | null>(null)
+  const [repairCandidatePage, setRepairCandidatePage] = useState<((TextOpenWorldQuestFinalizeRepairCandidatePageV1 | TextOpenWorldItemRewardRepairCandidatePageV1 | TextOpenWorldCatalogRepairCandidatePageV1) & { taskKey: string }) | null>(null)
+  const [repairCandidateSection, setRepairCandidateSection] = useState<RepairCandidateSectionV1>('objectives')
   const [contentRevision, setContentRevision] = useState<import('../../lib/types').TextAdventureContentRevisionV1 | null>(null)
   const [unknownResultDisposition, setUnknownResultDisposition] = useState<
     '' | 'confirmed-not-charged' | 'charge-reservation-upper-bound'
   >('')
-  const recoveryDraftScopeRef = useRef<{ productionId: number | null; controlEpoch: number | null }>({
-    productionId: null,
-    controlEpoch: null,
-  })
+  const recoveryDraftScopeRef = useRef<{
+    scopeKey: string | null; productionId: number | null; buildId: number | null; controlEpoch: number | null
+    taskKey: string | null; runId: number | null; attempt: number | null
+  }>({ scopeKey: null, productionId: null, buildId: null, controlEpoch: null, taskKey: null, runId: null, attempt: null })
   const recoveryDraftControlEpoch = progress?.productionId === selectedProductionId
     ? progress.controlEpoch
     : details?.production.id === selectedProductionId
       ? details.build?.controlEpoch ?? null
       : null
+  const recoveryDraftTaskKey = details?.build ? readProductProductionRecoveryTaskKeyV1(details.build.failureJson) : null
+  const recoveryDraftTask = progress?.productionId === selectedProductionId && progress.buildId === details?.build?.id
+    && progress.controlEpoch === recoveryDraftControlEpoch
+    ? progress.tasks.find(task => task.taskKey === recoveryDraftTaskKey) : undefined
+  const recoveryDraftIdentity = JSON.stringify({ scopeKey: JSON.stringify([props.scope.projectId, props.scope.worldId, props.scope.workId]),
+    productionId: selectedProductionId, buildId: details?.build?.id ?? null, controlEpoch: recoveryDraftControlEpoch,
+    taskKey: recoveryDraftTaskKey, runId: recoveryDraftTask?.runId ?? null, attempt: recoveryDraftTask?.attempt ?? null })
   useEffect(() => {
     const previous = recoveryDraftScopeRef.current
-    const productionChanged = previous.productionId !== selectedProductionId
-    const controlEpochChanged = !productionChanged
-      && previous.controlEpoch != null
-      && recoveryDraftControlEpoch != null
-      && previous.controlEpoch !== recoveryDraftControlEpoch
-    recoveryDraftScopeRef.current = {
-      productionId: selectedProductionId,
-      controlEpoch: recoveryDraftControlEpoch
-        ?? (productionChanged ? null : previous.controlEpoch),
+    const incoming: typeof previous = JSON.parse(recoveryDraftIdentity)
+    const changed = previous.scopeKey !== incoming.scopeKey || previous.productionId !== incoming.productionId
+      || (['buildId', 'controlEpoch', 'taskKey', 'runId', 'attempt'] as const)
+        .some(key => previous[key] != null && incoming[key] != null && previous[key] !== incoming[key])
+    // Filling the first async progress snapshot is not an owner change. Keep
+    // the original behavior for authors who already typed while it was loading.
+    recoveryDraftScopeRef.current = changed ? incoming : {
+      ...incoming, buildId: incoming.buildId ?? previous.buildId, controlEpoch: incoming.controlEpoch ?? previous.controlEpoch,
+      taskKey: incoming.taskKey ?? previous.taskKey, runId: incoming.runId ?? previous.runId, attempt: incoming.attempt ?? previous.attempt,
     }
-    if (!productionChanged && !controlEpochChanged) return
+    if (!changed) return
     setTaskEvidence(null)
+    setOriginalResponseDraftSource(null)
+    setOriginalHandoffBusyOwner(null)
+    setRepairCandidatePage(null)
     setRepairNote('')
     setAuthorDraftJson('')
     setContentRevision(null)
     setUnknownResultDisposition('')
-  }, [recoveryDraftControlEpoch, selectedProductionId])
+  }, [recoveryDraftIdentity])
   const [performanceGate, setPerformanceGate] = useState<VerifiedProductBrowserPerformanceGateV1 | null>(null)
   const [performanceGateError, setPerformanceGateError] = useState('')
   const [performanceLabRunning, setPerformanceLabRunning] = useState(false)
@@ -793,6 +852,7 @@ export default function ProductProductionStudio(props: {
     const { worldReleases: nextReleases, productions: nextProductions } = await listProductProductionWorkspaceV1(
       scope,
       allowedProducts,
+      { narrativePreview: import.meta.env.DEV && new URLSearchParams(window.location.search).has('narrative-preview') },
     )
     setReleases(nextReleases)
     setProductions(nextProductions)
@@ -990,7 +1050,13 @@ export default function ProductProductionStudio(props: {
     })
     return () => { active = false }
   }, [])
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    let active = true
+    void refresh().catch(cause => {
+      if (active) setError(cause instanceof Error ? cause.message : String(cause))
+    })
+    return () => { active = false }
+  }, [refresh])
   useEffect(() => () => {
     queuedProductionIdRef.current = null
     if (productionRecoveryTimer.current != null) globalThis.clearTimeout(productionRecoveryTimer.current)
@@ -1020,7 +1086,7 @@ export default function ProductProductionStudio(props: {
 
   const consult = () => run(async () => {
     if (worldReleaseId == null) throw new Error('请先发布一个 WorldRelease。')
-    const result = await consultProductProductionStartV1({ scope: props.scope, worldReleaseId })
+    const result = await consultProductProductionStartV1({ scope: props.scope, worldReleaseId, productType })
     setSuggestions(result.suggestions)
     setSourceOptions(result.sourceOptions)
     setSelectionDefaults(result.selectionDefaults)
@@ -1273,6 +1339,17 @@ export default function ProductProductionStudio(props: {
     setMessage('内容修订已保存；原稿保留，新版本将通过原有校验后重新生成受影响内容。')
   }, '保存内容修订并继续')
 
+  const resumeWithOpenWorldRevision = (revision: import('../../lib/types').TextOpenWorldContentRevisionV1) => void run(async () => {
+    if (!details) throw new Error('缺少当前制作。')
+    await setProductProductionPausedV1({ scope: props.scope, production: details.production, build: details.build,
+      openWorldContentRevision: revision,
+      ...(unknownResultDisposition ? { pausedReservationDisposition: unknownResultDisposition } : {}),
+    })
+    setUnknownResultDisposition('')
+    await refresh(details.production.id)
+    setMessage('修订授权已保存；原稿和调用记录保留，任务将校验新稿并重建受影响的下游。')
+  }, '保存开放世界内容修订并继续')
+
   const stop = () => run(async () => {
     if (!details) throw new Error('缺少 Production。')
     queuedProductionIdRef.current = null
@@ -1331,6 +1408,18 @@ export default function ProductProductionStudio(props: {
     })
   }, '读取任务证据')
 
+  const inspectOriginalLocalRequest = (taskKey: string, runId: number, attempt: number) => run(async () => {
+    if (!details?.production.id || !details.build?.id) throw new Error('缺少当前制作任务。')
+    const { readProductProductionOriginalLocalReceiptV1 } = await import('../../lib/product-production/local-request')
+    const receipt = await readProductProductionOriginalLocalReceiptV1({ scope: props.scope,
+      productionId: details.production.id, buildId: details.build.id, taskKey, runId, attempt })
+    setTaskEvidence({ taskKey, text: receipt.status === 'unbound'
+      ? '原任务没有发送前保存的本机请求引用；保留原记录，不能事后按正文或 hash 关联。'
+      : `原请求只读查询：${receipt.status}（${receipt.source === 'owner' ? '已保存的作品原文' : '原本机回执'}）\n`
+        + '本次查询没有重新生成、结算或采用。部分或失败回答不能作为成功候选。\n'
+        + `请求：${receipt.requestId}\n模型：${receipt.model}\n真实用量：${JSON.stringify(receipt.usage)}\n\n${receipt.text}` })
+  }, '查询原本机请求')
+
   const preview = () => run(async () => {
     if (!details) throw new Error('缺少 Production。')
     const opened = await startProductProductionPreviewV1({
@@ -1347,7 +1436,9 @@ export default function ProductProductionStudio(props: {
       productionId: details.production.id,
     })
     setProgress(recovered)
-    setMessage('导入后的 Run、Artifact、媒资与 Build root 已在新本地作用域完成零调用复验。')
+    setMessage(recovered.terminal
+      ? '导入后的 Run、Artifact、媒资与 Build root 已在新本地作用域完成零调用复验。'
+      : '已完成任务的导入证明已在新本地作用域完成零调用复验；原阻塞、待执行任务和用量保留，可继续制作。')
     await refresh(details.production.id)
   }, '复验导入生产证明')
 
@@ -1633,22 +1724,52 @@ export default function ProductProductionStudio(props: {
     setMessage(`Visual QA 的 ${result.artifactKeys.length} 张退回图片已进入受治理返修：Build #${result.parentBuildNumber} 保持不可变，新 Build #${result.buildNumber} 将按逐图审查意见重生成并重跑审计、Visual QA 与装配。`)
   }, '批量修复 Visual QA')
 
+  const inspectRepairCandidates = (page = 0, reset = false) => run(async () => {
+    if (!details?.production.id || !details.build) throw new Error('缺少当前制作版本。')
+    if (!repairCandidateSections.length || !blockerTaskKey) throw new Error('此任务没有登记修订候选入口。')
+    const selectors = {
+      scope: props.scope, productionId: details.production.id,
+      expectedBuildId: details.build.id!, expectedControlEpoch: details.build.controlEpoch,
+      page, ...(!reset && currentRepairCandidatePage
+        ? { expectedContextSelectionHash: currentRepairCandidatePage.contextSelectionHash } : {}),
+    }
+    const result = blockerTaskKey === 'p8.catalog.items-rewards'
+      ? await readTextOpenWorldItemRewardRepairCandidatesV1({ ...selectors, section: activeRepairCandidateSection as ItemRewardRepairSectionV1 })
+      : blockerTaskKey === 'p8.catalog.crafting-economy'
+        ? await readTextOpenWorldCraftingEconomyRepairCandidatesV1({ ...selectors, section: activeRepairCandidateSection as CraftingEconomyRepairSectionV1 })
+        : blockerTaskKey === 'p8.catalog.npc-runtime'
+          ? await readTextOpenWorldNpcRuntimeRepairCandidatesV1({ ...selectors, section: activeRepairCandidateSection as NpcRuntimeRepairSectionV1 })
+          : blockerTaskKey === 'p9.scene-scripts'
+            ? await readTextOpenWorldSceneScriptsRepairCandidatesV1({ ...selectors, section: activeRepairCandidateSection as SceneScriptsRepairSectionV1 })
+            : await readTextOpenWorldQuestFinalizeRepairCandidatesV1({ ...selectors, section: activeRepairCandidateSection as QuestFinalizeRepairSectionV1 })
+    setRepairCandidatePage({ ...result, taskKey: blockerTaskKey })
+  }, '读取当前修订候选')
+
   const retryBlocker = () => run(async () => {
     if (!details) throw new Error('缺少 Production。')
     const productionId = details.production.id!
+    let boundDraft = authorDraftJson.trim() || undefined
+    if (boundDraft && repairCandidateSections.length) {
+      if (!currentRepairCandidatePage) throw new Error('请先读取当前修订候选。')
+      const draft: unknown = JSON.parse(boundDraft)
+      if (!draft || typeof draft !== 'object' || Array.isArray(draft)) throw new Error('作者修订稿必须是完整 JSON 对象。')
+      boundDraft = JSON.stringify({ ...draft, authorContextSelectionHash: currentRepairCandidatePage.contextSelectionHash })
+    }
     const unknownResultAccounting = await retryProductProductionBlockerV1({
       scope: props.scope,
       details,
       ...(recoveryPolicy?.repairNoteAllowed ? { repairNote } : {}),
-      ...(recoveryPolicy?.authorDraftAllowed ? { authorDraftJson: authorDraftJson.trim() || undefined } : {}),
-      ...(unknownResultDisposition ? { unknownResultDisposition } : {}),
+      ...(recoveryPolicy?.authorDraftAllowed ? { authorDraftJson: boundDraft } : {}),
+      ...(activeOriginalResponseSource ? { originalResponseSource: activeOriginalResponseSource } : unknownResultDisposition ? { unknownResultDisposition } : {}),
     })
+    setOriginalResponseDraftSource(null)
     setRepairNote('')
     setAuthorDraftJson('')
     setUnknownResultDisposition('')
     await refresh(productionId)
     setMessage('重试已由作者确认；未受影响的已完成产物会跨 epoch 复用，阻塞工件及其下游将按质量反馈定向重做。')
-    setMessage(unknownResultAccounting === 'provider-actual-charge'
+    setMessage(activeOriginalResponseSource ? '完整原回答已按你的修订提交；该任务不会重新生成，旧用量保持原核对记录。'
+      : unknownResultAccounting === 'provider-actual-charge'
       ? '重试已继续；提交处置时系统已收到供应商真实用量，因此按真实用量结算，未采用“确认未计费”的旧选择。'
       : unknownResultAccounting === 'author-charged-reservation-upper-bound'
         ? '重试已继续；旧请求已按冻结的预留上限结算。'
@@ -1656,6 +1777,20 @@ export default function ProductProductionStudio(props: {
           ? '重试已继续；旧请求已按作者核对结果记为未计费。'
           : '重试已由作者确认；已完成产物会跨 epoch 复用，不会重复调用。')
   }, '重试阻塞任务')
+
+  const selectChatSituation = (selection: {candidatesHash: string; sourceHash: string; selectedOptionKey: string}) => run(async () => {
+    if (!details) throw new Error('缺少制作记录')
+    await confirmChatSituationDecisionV1({scope: props.scope, details, ...selection})
+    await refresh(details.production.id!)
+    setMessage('初始情境已选定，正在继续制作。角色将从这个局面开始演绎。')
+  }, '选择初始情境')
+
+  const selectChatMedia = (decision: ChatMediaProductionDecisionV1) => run(async () => {
+    if (!details) throw new Error('缺少制作记录')
+    await confirmChatMediaDecisionV1({scope: props.scope, details, decision})
+    await refresh(details.production.id!)
+    setMessage('图片与用途已确认，正在组装可预览的聊天版本。')
+  }, '确认聊天图片')
 
   const resolveSourceDecision = (
     action: 'accept-product-private-expansion' | 'cancel',
@@ -1728,14 +1863,14 @@ export default function ProductProductionStudio(props: {
 
   const selectedSuggestion = suggestions.find(item => item.suggestionKey === suggestionKey) ?? null
   const isTextOpenWorldCreator = details?.brief?.briefKind === 'text-open-world-creator-v1'
-  const importedProofRecoveryRequired = !!details?.build
-    && ['preview-ready', 'release-ready', 'released'].includes(details.build.status)
-    && progress != null && !progress.terminal
+  const importedProofRecoveryRequired = !!details?.build && progress != null
+    && (progress.importedProofRecoveryRequired === true
+      || ['preview-ready', 'release-ready', 'released'].includes(details.build.status) && !progress.terminal)
   const canPause = details && ['producing', 'preview-ready'].includes(details.production.status)
     && details.build && !['released', 'cancelled', 'failed', 'archived', 'paused'].includes(details.build.status)
   const canRepairVisualContract = !!details && canRepairTextAdventureVisualContractV1(details)
   const canRepairRuntimeCopy = !!details && canRepairTextAdventureRuntimeCopyV1(details)
-  const canRetryBlocker = details?.production.status === 'producing'
+  const canRetryBlocker = !!details && ['producing', 'failed'].includes(details.production.status)
     && canRetryProductProductionBlockerV1(details)
     && (!canRepairVisualContract || !!details.build
       && (readProductProductionRecoveryTaskKeyV1(details.build.failureJson) === 'media.requirements'
@@ -1795,11 +1930,28 @@ export default function ProductProductionStudio(props: {
     ? buildFailureSummary(details.build.failureJson) : ''
   const blockerTaskKey = details?.build?.status === 'recovery-required'
     ? readProductProductionRecoveryTaskKeyV1(details.build.failureJson) : null
+  const itemRepair = blockerTaskKey === 'p8.catalog.items-rewards'
+  const economyRepair = blockerTaskKey === 'p8.catalog.crafting-economy'
+  const npcRepair = blockerTaskKey === 'p8.catalog.npc-runtime'
+  const sceneRepair = blockerTaskKey === 'p9.scene-scripts'
+  const repairCandidateSections: readonly RepairCandidateSectionV1[] = itemRepair ? ITEM_REWARD_REPAIR_SECTIONS_V1
+    : economyRepair ? CRAFTING_ECONOMY_REPAIR_SECTIONS_V1 : npcRepair ? NPC_RUNTIME_REPAIR_SECTIONS_V1
+      : sceneRepair ? SCENE_SCRIPTS_REPAIR_SECTIONS_V1 : blockerTaskKey === 'p8f.quest-finalize' ? QUEST_FINALIZE_REPAIR_SECTIONS_V1 : []
+  const repairCandidateTestId = itemRepair ? 'item-reward-repair-candidates' : economyRepair ? 'crafting-economy-repair-candidates'
+    : npcRepair ? 'npc-runtime-repair-candidates' : sceneRepair ? 'scene-scripts-repair-candidates' : 'quest-finalize-repair-candidates'
+  const repairCandidateLabel = itemRepair ? '物品奖励' : economyRepair ? '配方经济' : npcRepair ? '人物运行' : sceneRepair ? '场景文字' : '任务履约'
+  const activeRepairCandidateSection = repairCandidateSections.includes(repairCandidateSection)
+    ? repairCandidateSection : repairCandidateSections[0]!
+  const currentRepairCandidatePage = repairCandidatePage?.taskKey === blockerTaskKey
+    && repairCandidatePage?.buildId === details?.build?.id
+    && repairCandidatePage?.controlEpoch === details?.build?.controlEpoch ? repairCandidatePage : null
   const providerReservationFailureCode = details?.build
     && (details.build.status === 'recovery-required'
       || (details.production.status === 'paused' && details.build.status === 'paused'))
     ? buildFailureCode(details.build.failureJson) : ''
-  const unknownResultBlocked = providerReservationFailureCode === 'unknown-result'
+  const unknownResultBlocked = !!details?.build && providerReservationFailureCode !== ''
+    && providerReservationFailureCode !== 'provider-response-uncheckpointed'
+    && productProductionFailureNeedsProviderAccountingV1(details.build)
   const observedUncheckpointedResponseBlocked = providerReservationFailureCode === 'provider-response-uncheckpointed'
   const pausedProviderReservationBlocked = details?.production.status === 'paused'
     && providerReservationFailureCode === 'pause-provider-result-unknown'
@@ -1832,9 +1984,53 @@ export default function ProductProductionStudio(props: {
     }
     catch { return null }
   }, [details?.brief, details?.executionBrief])
+  const ttrpgBudgetRevisionView: Omit<import('../../lib/ttrpg/open-production-budget-revision').TtrpgOpenProductionBudgetOwnerV1, 'ledgerHash' | 'failureHash'> | null = details?.production.productType === 'ttrpg'
+    && selectedBrief?.ttrpgOpen && details.production.status === 'stopped' && details.build?.status === 'cancelled' && details.build.id && details.brief
+    && details.production.projectId === props.scope.projectId && details.production.worldId === props.scope.worldId && details.production.workId === props.scope.workId
+    ? { scope: props.scope, productionId: details.production.id!, buildId: details.build.id, buildNumber: details.build.buildNumber,
+      controlEpoch: details.build.controlEpoch, expectedStateRevision: details.production.stateRevision,
+      briefRevision: details.brief.revision, briefHash: details.brief.briefHash } : null
+  const ttrpgContentRevisionView: import('../../lib/ttrpg/open-production-content-revision-service').TtrpgOpenContentRevisionViewV1 | null = details?.production.productType === 'ttrpg'
+    && selectedBrief?.ttrpgOpen && details.production.status === 'paused' && details.build?.status === 'paused' && details.build.id
+    && ['building', 'recovery-required'].includes(details.build.resumeState ?? '') && details.build.releasedProductReleaseId == null
+    && details.production.projectId === props.scope.projectId && details.production.worldId === props.scope.worldId && details.production.workId === props.scope.workId
+    ? { scope: props.scope, productionId: details.production.id!, buildId: details.build.id,
+      controlEpoch: details.build.controlEpoch, expectedStateRevision: details.production.stateRevision, planHash: details.build.planHash } : null
+  const ttrpgOriginalOwner: import('../../lib/ttrpg/open-original-response-review-service').TtrpgOpenOriginalResponseOwnerV1 | null = details?.production.productType === 'ttrpg' && selectedBrief?.ttrpgOpen
+    && details.production.projectId === props.scope.projectId && details.production.worldId === props.scope.worldId && details.production.workId === props.scope.workId
+    && details.build?.id && canRetryBlocker && recoveryPolicy?.authorDraftAllowed && blockerTaskKey && supportsProductProductionLocalRequestV1(blockerTaskKey)
+    && progress?.buildId === details.build.id && progress.controlEpoch === details.build.controlEpoch && progress.planHash === details.build.planHash
+    && recoveryDraftTask?.runId && recoveryDraftTask.attempt > 0
+    ? { scope: props.scope, productionId: details.production.id!, buildId: details.build.id, controlEpoch: details.build.controlEpoch,
+      planHash: details.build.planHash, taskKey: blockerTaskKey, runId: recoveryDraftTask.runId, attempt: recoveryDraftTask.attempt } : null
+  const originalOwnerKey = ttrpgOriginalOwner ? JSON.stringify(ttrpgOriginalOwner) : ''
+  const originalBooking = ttrpgOriginalOwner && details ? ttrpgOpenOriginalBookingSummaryV1(details, ttrpgOriginalOwner) : null
+  const activeOriginalResponseSource = originalResponseDraftSource && originalResponseDraftSource.ownerKey === originalOwnerKey && authorDraftJson.trim()
+    ? originalResponseDraftSource.source : null
+  const originalSourceDraftReady = !!activeOriginalResponseSource && originalBooking?.blocked === false
+    && originalBooking.captureRunId === activeOriginalResponseSource.captureRunId && originalBooking.captureReceiptHash === activeOriginalResponseSource.captureReceiptHash
+  const originalHandoffBusy = originalOwnerKey !== '' && originalHandoffBusyOwner === originalOwnerKey
+  const ttrpgReviewOwner: import('../../lib/ttrpg/open-production-review-service').TtrpgOpenProductionReviewOwnerV1 | null = details?.production.productType === 'ttrpg' && selectedBrief?.ttrpgOpen
+    && details.build?.id && canRetryBlocker && recoveryPolicy?.authorDraftAllowed && (!providerReservationBlocked || originalSourceDraftReady)
+    && (blockerTaskKey === 'ttrpg.open.source-facts' || blockerTaskKey === 'ttrpg.open.rule-system')
+    && progress?.buildId === details.build.id && progress.controlEpoch === details.build.controlEpoch
+    && recoveryDraftTask?.runId && recoveryDraftTask.attempt > 0
+    ? { scope: props.scope, productionId: details.production.id!, buildId: details.build.id,
+      controlEpoch: details.build.controlEpoch, planHash: details.build.planHash, taskKey: blockerTaskKey,
+      runId: recoveryDraftTask.runId, attempt: recoveryDraftTask.attempt } : null
   const modelBudgetExhausted = !!progress && !!selectedBrief
     && progress.budget.usage.modelCalls >= selectedBrief.productionBudget.maximumModelCalls
   const canRecoverProductionBudget = !!details && canRecoverTextAdventureProductionBudgetV1(details)
+  const canRecoverCreatorBudget = isTextOpenWorldCreator && details?.production.status === 'producing'
+    && details?.build?.status === 'recovery-required'
+    && isTextOpenWorldBudgetRecoveryFailureV1(details.build.failureJson)
+  // Any authoritative budget refusal suppresses another model request, even
+  // when its historical detail cannot prove eligibility for a child Build.
+  const creatorModelBudgetBlocked = isTextOpenWorldCreator
+    && (providerReservationFailureCode === 'task-budget-exceeded' || canRecoverCreatorBudget)
+  const canSubmitCreatorDraftWithoutModel = isTextOpenWorldCreator
+    && recoveryPolicy?.authorDraftAllowed === true && authorDraftJson.trim().length > 0
+    && (modelBudgetExhausted || creatorModelBudgetBlocked)
   const commercialPerformanceRequired = selectedBrief?.qualityProfile === 'commercial-candidate'
   const commercialTextAdventureImageMinimum = selectedBrief?.qualityProfile === 'commercial-candidate'
     && selectedBrief.intent.productType === 'text-adventure' && selectedBrief.textAdventure
@@ -1922,8 +2118,12 @@ export default function ProductProductionStudio(props: {
   const capabilityReadiness = inspectProductProductionCapabilityReadinessV1({
     projectId: props.scope.projectId,
   })
-  const requestedCommercialImageReady = qualityProfile !== 'commercial-candidate'
-    || !['avg', 'ttrpg', 'ai-town', 'text-adventure'].includes(productType)
+  const chatVisualAvailability = (() => {
+    try {return {count: chatVisualMediaProfileV1(props.chatSetup?.settings, 'key-scenes').imageCount, issue: ''}}
+    catch (cause) {return {count: 0, issue: cause instanceof Error ? cause.message.replace(/^\[chat-visual-intent\] /, '') : String(cause)}}
+  })()
+  const requestedImageReady = (qualityProfile !== 'commercial-candidate' && productType !== 'character-interaction')
+    || !['avg', 'ttrpg', 'ai-town', 'text-adventure', 'character-interaction'].includes(productType)
     || (productType === 'ttrpg' ? ttrpgWizard?.maximumGeneratedAssets === 0 : visualLevel === 'none')
     || capabilityReadiness.image.ready || capabilityReadiness.mediaRelayReady
   const requestedCommercialAudioReady = qualityProfile !== 'commercial-candidate'
@@ -1978,9 +2178,9 @@ export default function ProductProductionStudio(props: {
         <section className="grid gap-4 rounded border border-border bg-bg-elevated p-5 md:grid-cols-2">
           <label className="grid gap-2 text-[10px] text-text-muted">冻结 WorldRelease<select aria-label="冻结 WorldRelease" value={worldReleaseId ?? ''} onChange={event => { setWorldReleaseId(Number(event.target.value) || null); setSuggestions([]); setSourceOptions(null); setSelectionDefaults({}); setSourceSelection(null); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary">{releases.map(release => <option key={release.reference.releaseUid} value={release.reference.localReleaseRecordId}>v{release.reference.releaseVersion} · {release.label}</option>)}</select></label>
           <label className="grid gap-2 text-[10px] text-text-muted">产品形态<select aria-label="产品形态" disabled={props.allowedProducts.length === 1} value={productType} onChange={event => { const next = event.target.value as SupportedProduct; if (!props.allowedProducts.includes(next)) return; const nextScale = next === 'text-adventure' ? 'short-arc' : 'scene'; setProductType(next); setScale(nextScale); setTextAdventureWizard(createDefaultTextAdventureProductionWizardValueV1(nextScale)); props.onProductSelected?.(next); setVisualLevel(next === 'avg' || next === 'ttrpg' || next === 'ai-town' || next === 'text-adventure' ? 'key-scenes' : 'none'); setAudioLevel(next === 'avg' ? 'music-sfx' : 'none'); setConfirmTtrpgDefaultMappings(false); void loadTtrpgProductionWizardV2().then(module => setTtrpgWizard(module.createDefaultTtrpgProductionWizardValueV2())); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary disabled:opacity-70">{props.allowedProducts.map(kind => <option key={kind} value={kind}>{PRODUCT_LABELS[kind]}</option>)}</select><span>{productType === 'ttrpg' ? '跑团使用自己的需求适配器、规则、战役、媒资和运行协议；世界事实只从冻结 WorldRelease 渐进读取。' : productType === 'text-adventure' ? '文字冒险拥有独立的叙事、规则、媒资、Build、Release 与运行状态；只读引用冻结 WorldRelease。' : '每种产品使用自己的需求适配器和生产图，共享中立世界协议但不共享业务表。'}</span></label>
-          <label className="grid gap-2 text-[10px] text-text-muted">制作质量<select value={qualityProfile} onChange={event => { setQualityProfile(event.target.value as ProductProductionBriefV3['qualityProfile']); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary"><option value="prototype">{productType === 'character-interaction' ? '原型 · 纯文字' : '原型 · 内置占位素材'}</option><option value="internal">{productType === 'character-interaction' ? '内部评审' : '内部评审 · Agnes 就绪则生成图片'}</option><option value="commercial-candidate">{productType === 'character-interaction' ? '商业候选 · 完成质量门' : '商业候选 · 生成正式图片并完成质量门'}</option></select><span>始终复用“设置”中的全局 AI 配置。Agnes 文字与图片共用同一个 API Key，图片自动切换到专用模型，不会要求你再次填写。</span></label>
+          <label className="grid gap-2 text-[10px] text-text-muted">制作质量<select value={qualityProfile} onChange={event => { setQualityProfile(event.target.value as ProductProductionBriefV3['qualityProfile']); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary"><option value="prototype">{productType === 'character-interaction' ? '技术预览 · 使用真实图片' : '原型 · 内置占位素材'}</option><option value="internal">{productType === 'character-interaction' ? '内部评审' : '内部评审 · Agnes 就绪则生成图片'}</option><option value="commercial-candidate">{productType === 'character-interaction' ? '商业候选 · 完成质量门' : '商业候选 · 生成正式图片并完成质量门'}</option></select><span>文字复用设置中的全局配置或任务分流；图片复用全局 Agnes 配置并自动使用专用图片模型，无需重复填写 API Key。</span></label>
           <label className="grid gap-2 text-[10px] text-text-muted">{productType === 'character-interaction' ? '作品名称' : '游戏标题'}<input value={title} onChange={event => setTitle(event.target.value)} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary" placeholder="会谈后可修改" /></label>
-          <div className={`rounded border p-3 text-[10px] leading-5 md:col-span-2 ${capabilityReadiness.text.ready && requestedCommercialImageReady && requestedCommercialAudioReady ? 'border-success/30 bg-success/5 text-success' : 'border-error/30 bg-error/5 text-error'}`} data-testid="product-production-capability-readiness"><strong className="block text-xs">{capabilityReadiness.text.ready ? '文本生成能力已就绪' : '文本生成能力未就绪'}</strong><span>{capabilityReadiness.text.ready ? `将直接复用 ${capabilityReadiness.text.provider} / ${capabilityReadiness.text.model}，无需再次填写 API Key。` : capabilityReadiness.text.issue}</span>{['avg', 'ttrpg', 'ai-town', 'text-adventure'].includes(productType) && (productType === 'ttrpg' ? (ttrpgWizard?.maximumGeneratedAssets ?? 0) > 0 : visualLevel !== 'none') && <span className="block">{productType === 'ai-town' && qualityProfile === 'internal' && capabilityReadiness.authoredImagePackReady ? `原创媒资包已就绪：${capabilityReadiness.authoredImagePackManifestPath}；生产时逐文件校验 SHA-256、MIME 与尺寸。` : capabilityReadiness.image.ready ? `图片能力已就绪：复用同一 Agnes Key，自动调用 ${capabilityReadiness.image.model}。` : capabilityReadiness.mediaRelayReady ? `Agnes 图片不可用，将使用已绑定媒体中继${capabilityReadiness.mediaRelayOrigin ? `：${capabilityReadiness.mediaRelayOrigin}` : ''}。` : capabilityReadiness.image.issue}</span>}{(productType === 'avg' || productType === 'ai-town') && audioLevel !== 'none' && <span className="block">{capabilityReadiness.mediaRelayReady ? `音乐与音效能力已绑定${capabilityReadiness.mediaRelayOrigin ? `：${capabilityReadiness.mediaRelayOrigin}` : ''}。` : 'Agnes 当前公开接口未提供独立音乐/SFX 生成；选择商业音频时仍需绑定音频能力，或改为静音。'}</span>}</div>
+          <div className={`rounded border p-3 text-[10px] leading-5 md:col-span-2 ${capabilityReadiness.text.ready && requestedImageReady && requestedCommercialAudioReady ? 'border-success/30 bg-success/5 text-success' : 'border-error/30 bg-error/5 text-error'}`} data-testid="product-production-capability-readiness"><strong className="block text-xs">{capabilityReadiness.text.ready ? '文本生成能力已就绪' : '文本生成能力未就绪'}</strong><span>{capabilityReadiness.text.ready ? `将直接复用 ${capabilityReadiness.text.provider} / ${capabilityReadiness.text.model}，无需再次填写 API Key。` : capabilityReadiness.text.issue}</span>{['avg', 'ttrpg', 'ai-town', 'text-adventure', 'character-interaction'].includes(productType) && (productType === 'ttrpg' ? (ttrpgWizard?.maximumGeneratedAssets ?? 0) > 0 : visualLevel !== 'none') && <span className="block">{productType === 'ai-town' && qualityProfile === 'internal' && capabilityReadiness.authoredImagePackReady ? `原创媒资包已就绪：${capabilityReadiness.authoredImagePackManifestPath}；生产时逐文件校验 SHA-256、MIME 与尺寸。` : capabilityReadiness.image.ready ? `图片能力已就绪：复用同一 Agnes Key，自动调用 ${capabilityReadiness.image.model}。` : capabilityReadiness.mediaRelayReady ? `Agnes 图片不可用，将使用已绑定媒体中继${capabilityReadiness.mediaRelayOrigin ? `：${capabilityReadiness.mediaRelayOrigin}` : ''}。` : capabilityReadiness.image.issue}</span>}{(productType === 'avg' || productType === 'ai-town') && audioLevel !== 'none' && <span className="block">{capabilityReadiness.mediaRelayReady ? `音乐与音效能力已绑定${capabilityReadiness.mediaRelayOrigin ? `：${capabilityReadiness.mediaRelayOrigin}` : ''}。` : 'Agnes 当前公开接口未提供独立音乐/SFX 生成；选择商业音频时仍需绑定音频能力，或改为静音。'}</span>}</div>
           <label className="grid gap-2 text-[10px] text-text-muted">玩家身份 / 主角<input value={playerRole} maxLength={300} onChange={event => { setPlayerRole(event.target.value); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary" placeholder="例如：扮演港口守灯人；或与某角色同行" /></label>
           <label className="grid gap-2 text-[10px] text-text-muted">游戏规模<select aria-label="游戏规模" value={scale} onChange={event => { const nextScale = event.target.value as ProductProductionScaleV1['scope']; setScale(nextScale); if (productType === 'text-adventure') setTextAdventureWizard(current => ({ ...current, targetPlayMinutes: nextScale === 'chapter' ? 60 : nextScale === 'short-arc' ? 45 : 20 })); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary"><option value="scene">单场景 · 约 20 分钟</option><option value="short-arc">短篇支线</option><option value="chapter">完整章节</option>{productType !== 'text-adventure' && <><option value="multi-chapter">多章节</option><option value="campaign">长线战役</option></>}</select></label>
           <label className="grid gap-2 text-[10px] text-text-muted md:col-span-2">你想玩的第一幕与核心目标<textarea value={openingSituation} maxLength={2000} rows={4} onChange={event => { setOpeningSituation(event.target.value); setDraft(null) }} className="rounded border border-border bg-bg-base p-3 text-xs text-text-primary" placeholder="例如：主角在港口封锁前收到失踪导师的信号，必须决定先救人还是公开真相。" /><span>这是后续内容、美术和音频拆分共同遵守的用户目标，不会被 Agent 自行替换。</span></label>
@@ -2003,9 +2203,9 @@ export default function ProductProductionStudio(props: {
             <div className="flex flex-wrap gap-3 text-[10px] text-text-muted md:col-span-3"><span>冻结媒资意图：</span>{([['portraits', '居民肖像'], ['expressions', '表情差分'], ['locationCards', '地点卡'], ['ambientAudio', '环境音']] as const).map(([key, label]) => <label key={key} className="flex items-center gap-1"><input type="checkbox" checked={aiTownSettings[key]} onChange={event => { setAiTownSettings(current => ({ ...current, [key]: event.target.checked })); setDraft(null) }} />{label}</label>)}<span className="text-accent">语义地图固定启用</span></div>
             <p className="text-[9px] leading-5 text-text-muted md:col-span-3">重大死亡/永久离开/婚育/设施或世界规则变更固定需要作者确认；私密心智固定不可供玩家读取，这两项不能在界面放宽。</p>
           </fieldset>}
-          <label className="grid gap-2 text-[10px] text-text-muted">视觉目标<select disabled={!['avg', 'ttrpg', 'ai-town', 'text-adventure'].includes(productType)} value={visualLevel} onChange={event => { setVisualLevel(event.target.value as 'none' | 'key-scenes' | 'illustrated'); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary disabled:opacity-50"><option value="none">纯文字</option><option value="key-scenes">关键场景 + 角色素材</option>{productType === 'text-adventure' && <option value="illustrated">丰富插图</option>}</select><span>{productType === 'avg' || productType === 'ttrpg' || productType === 'ai-town' || productType === 'text-adventure' ? qualityProfile === 'prototype' ? '内容会自主拆分美术需求；原型档使用明确标记的安全占位素材。' : '内容拆分需求后，直接复用全局图片能力并行制作并接入玩家界面。' : '当前产品以专用文字舞台为主。'}</span></label>
-          <label className="grid gap-2 text-[10px] text-text-muted">音频目标<select disabled={productType !== 'avg' && productType !== 'ai-town'} value={audioLevel} onChange={event => { setAudioLevel(event.target.value as 'none' | 'music-sfx'); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary disabled:opacity-50"><option value="none">静音</option><option value="music-sfx">{productType === 'ai-town' ? '小镇环境音' : '主题音 + 关键音效'}</option></select><span>{audioLevel === 'music-sfx' ? qualityProfile === 'commercial-candidate' ? '音乐与音效需要独立音频能力，并和内容、美术并行，完成后自动接入 Cue。' : '音频与内容、美术并行；未绑定外部音频时使用明确标记的程序化 WAV。' : '不制作音频，产品仍可完整游玩。'}</span></label>
-          {productType === 'ttrpg' && ttrpgWizard && <><TtrpgProductionWizard scope={props.scope} value={ttrpgWizard} sourceOptions={sourceOptions} sourceSelection={sourceSelection} onChange={next => { setTtrpgWizard(next); setConfirmTtrpgDefaultMappings(next.confirmAll); setDraft(null) }} /><label className="flex items-start gap-2 rounded border border-border bg-bg-base p-3 text-[10px] leading-5 text-text-muted md:col-span-2"><input type="checkbox" checked={confirmTtrpgDefaultMappings} onChange={event => { setConfirmTtrpgDefaultMappings(event.target.checked); setTtrpgWizard(current => current ? ({ ...current, confirmAll: event.target.checked }) : current); setDraft(null) }} className="mt-1" /><span><strong className="block text-xs text-text-primary">确认第一方规则默认映射</strong>同时确认九步向导末页列出的世界边界、规则许可、AI 身份披露和媒资权利；未确认时 Brief 保持阻塞。</span></label></>}
+          <label className="grid gap-2 text-[10px] text-text-muted">视觉目标<select aria-label="视觉目标" disabled={!['avg', 'ttrpg', 'ai-town', 'text-adventure'].includes(productType) && !(productType === 'character-interaction' && chatVisualAvailability.count > 0)} value={visualLevel} onChange={event => { setVisualLevel(event.target.value as 'none' | 'key-scenes' | 'illustrated'); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary disabled:opacity-50"><option value="none">纯文字</option><option value="key-scenes">{productType === 'character-interaction' ? `角色与开场配图 · ${chatVisualAvailability.count} 张` : '关键场景 + 角色素材'}</option>{productType === 'text-adventure' && <option value="illustrated">丰富插图</option>}</select><span>{productType === 'character-interaction' ? (chatVisualAvailability.issue || '依据已确认的世界、角色和选定情境统一设计，再生成真实人物与场景图片。制作时保留设计依据；生成后检查原图并确认发布。') : productType === 'avg' || productType === 'ttrpg' || productType === 'ai-town' || productType === 'text-adventure' ? qualityProfile === 'prototype' ? '内容会自主拆分美术需求；原型档使用明确标记的安全占位素材。' : '内容拆分需求后，直接复用全局图片能力并行制作并接入玩家界面。' : '当前产品以专用文字舞台为主。'}</span></label>
+          <label className="grid gap-2 text-[10px] text-text-muted">音频目标<select disabled={productType !== 'avg' && productType !== 'ai-town'} value={audioLevel} onChange={event => { setAudioLevel(event.target.value as 'none' | 'music-sfx'); setDraft(null) }} className="rounded border border-border bg-bg-base p-2 text-xs text-text-primary disabled:opacity-50"><option value="none">静音</option><option value="music-sfx">{productType === 'ai-town' ? '小镇环境音' : '主题音 + 关键音效'}</option></select><span>{productType === 'character-interaction' ? '聊天页支持设备语音输入和角色朗读，无需在这里制作音频文件；可用音色由浏览器和设备提供。' : audioLevel === 'music-sfx' ? qualityProfile === 'commercial-candidate' ? '音乐与音效需要独立音频能力，并和内容、美术并行，完成后自动接入 Cue。' : '音频与内容、美术并行；未绑定外部音频时使用明确标记的程序化 WAV。' : '不制作音频，产品仍可完整游玩。'}</span></label>
+          {productType === 'ttrpg' && ttrpgWizard && <Suspense fallback={<p role="status" className="text-xs text-text-muted md:col-span-2">正在载入跑团制作向导…</p>}><TtrpgProductionWizard scope={props.scope} value={ttrpgWizard} sourceOptions={sourceOptions} sourceSelection={sourceSelection} onChange={next => { setTtrpgWizard(next); setConfirmTtrpgDefaultMappings(next.confirmAll); setDraft(null) }} /><label className="flex items-start gap-2 rounded border border-border bg-bg-base p-3 text-[10px] leading-5 text-text-muted md:col-span-2"><input type="checkbox" checked={confirmTtrpgDefaultMappings} onChange={event => { setConfirmTtrpgDefaultMappings(event.target.checked); setTtrpgWizard(current => current ? ({ ...current, confirmAll: event.target.checked }) : current); setDraft(null) }} className="mt-1" /><span><strong className="block text-xs text-text-primary">确认第一方规则默认映射</strong>同时确认九步向导末页列出的世界边界、规则许可、AI 身份披露和媒资权利；未确认时 Brief 保持阻塞。</span></label></Suspense>}
           {productType === 'text-adventure' && <TextAdventureProductionWizard value={textAdventureWizard} onChange={next => { setTextAdventureWizard(next); setDraft(null) }} />}
           <details className="rounded border border-border bg-bg-base p-3 text-[10px] text-text-muted md:col-span-2"><summary className="cursor-pointer text-xs text-text-primary">内容边界与世界约束（可选）</summary><div className="mt-3 grid gap-3 md:grid-cols-3"><label className="grid gap-1">必须保留的事实<textarea rows={3} value={requiredFactsText} onChange={event => { setRequiredFactsText(event.target.value); setDraft(null) }} placeholder="每行一项" className="rounded border border-border bg-bg-elevated p-2" /></label><label className="grid gap-1">禁止改变<textarea rows={3} value={forbiddenChangesText} onChange={event => { setForbiddenChangesText(event.target.value); setDraft(null) }} placeholder="每行一项" className="rounded border border-border bg-bg-elevated p-2" /></label><label className="grid gap-1">内容边界<textarea rows={3} value={contentBoundariesText} onChange={event => { setContentBoundariesText(event.target.value); setDraft(null) }} placeholder="每行一项" className="rounded border border-border bg-bg-elevated p-2" /></label></div></details>
           <div className="flex flex-wrap gap-2 md:col-span-2"><button disabled={busy || worldReleaseId == null} onClick={consult} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><Sparkles className="h-3.5 w-3.5" />分析可玩起点</button>{suggestionKey && <button disabled={busy || !openingSituation.trim() || !playerRole.trim()} onClick={compileBrief} className="flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-4 py-2 text-xs text-accent disabled:opacity-40"><FileCheck2 className="h-3.5 w-3.5" />生成严格 Brief</button>}{draft && <button disabled={busy || !title.trim()} onClick={saveBrief} className="flex items-center gap-2 rounded border border-success/40 bg-success/10 px-4 py-2 text-xs text-success"><ShieldCheck className="h-3.5 w-3.5" />保存 Brief revision</button>}</div>
@@ -2089,9 +2289,20 @@ export default function ProductProductionStudio(props: {
         <section className="mt-5 rounded border border-border bg-bg-elevated p-5">
           <h2 className="text-sm font-semibold">下一步</h2>
           <p className="mt-2 text-[10px] leading-5 text-text-muted">一次作者授权会启动整套自动制作；正式文本任务直接复用“设置”里的全局 AI 配置，不另收 API Key。每一步都有 CAS、scope、epoch 和 hash 复验。</p>
+          {isTextOpenWorldCreator && props.onReviseCreatorBrief
+            && canReviseStoppedTextOpenWorldCreatorBriefV1(details.production, details.build)
+            && <div className="mt-3 rounded border border-border bg-bg-base p-3 text-xs" data-testid="text-open-world-creator-brief-revision">
+              <p className="leading-5 text-text-muted">旧 Build、原始模型产物和用量已保留。修订简报并重新确认后，将创建后继 Build；旧版本不会被覆盖。</p>
+              <button disabled={busy} onClick={() => void run(async () => {
+                await props.onReviseCreatorBrief!(details.production.id!)
+              }, '修订制作简报')} className="mt-3 rounded bg-accent px-4 py-2 text-white disabled:opacity-40">修订制作简报</button>
+            </div>}
           {isTextOpenWorldCreator && details.build && ['preview-ready', 'release-ready', 'released'].includes(details.build.status) && <p className="mt-3 rounded border border-border bg-bg-base p-3 text-[10px] leading-5 text-text-muted" data-testid="text-open-world-creator-release-stage-notice">{details.build.status === 'released' ? '当前 Release 保持不可变。可在下方修改受治理内容并创建子 Build；重新完成媒资、质量与作者确认后发布新版本。' : 'Creator Build 按“产物检查 → 媒资 → 灰盒与质量 → 作者最终确认 → 不可变 Release”顺序收口。'}</p>}
           {importedProofRecoveryRequired && <div className="mt-3 rounded border border-warning/40 bg-warning/5 p-3 text-[10px] leading-5 text-text-muted" data-testid="product-production-import-proof-recovery"><strong className="block text-text-main">导入内容等待本地证明复验</strong><span>备份中的内容与媒资已经恢复；本地 ID 已重绑，复验不会调用模型或媒资供应商。</span></div>}
           {details.production.status === 'brief-ready' && authorizationReadiness && !authorizationReadiness.ready && <div className="mt-3 rounded border border-error/30 bg-error/5 p-3 text-[10px] text-error" data-testid="product-production-authorization-blocker"><strong className="block">能力未绑定，尚未创建 Build</strong><span className="mt-1 block">{authorizationReadiness.blockerMessages.join('；')}</span></div>}
+          {isChatSituationDecisionBlockerV1(details) && <SituationSelection artifacts={reviewArtifacts} planJson={details.build!.planJson} disabled={busy || productionRunning} onSelect={selectChatSituation}/>}
+          {isChatMediaDecisionBlockerV1(details) && <MediaSelection scope={props.scope} build={details.build!} disabled={busy || productionRunning} onConfirm={selectChatMedia}/>}
+
           {sourceDecisionBlocker && <div className="mt-3 rounded border border-accent/40 bg-accent/5 p-4 text-[10px] text-text-primary" data-testid="text-adventure-source-decision-blocker"><strong className="block text-xs">来源编辑已完成审查，等待作者决策</strong>{sourceDecision?.decision === 'ready-with-private-additions' ? <><p className="mt-2 leading-5 text-text-muted">冻结世界资料可以支撑主线，但需要以下内容仅作为本游戏私域事实补充。接受后不会回写或改变 WorldRelease。</p><ul className="mt-2 grid gap-2">{sourceDecision.privateAdditions.map(item => <li key={item.key} className="rounded bg-bg-base p-2"><strong>{item.title}</strong><span className="ml-2 text-text-muted">{item.rationale}</span></li>)}</ul></> : <><p className="mt-2 leading-5 text-error">来源中存在阻断缺口或事实冲突，系统禁止用 AI 私自补写来绕过。</p><ul className="mt-2 grid gap-1 text-text-muted">{sourceDecision?.gaps.map(gap => <li key={gap}>· {gap}</li>)}</ul></>}<p className="mt-3 text-text-muted">若不接受，请取消本 Build，返回来源选择或缩小产品范围后重新授权；系统不会原地改写已授权 Brief。</p></div>}
           {mediaAnchorBlocker && <div className="mt-3 rounded border border-accent/40 bg-accent/5 p-4 text-[10px] text-text-primary" data-testid="text-adventure-media-anchor-blocker">
             <strong className="block text-xs">美术总监已完成视觉圣经，等待作者确认角色锚点</strong>
@@ -2122,14 +2333,56 @@ export default function ProductProductionStudio(props: {
               <span className="rounded bg-bg-base p-2">旧 Build：<strong>保留，不原地改写</strong></span>
             </div>}
           </div>}
+          {ttrpgBudgetRevisionView && <Suspense fallback={<p>正在打开预算修订…</p>}><TtrpgOpenProductionBudgetRevision key={JSON.stringify(ttrpgBudgetRevisionView)}
+            view={ttrpgBudgetRevisionView} disabled={busy || productionRunning}
+            onBusy={value => setTtrpgBudgetBusyOwner(previous => value ? ttrpgBudgetBusyKey : previous === ttrpgBudgetBusyKey ? null : previous)}
+            onSaved={result => { setDetails(result.details); setProgress(null);
+              setProductions(previous => previous.map(row => row.id === result.details.production.id ? result.details.production : row));
+              setMessage('新的制作方案已保存，旧轮次与记录保留。核对上限后，请单独授权开始新一轮制作。') }}
+          /></Suspense>}
+          {ttrpgContentRevisionView && <Suspense fallback={<p>正在打开原稿返修…</p>}><TtrpgOpenContentRevision key={JSON.stringify(ttrpgContentRevisionView)}
+            view={ttrpgContentRevisionView} disabled={busy || productionRunning}
+            onBusy={value => setTtrpgContentBusyOwner(previous => value ? ttrpgBudgetBusyKey : previous === ttrpgBudgetBusyKey ? null : previous)}
+            onAccounted={result => { setDetails(result.details); setProgress(null);
+              setProductions(previous => previous.map(row => row.id === result.details.production.id ? result.details.production : row));
+              setMessage('已关闭证据确认未发送的旧记录，原始凭据与暂停状态保留。请重新载入原稿，再明确返修。') }}
+            onSubmitted={result => { setDetails(result.details); setProgress(null);
+              setProductions(previous => previous.map(row => row.id === result.details.production.id ? result.details.production : row));
+              setMessage('返修已记录，原稿与历史用量保留；将按原预算继续受影响的制作步骤。') }}
+          /></Suspense>}
+          {canRetryBlocker && selectedBrief?.ttrpgOpen && <p className="my-3 text-xs text-text-muted">需要返修已采用的上游原稿时，先暂停当前轮次，再使用“返修已采用原稿”。</p>}
+          {canRetryBlocker && selectedBrief?.ttrpgOpen && <details className="mt-3 rounded border border-border p-3 text-xs text-text-muted" data-testid="ttrpg-open-budget-revision-help">
+            <summary className="cursor-pointer">需要调整下一轮制作上限</summary>
+            <p className="mt-2 leading-5">如需调整冻结的制作预算，请先使用本页“停止”保留旧轮次，再修订并保存新方案。旧调用的费用和未确认用量继续留在原记录中；新方案不会结算旧调用。</p>
+          </details>}
           {canRetryBlocker && <div className="mt-3 rounded border border-error/30 bg-error/5 p-3 text-[10px] text-error"><strong className="block">自动制作停在可恢复边界</strong><span className="mt-1 block">{blockerSummary || '执行能力返回失败；可检查全局 AI 配置后重试。'}</span></div>}
           {canRetryBlocker && recoveryPolicy?.repairNoteAllowed && <label className="mt-3 block text-xs text-text-muted">本次修复要求（可选）<textarea aria-label="本次修复要求" maxLength={4000} value={repairNote} onChange={event => setRepairNote(event.target.value)} className="mt-2 block min-h-24 w-full rounded border border-border bg-bg-base p-3 text-text-main" placeholder="指出需要修正的内容；仍需遵守已确认的世界、规则和安全边界。" /></label>}
-          {canRetryBlocker && recoveryPolicy?.authorDraftAllowed && <details className="mt-3 text-xs text-text-muted"><summary className="cursor-pointer">直接修订任务草稿（高级）</summary><p className="my-2">填写完整 JSON 将跳过本次模型重写，按原任务规则校验；保留原始模型证据，记录为作者修订。只适用于失败的文本任务。</p><textarea aria-label="作者修订的完整任务 JSON" maxLength={120000} value={authorDraftJson} onChange={event => setAuthorDraftJson(event.target.value)} className="min-h-60 w-full rounded border border-border bg-bg-base p-3 font-mono text-text-main" /></details>}
-          {providerReservationBlocked && <fieldset className="mt-3 rounded border border-error/30 bg-error/5 p-3 text-xs text-text-muted" data-testid="product-production-unknown-result-disposition"><legend className="px-1 font-medium text-error">先结算供应商请求</legend><p className="mb-2 text-[10px] leading-5">{pausedProviderReservationBlocked ? '暂停时仍有供应商请求在途。恢复前必须把冻结的每个 Run、attempt 和 epoch 一起封账；本次选择应用于全部在途请求。' : observedUncheckpointedResponseBlocked ? '系统已持久化供应商响应证据，但完整用量未能回传。为避免少记账，只能按该 attempt 的冻结预留上限封账。' : '系统不会猜测这次请求是否扣费。请选择与你核对结果一致的处置，选择会与失败 Run、attempt 和 epoch 一起冻结。'}</p>{!observedUncheckpointedResponseBlocked && <label className="mr-4 inline-flex items-center gap-2"><input type="radio" name="unknown-result-disposition" checked={unknownResultDisposition === 'confirmed-not-charged'} onChange={() => setUnknownResultDisposition('confirmed-not-charged')} />已确认未计费</label>}<label className="inline-flex items-center gap-2"><input type="radio" name="unknown-result-disposition" checked={unknownResultDisposition === 'charge-reservation-upper-bound'} onChange={() => setUnknownResultDisposition('charge-reservation-upper-bound')} />{pausedProviderReservationBlocked ? '全部按冻结预留上限封账' : observedUncheckpointedResponseBlocked ? '按冻结预留上限封账并重试' : '无法确认，按预留上限记账'}</label></fieldset>}
+          {ttrpgOriginalOwner && (providerReservationBlocked || originalBooking) && <Suspense fallback={<p>正在打开原回答恢复…</p>}><TtrpgOpenOriginalResponseHandoff key={originalOwnerKey}
+            owner={ttrpgOriginalOwner} expectedStateRevision={details.production.stateRevision} booking={originalBooking}
+            value={authorDraftJson} disabled={busy || productionRunning}
+            onBusy={value => setOriginalHandoffBusyOwner(previous => value ? originalOwnerKey : previous === originalOwnerKey ? null : previous)}
+            onBooked={result => { setDetails(result.details); setProgress(result.progress); setUnknownResultDisposition('');
+              setProductions(previous => previous.map(row => row.id === result.details.production.id ? result.details.production : row)) }}
+            onDraft={(value, source) => { setAuthorDraftJson(value); setOriginalResponseDraftSource({ ownerKey: originalOwnerKey, source }); setUnknownResultDisposition('') }}
+          /></Suspense>}
+          {ttrpgReviewOwner && selectedBrief?.ttrpgOpen && <Suspense fallback={<p>正在打开待审稿…</p>}><TtrpgOpenProductionReview key={JSON.stringify(ttrpgReviewOwner)}
+            owner={ttrpgReviewOwner} brief={selectedBrief.ttrpgOpen} value={authorDraftJson} onChange={setAuthorDraftJson} disabled={busy || productionRunning || originalHandoffBusy} /></Suspense>}
+          {canRetryBlocker && recoveryPolicy?.authorDraftAllowed && <details className="mt-3 text-xs text-text-muted"><summary className="cursor-pointer">直接修订任务草稿（高级）</summary><p className="my-2">填写完整 JSON 将跳过本次模型重写，按原任务规则校验；保留原始模型证据，记录为作者修订。只适用于失败的文本任务。</p>{repairCandidateSections.length > 0 && <div className="my-3 rounded border border-border p-3" data-testid={repairCandidateTestId}>
+              <p>当前修订候选来自已签收内容，不是历史请求快照；读取不调用模型。提交时核对上下文，来源变化后须重新读取。</p>
+              <label className="my-2 block">候选分类<select aria-label={`${repairCandidateLabel}修订候选分类`} value={activeRepairCandidateSection}
+                onChange={event => setRepairCandidateSection(event.target.value as RepairCandidateSectionV1)} className="ml-2 rounded border border-border bg-bg-base p-1">
+                {repairCandidateSections.map(section => <option key={section} value={section}>{({ scenes: '逐场景文字', actions: '行动说法', vendors: '商店', locations: '地点', factions: '势力', actors: '人物', contract: '合同与规模', sources: '物品来源', rewards: '奖励', ordinaryDeliveries: '普通交付', requirements: '内容需求', objectives: '目标操作', objectiveDescriptions: '全部目标说明', interactions: '地图交互', items: '物品', acquisitions: '领取来源', endings: '结局资格', recognition: '主线认可', consequences: '故事后果', knowledge: '传闻', achievements: '成就', quests: '任务', recipes: '配方', events: '事件', templates: '模板', regions: '地区' })[section]}</option>)}
+              </select></label>
+              <div className="flex gap-3"><button type="button" disabled={busy} onClick={() => inspectRepairCandidates()}>读取所选候选</button><button type="button" disabled={busy} onClick={() => inspectRepairCandidates(0, true)}>重新读取当前来源</button></div>
+              {currentRepairCandidatePage && <><p className="my-2 break-all">上下文指纹：{currentRepairCandidatePage.contextSelectionHash} · {currentRepairCandidatePage.section} · 第 {currentRepairCandidatePage.page + 1} 页 / {Math.max(1, Math.ceil(currentRepairCandidatePage.total / currentRepairCandidatePage.pageSize))} 页 · {currentRepairCandidatePage.total} 项</p>
+                <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-[10px]" aria-label={`当前${repairCandidateLabel}修订候选`}>{JSON.stringify(currentRepairCandidatePage.rows, null, 2)}</pre>
+                <div className="mt-2 flex gap-3"><button type="button" disabled={busy || activeRepairCandidateSection !== currentRepairCandidatePage.section || currentRepairCandidatePage.page === 0} onClick={() => inspectRepairCandidates(currentRepairCandidatePage.page - 1)}>上一页候选</button><button type="button" disabled={busy || activeRepairCandidateSection !== currentRepairCandidatePage.section || (currentRepairCandidatePage.page + 1) * currentRepairCandidatePage.pageSize >= currentRepairCandidatePage.total} onClick={() => inspectRepairCandidates(currentRepairCandidatePage.page + 1)}>下一页候选</button></div></>}
+            </div>}<textarea aria-label="作者修订的完整任务 JSON" maxLength={120000} value={authorDraftJson} onChange={event => setAuthorDraftJson(event.target.value)} className="min-h-60 w-full rounded border border-border bg-bg-base p-3 font-mono text-text-main" /></details>}
+          {providerReservationBlocked && !originalBooking && <fieldset className="mt-3 rounded border border-error/30 bg-error/5 p-3 text-xs text-text-muted" data-testid="product-production-unknown-result-disposition"><legend className="px-1 font-medium text-error">先结算供应商请求</legend><p className="mb-2 text-[10px] leading-5">{pausedProviderReservationBlocked ? '暂停时仍有供应商请求在途。恢复前必须把冻结的每个 Run、attempt 和 epoch 一起封账；本次选择应用于全部在途请求。' : observedUncheckpointedResponseBlocked ? '系统已持久化供应商响应证据，但完整用量未能回传。为避免少记账，只能按该 attempt 的冻结预留上限封账。' : '系统不会猜测这次请求是否扣费。请选择与你核对结果一致的处置，选择会与失败 Run、attempt 和 epoch 一起冻结。'}</p>{!observedUncheckpointedResponseBlocked && <label className="mr-4 inline-flex items-center gap-2"><input type="radio" name="unknown-result-disposition" checked={unknownResultDisposition === 'confirmed-not-charged'} onChange={() => setUnknownResultDisposition('confirmed-not-charged')} />已确认未计费</label>}<label className="inline-flex items-center gap-2"><input type="radio" name="unknown-result-disposition" checked={unknownResultDisposition === 'charge-reservation-upper-bound'} onChange={() => setUnknownResultDisposition('charge-reservation-upper-bound')} />{pausedProviderReservationBlocked ? '全部按冻结预留上限封账' : observedUncheckpointedResponseBlocked ? '按冻结预留上限封账并重试' : '无法确认，按预留上限记账'}</label></fieldset>}
           {canRetryBlocker && !recoveryPolicy?.repairNoteAllowed && <p className="mt-3 rounded border border-border bg-bg-base p-3 text-xs text-text-muted" data-testid="product-production-retry-only">当前任务暂不支持修复要求或直接 JSON 修订；可先查看制作记录，再按原冻结输入重试。</p>}
           <div className="mt-4 flex flex-wrap gap-2">
             {details.production.status === 'brief-ready' && <button disabled={busy || productionRunning || authorizationReadiness?.ready !== true} onClick={authorize} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><ShieldCheck className="h-3.5 w-3.5" />作者授权并开始自动制作</button>}
-            {details.build && ['authorized', 'building'].includes(details.build.status) && !productionRunning && <button disabled={busy} onClick={build} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white"><PackageCheck className="h-3.5 w-3.5" />继续自动制作</button>}
+            {details.build && ['authorized', 'building'].includes(details.build.status) && !productionRunning && <button disabled={busy || importedProofRecoveryRequired} onClick={build} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white"><PackageCheck className="h-3.5 w-3.5" />继续自动制作</button>}
             {sourceDecision?.decision === 'ready-with-private-additions' && <button disabled={busy || productionRunning} onClick={() => resolveSourceDecision('accept-product-private-expansion')} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><ShieldCheck className="h-3.5 w-3.5" />接受私域补充并继续</button>}
             {sourceDecision?.decision === 'blocked' && <button disabled={busy || productionRunning} onClick={retrySourceReview} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><RefreshCw className="h-3.5 w-3.5" />按产品边界重新审查</button>}
             {sourceDecisionBlocker && <button disabled={busy || productionRunning} onClick={() => resolveSourceDecision('cancel')} className="flex items-center gap-2 rounded border border-error/40 px-4 py-2 text-xs text-error disabled:opacity-40"><Square className="h-3.5 w-3.5" />取消本次 Build</button>}
@@ -2142,7 +2395,7 @@ export default function ProductProductionStudio(props: {
             {canUpgradeExecutionPlan && <button disabled={busy || productionRunning} onClick={upgradeExecutionPlan} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white"><GitBranch className="h-3.5 w-3.5" />生成执行计划升级 Brief</button>}
             {canRepairVisualContract && <button disabled={busy || productionRunning} onClick={repairVisualContract} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white"><GitBranch className="h-3.5 w-3.5" />重建媒资规划 Brief</button>}
             {canRepairRuntimeCopy && <button disabled={busy || productionRunning} onClick={repairRuntimeCopy} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white"><GitBranch className="h-3.5 w-3.5" />重建公开文案运行包</button>}
-            {canRetryBlocker && !modelBudgetExhausted && !canRecoverProductionBudget && !canUpgradeExecutionPlan && !canRepairRuntimeCopy && <button disabled={busy || productionRunning || (providerReservationBlocked && !unknownResultDisposition)} onClick={retryBlocker} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><RefreshCw className="h-3.5 w-3.5" />{recoveryPolicy?.repairNoteAllowed ? '修正后继续制作' : '重试失败任务'}</button>}
+            {canRetryBlocker && (canSubmitCreatorDraftWithoutModel || ((!modelBudgetExhausted || originalSourceDraftReady) && !canRecoverProductionBudget && !creatorModelBudgetBlocked)) && !canUpgradeExecutionPlan && !canRepairRuntimeCopy && <button disabled={busy || productionRunning || importedProofRecoveryRequired || originalHandoffBusy || originalBooking?.blocked === true || (providerReservationBlocked && !originalSourceDraftReady && !unknownResultDisposition)} onClick={retryBlocker} className="flex items-center gap-2 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40"><RefreshCw className="h-3.5 w-3.5" />{canSubmitCreatorDraftWithoutModel ? '校验修订稿并继续' : recoveryPolicy?.repairNoteAllowed ? '修正后继续制作' : '重试失败任务'}</button>}
             {importedProofRecoveryRequired && <button disabled={busy || productionRunning} onClick={recoverImportedProofs} data-testid="product-production-recover-import-proof" className="flex items-center gap-2 rounded border border-warning/50 bg-warning/10 px-4 py-2 text-xs text-text-main disabled:opacity-40"><ShieldCheck className="h-3.5 w-3.5" />复验导入生产证明</button>}
             {details.build && ['preview-ready', 'release-ready', 'released'].includes(details.build.status) && <button disabled={busy || productionRunning || importedProofRecoveryRequired} onClick={preview} className="flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-4 py-2 text-xs text-accent"><Play className="h-3.5 w-3.5" />{details.build.status === 'released' ? '试玩此 Build' : '试玩未发布 Build'}</button>}
             {details.build?.status === 'release-ready' && !isTextOpenWorldCreator && <button disabled={busy || productionRunning || (commercialPerformanceRequired && !commercialQualityPassed)} onClick={publish} className="flex items-center gap-2 rounded bg-success px-4 py-2 text-xs text-white disabled:opacity-40"><Rocket className="h-3.5 w-3.5" />复验并原子发布</button>}
@@ -2156,7 +2409,28 @@ export default function ProductProductionStudio(props: {
           <p className="mt-2 text-xs text-text-muted">完整游戏包包含已发布的剧情、角色、规则和图片。玩家存档、制作记录与 API 配置不会进入分发包。</p>
           <button disabled={busy || productionRunning} onClick={exportCommunityGame} className="mt-3 flex items-center gap-2 rounded border border-accent/40 px-4 py-2 text-xs text-accent"><Download className="h-4 w-4" />导出社区游戏包</button>
         </section>}
-        {progress && progress.tasks.length > 0 && <section aria-live="polite" className="mt-5 rounded border border-border bg-bg-elevated p-5">
+        {canRecoverCreatorBudget && details.build?.id && <Suspense fallback={null}>
+          <TextOpenWorldBudgetRecovery key={`${details.build.id}:${details.production.stateRevision}`}
+            scope={props.scope} productionId={details.production.id!} buildId={details.build.id}
+            disabled={busy || productionRunning || importedProofRecoveryRequired}
+            onAuthorized={() => refresh(details.production.id)} />
+        </Suspense>}
+        {isTextOpenWorldCreator && details.build && <TextOpenWorldResponsibilityOverview
+          scope={props.scope} productionId={selectedProductionId!} buildId={details.build.id!}
+          refreshToken={`${details.build.id}:${details.build.stateRevision}:${progress?.controlEpoch ?? 0}:${progress?.tasks.map(task => `${task.taskKey}:${task.status}:${task.attempt}`).join('|') ?? ''}`}
+          onInspectTask={taskKey => {
+            void inspectTaskEvidence(taskKey)
+            document.getElementById('open-world-task-evidence')?.scrollIntoView({ block: 'start' })
+          }}
+          onInspectArtifact={artifactKey => {
+            setResponsibilityArtifactFocus(current => ({ productionId: selectedProductionId!,
+              artifactKey, requestId: (current?.requestId ?? 0) + 1 }))
+            const browser = document.getElementById('open-world-artifact-browser')
+            browser?.scrollIntoView({ block: 'start' })
+            browser?.focus({ preventScroll: true })
+          }}
+        />}
+        {progress && progress.tasks.length > 0 && <section id="open-world-task-evidence" aria-live="polite" className="mt-5 rounded border border-border bg-bg-elevated p-5">
           <div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold">自动制作任务</h2><code className="text-[9px] text-text-muted">Build #{progress.buildNumber} · epoch {progress.controlEpoch}</code></div>
           <div className="mt-4 rounded border border-border bg-bg-base p-3" data-testid="product-production-overall-progress"><span className="flex items-center justify-between gap-3 text-[10px]"><strong>总任务进度 {overallTaskProgress.percent}%</strong><span className="text-text-muted">{overallTaskProgress.completed}/{overallTaskProgress.total} 个 durable task 已签收</span></span><progress aria-label="文字冒险总任务进度" className="mt-2 w-full" max={100} value={overallTaskProgress.percent}>{overallTaskProgress.percent}%</progress><p className="mt-2 text-[9px] text-text-muted">{overallTaskProgress.active.length > 0 ? `正在执行：${overallTaskProgress.active.join('、')}` : progress.terminal ? '全部计划任务已完成，等待后续人工发布门。' : '等待依赖或作者处理当前闸门。'}{overallTaskProgress.totalVisual > 0 ? ` · 视觉素材 ${overallTaskProgress.completedVisual}/${overallTaskProgress.totalVisual} 已生成并签收` : ''}</p></div>
           <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" data-testid="product-production-lane-progress">{laneProgress.map(lane => {
@@ -2168,14 +2442,15 @@ export default function ProductProductionStudio(props: {
             </article>
           })}</div>
           <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4" data-testid="product-production-budget-usage">
-            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">本轮模型调用</span><strong className="mt-1 block">{progress.budget.usage.modelCalls} / {progress.budget.limits.maximumModelCalls}</strong></article>
-            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">本轮媒资调用</span><strong className="mt-1 block">{progress.budget.usage.mediaCalls} / {progress.budget.limits.maximumMediaCalls}</strong></article>
-            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">本轮成本</span><strong className="mt-1 block">{progress.budget.usage.costUsd == null ? '供应商未回传' : `$${progress.budget.usage.costUsd.toFixed(4)}`} / {progress.budget.limits.maximumCostUsd == null ? '未设金额上限' : `$${progress.budget.limits.maximumCostUsd.toFixed(2)}`}</strong></article>
-            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">本轮新增媒资</span><strong className="mt-1 block">{formatBytes(progress.budget.usage.storageBytes)} / {formatBytes(progress.budget.limits.maximumStorageBytes)}</strong></article>
+            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">模型额度占用</span><strong className="mt-1 block">{progress.budget.usage.modelCalls} / {progress.budget.limits.maximumModelCalls}</strong></article>
+            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">媒资调用额度占用</span><strong className="mt-1 block">{progress.budget.usage.mediaCalls} / {progress.budget.limits.maximumMediaCalls}</strong></article>
+            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">费用额度占用</span><strong className="mt-1 block">{progress.budget.usage.costUsd == null ? '供应商未回传' : `$${progress.budget.usage.costUsd.toFixed(4)}`} / {progress.budget.limits.maximumCostUsd == null ? '未设金额上限' : `$${progress.budget.limits.maximumCostUsd.toFixed(2)}`}</strong></article>
+            <article className="rounded bg-bg-base p-3 text-[10px]"><span className="text-text-muted">存储额度占用</span><strong className="mt-1 block">{formatBytes(progress.budget.usage.storageBytes)} / {formatBytes(progress.budget.limits.maximumStorageBytes)}</strong></article>
           </div>
+          <p className="mt-2 text-[10px] text-text-muted">额度占用含已知用量和未确认请求的预留，用于判断本轮能否继续制作。</p>
           <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{progress.tasks.map(task => {
             const presentation = productionTaskPresentation(task.taskKey)
-            return <article key={task.taskKey} className="rounded border border-border bg-bg-base p-3"><span className="flex items-center justify-between gap-2"><strong className="text-[10px]">{presentation.label}</strong><em className={`not-italic text-[9px] ${task.status === 'completed' ? 'text-success' : task.status === 'blocked' ? 'text-error' : 'text-accent'}`}>{statusLabel(task.status)}</em></span><p className="mt-1 text-[9px] text-text-muted">{presentation.owner}</p><code className="mt-1 block text-[8px] text-text-muted">{task.taskKey}</code><p className="mt-2 text-[9px] text-text-muted">{task.lane} · attempt {task.attempt || '—'}{task.blocker ? ` · 阻塞：${task.blocker}` : ''}</p>{task.latestDurableBoundary && <p className="mt-1 text-[9px] text-text-muted">边界：{task.latestDurableBoundary.eventType} #{task.latestDurableBoundary.sequence}</p>}{task.checkpoint && <p className="mt-1 text-[9px] text-text-muted">checkpoint：{task.checkpoint.status} · {task.checkpoint.resumeKind}</p>}{task.runId && <button type="button" disabled={busy} onClick={() => inspectTaskEvidence(task.taskKey)} className="mt-2 rounded border border-border px-2 py-1 text-[9px] text-text-muted disabled:opacity-40">查看冻结证据</button>}</article>
+            return <article key={task.taskKey} className="rounded border border-border bg-bg-base p-3"><span className="flex items-center justify-between gap-2"><strong className="text-[10px]">{presentation.label}</strong><em className={`not-italic text-[9px] ${task.status === 'completed' ? 'text-success' : task.status === 'blocked' ? 'text-error' : 'text-accent'}`}>{statusLabel(task.status)}</em></span><p className="mt-1 text-[9px] text-text-muted">{presentation.owner}</p><code className="mt-1 block text-[8px] text-text-muted">{task.taskKey}</code><p className="mt-2 text-[9px] text-text-muted">{task.lane} · attempt {task.attempt || '—'}{task.blocker ? ` · 阻塞：${task.blocker}` : ''}</p>{task.latestDurableBoundary && <p className="mt-1 text-[9px] text-text-muted">边界：{task.latestDurableBoundary.eventType} #{task.latestDurableBoundary.sequence}</p>}{task.checkpoint && <p className="mt-1 text-[9px] text-text-muted">checkpoint：{task.checkpoint.status} · {task.checkpoint.resumeKind}</p>}{task.runId && <button type="button" disabled={busy} onClick={() => inspectTaskEvidence(task.taskKey)} className="mt-2 rounded border border-border px-2 py-1 text-[9px] text-text-muted disabled:opacity-40">查看冻结证据</button>}{selectedBrief?.ttrpgOpen && task.runId && task.attempt > 0 && supportsProductProductionLocalRequestV1(task.taskKey) && <button type="button" disabled={busy} onClick={() => inspectOriginalLocalRequest(task.taskKey, task.runId!, task.attempt)} className="ml-2 mt-2 rounded border border-border px-2 py-1 text-[9px] text-text-muted disabled:opacity-40">查询原本机请求</button>}</article>
           })}</div>
           {taskEvidence && <div className="mt-4 rounded border border-border bg-bg-base p-3" data-testid="product-production-task-evidence"><div className="flex items-center justify-between gap-2"><strong className="text-[10px]">{taskEvidence.taskKey} · 冻结证据</strong><button type="button" onClick={() => setTaskEvidence(null)} className="text-[9px] text-text-muted">关闭</button></div><pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap text-[9px] leading-5 text-text-muted">{taskEvidence.text}</pre></div>}
         </section>}
@@ -2220,6 +2495,14 @@ export default function ProductProductionStudio(props: {
                 onClick={resumeWithContentRevision} className="mt-3 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40">保存内容修订并继续</button>
             </>}
           </section>}
+        {details?.production.productType === 'text-open-world' && details.production.status === 'paused'
+          && details.build && ['building', 'recovery-required'].includes(details.build.resumeState ?? '')
+          && details.build.releasedProductReleaseId == null && details.build.rootTerminalReceiptHash == null
+          && <Suspense fallback={<p className="text-xs text-text-muted">正在载入内容返修…</p>}><TextOpenWorldPausedTaskRevision
+            key={`${details.production.id}:${details.build.controlEpoch}`} scope={props.scope} productionId={details.production.id!}
+            controlEpoch={details.build.controlEpoch} busy={busy || productionRunning || importedProofRecoveryRequired}
+            onSubmit={resumeWithOpenWorldRevision}
+          /></Suspense>}
         {details?.production.productType === 'text-adventure' && mediaAssets.length > 0 && <section className="mt-5 rounded border border-border bg-bg-elevated p-5" data-testid="text-adventure-media-authoring">
           <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-sm font-semibold">插图素材、独立质检与作者逐图验收</h2><p className="mt-1 max-w-3xl text-[10px] leading-5 text-text-muted">每次替换、锁定、解锁或单项重生成都会派生新 Build；旧 Preview、Release 与存档不会被覆盖。商业候选必须依次通过需求绑定审计、独立多模态 Visual QA 和作者逐图确认，任何一层都不能替代另一层。</p></div><span className="rounded bg-accent/10 px-2 py-1 text-[9px] text-accent">{mediaAssets.length} 张冻结图片</span></div>
           {commercialHumanVisualRequired && <div className="mt-4 grid gap-2 text-[10px] md:grid-cols-3" data-testid="text-adventure-visual-review-layers">
@@ -2267,22 +2550,25 @@ export default function ProductProductionStudio(props: {
           {commercialHumanVisualRequired && <div className="mt-4 rounded border border-border bg-bg-base p-4 text-[10px]" data-testid="text-adventure-human-visual-review"><strong className="block">冻结作者逐图审查</strong><p className="mt-1 leading-5 text-text-muted">回执绑定当前 Build、Preview、需求审计、独立 Visual QA、每张 Artifact/Blob hash。任何图片修订都会使旧回执失效。退回决定也会保存，但不会解锁发布。</p>{!humanVisualReviewReady && <p className="mt-2 text-accent">正在核对当前 Build 的逐图回执…</p>}{humanVisualGateError && <p className="mt-2 text-error">当前回执无法复验：{humanVisualGateError}</p>}{humanVisualGate && <p className={`mt-2 ${humanVisualGate.evidence.passed ? 'text-success' : 'text-error'}`}>最新回执：{humanVisualGate.evidence.passed ? '全部接受' : `${humanVisualGate.evidence.assets.filter(asset => asset.decision === 'rejected').length} 张退回`} · {compactHash(humanVisualGate.gateReceipt.receiptHash)}</p>}<button disabled={busy || productionRunning || !humanVisualReviewReady || visualReviewStatus !== 'passed' || !mediaAuditPassed || !humanVisualDecisionsComplete} onClick={confirmHumanVisualReview} className="mt-3 rounded bg-accent px-4 py-2 text-xs text-white disabled:opacity-40">冻结本次逐图审查回执</button></div>}
         </section>}
         {canEvolve && <section className="mt-5 rounded border border-border bg-bg-elevated p-5"><div className="flex items-center gap-2"><GitBranch className="h-4 w-4 text-accent" /><h2 className="text-sm font-semibold">继续演化下一版</h2></div><p className="mt-2 text-[10px] leading-5 text-text-muted">描述希望增加、延续或改变的体验。旧 Build、Release 和存档不会被改写；提交后先生成新的可审查 Brief，不会直接调用模型。</p><textarea value={evolutionGoal} onChange={event => setEvolutionGoal(event.target.value)} maxLength={2000} rows={4} placeholder="例如：从当前结局继续，让配角成为新主角，增加一条调查旧港失踪案的支线，并保留已经发生的选择后果。" className="mt-4 w-full rounded border border-border bg-bg-base p-3 text-xs text-text-primary" /><fieldset className="mt-3 flex flex-wrap gap-3 text-[10px] text-text-muted"><legend className="mb-2">本轮影响范围（未勾选且依赖未变化的产物可复用）</legend>{([['content', '剧情内容'], ['product', '玩法模块'], ['visual', '美术'], ['audio', '音乐/音效'], ['runtime', '装配/运行时']] as const).map(([lane, label]) => <label key={lane} className="flex items-center gap-1.5"><input type="checkbox" checked={evolutionLanes.includes(lane)} onChange={event => setEvolutionLanes(current => event.target.checked ? [...new Set([...current, lane])] : current.filter(item => item !== lane))} />{label}</label>)}</fieldset><button disabled={busy || productionRunning || !evolutionGoal.trim() || evolutionLanes.length === 0} onClick={evolve} className="mt-3 flex items-center gap-2 rounded border border-accent/40 bg-accent/10 px-4 py-2 text-xs text-accent disabled:opacity-40"><GitBranch className="h-3.5 w-3.5" />生成下一轮 Brief</button></section>}
-        {isTextOpenWorldCreator && details.build && <TextOpenWorldCreatorArtifactBrowser
+        {isTextOpenWorldCreator && details.build && <div id="open-world-artifact-browser" tabIndex={-1}><TextOpenWorldCreatorArtifactBrowser
           scope={props.scope}
           productionId={selectedProductionId!}
+          focusArtifact={responsibilityArtifactFocus?.productionId === selectedProductionId ? responsibilityArtifactFocus : null}
           refreshToken={`${details.build.id}:${details.build.stateRevision}:${progress?.controlEpoch ?? 0}:${progress?.tasks.map(task => `${task.taskKey}:${task.status}:${task.attempt}`).join('|') ?? ''}`}
           onRepairBuildCreated={() => refresh(details.production.id)}
-        />}
+        /></div>}
         {isTextOpenWorldCreator && details.build
           && details.production.status === 'preview-ready'
           && ['preview-ready', 'release-ready'].includes(details.build.status)
-          && <TextOpenWorldCreatorMediaStudio
+          && <><TextOpenWorldCreatorMediaStudio
             scope={props.scope}
             productionId={selectedProductionId!}
             buildId={details.build.id!}
             disabled={busy || productionRunning}
             onChanged={() => refresh(details.production.id)}
-          />}
+          /><TextOpenWorldVisualReview scope={props.scope} productionId={selectedProductionId!}
+            buildId={details.build.id!} disabled={busy || productionRunning}
+            onChanged={() => refresh(details.production.id)} /></>}
         {isTextOpenWorldCreator && details.build
           && ((details.production.status === 'preview-ready'
             && ['preview-ready', 'release-ready'].includes(details.build.status))

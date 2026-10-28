@@ -13,6 +13,7 @@ import { getFactPredicate } from './fact-predicate-registry'
 import { retrieveChunks, embedQuery, readNarrativeSummaryContext } from '../retrieval/retrieval'
 import { isEmbeddingReady, embeddingModelTag } from '../ai/adapters/embedding-adapter'
 import { useAIConfigStore } from '../../stores/ai-config'
+import {CHAT_CONTEXT_SOURCE_TOKENS_V1, CHAT_COORDINATOR_SOURCE_TOKENS_V1} from '../character-interaction/source-budgets'
 import {
   buildCreativeRulesContext,
   buildHistoricalContext,
@@ -42,6 +43,7 @@ import {
   readCanonAssertions,
   readSettingAssertionScanContext,
 } from '../fact-ledger/setting-assertions'
+import { readNarrativeCanonContextV1 } from '../world-engine/narrative-domain-context'
 import { readStorylineProgressContext } from '../storyline/storyline-progress'
 import { readCodexExtractionBaselineContextV1 } from '../codex/extraction'
 import { readHistoryAgentBaselineContextV1 } from '../history/agent-baseline'
@@ -145,6 +147,15 @@ const WORLD_RELEASE_RESOURCE_PROVIDER_PROXY_V1: ContextResourceProviderV1 = {
     .WORLD_RELEASE_RESOURCE_PROVIDER_V1.readOriginal!(input),
   fingerprint: async scope => (await import('../context-gateway/world-release-provider'))
     .WORLD_RELEASE_RESOURCE_PROVIDER_V1.fingerprint(scope),
+  worldQuery: {
+    openAuthor: async input => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.openAuthor(input),
+    openPreparation: async input => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.openPreparation(input),
+    openProduction: async input => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.openProduction(input),
+    describe: async access => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.describe(access),
+    bind: async (access, narrowing) => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.bind(access, narrowing),
+    query: async (access, query) => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.query(access, query),
+    close: async access => (await import('../context-gateway/world-release-provider')).WORLD_RELEASE_RESOURCE_PROVIDER_V1.worldQuery!.close(access),
+  },
 }
 
 const TEXT_OPEN_WORLD_RUNTIME_CONTEXT_PROVIDER_PROXY_V1: ContextResourceProviderV1 = {
@@ -165,11 +176,122 @@ const TEXT_OPEN_WORLD_RUNTIME_CONTEXT_PROVIDER_PROXY_V1: ContextResourceProvider
     .TEXT_OPEN_WORLD_RUNTIME_CONTEXT_PROVIDER_V1.fingerprint(scope),
 }
 
+function ttrpgCommonIdentityProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-common-identity-context')).createTtrpgOpenCommonIdentityProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenCommonIdentities',
+    providerVersion: 'ttrpg-open-common-identities-provider-v1', normalizationVersion: 'ttrpg-open-common-identities-json-v1', kinds: ['fact'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope), openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+function ttrpgLearnedIdentityProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-identity-knowledge-context')).createTtrpgOpenLearnedIdentityProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenLearnedIdentities',
+    providerVersion: 'ttrpg-open-learned-identities-provider-v1', normalizationVersion: 'ttrpg-open-learned-identities-json-v1', kinds: ['fact'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope), openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+function ttrpgOpenProvider(sourceKey: 'ttrpgOpenAuthority' | 'ttrpgOpenKnowledge' | 'ttrpgOpenOracleHistory' | 'ttrpgOpenFacts' | 'ttrpgOpenGmOracleInput' | 'ttrpgOpenKpInput'): ContextResourceProviderV1 {
+  const load = async () => {
+    const module = await import('../ttrpg/open-context-provider')
+    if (sourceKey === 'ttrpgOpenKpInput') return module.TTRPG_OPEN_KP_INPUT_PROVIDER_V1
+    return sourceKey === 'ttrpgOpenAuthority' ? module.TTRPG_OPEN_AUTHORITY_PROVIDER_V1
+      : sourceKey === 'ttrpgOpenKnowledge' ? module.TTRPG_OPEN_KNOWLEDGE_PROVIDER_V1
+        : sourceKey === 'ttrpgOpenOracleHistory' ? module.TTRPG_OPEN_ORACLE_HISTORY_PROVIDER_V1
+          : sourceKey === 'ttrpgOpenFacts' ? module.TTRPG_OPEN_FACTS_PROVIDER_V1 : module.TTRPG_OPEN_GM_ORACLE_INPUT_PROVIDER_V1
+  }
+  return { version: 'context-resource-provider-v1', providerId: `storyforge.${sourceKey}`,
+    providerVersion: sourceKey === 'ttrpgOpenKnowledge' ? 'ttrpg-open-knowledge-provider-v2' : sourceKey === 'ttrpgOpenAuthority' ? 'ttrpg-open-actor-provider-v3' : sourceKey === 'ttrpgOpenKpInput' ? 'ttrpg-open-kp-provider-v3' : 'ttrpg-open-actor-provider-v1', normalizationVersion: 'ttrpg-open-actor-json-v1', kinds: ['fact'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+
+function ttrpgOpenGuidanceProvider(consumer: 'actor' | 'party-narrator' | 'gm-assistant', sourceKey: string): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-context-guidance-provider')).createTtrpgOpenGuidanceProviderV1(consumer)
+  return { version: 'context-resource-provider-v1', providerId: `storyforge.${sourceKey}`,
+    providerVersion: 'ttrpg-open-guidance-provider-v1', normalizationVersion: 'ttrpg-open-guidance-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+
+function ttrpgOpenMemoryProvider(consumer: 'actor' | 'party-narrator', sourceKey: string): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-memory-context-provider')).createTtrpgOpenMemoryContextProviderV1(consumer)
+  return { version: 'context-resource-provider-v1', providerId: `storyforge.${sourceKey}`,
+    providerVersion: 'ttrpg-open-memory-provider-v1', normalizationVersion: 'ttrpg-open-memory-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+
+function ttrpgOpenBriefProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-brief-context')).createTtrpgOpenBriefContextProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenBriefInput',
+    providerVersion: 'ttrpg-open-brief-provider-v1', normalizationVersion: 'ttrpg-open-brief-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+
+function ttrpgOpenSituationProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-generated-situation-context')).createTtrpgOpenSituationContextProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenSituationInput',
+    providerVersion: 'ttrpg-open-situation-provider-v1', normalizationVersion: 'ttrpg-open-situation-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+function ttrpgOpenPublicSituationProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-public-situation-context')).createTtrpgOpenPublicSituationContextProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenPublicSituationInput',
+    providerVersion: 'ttrpg-open-public-situation-provider-v1', normalizationVersion: 'ttrpg-open-public-situation-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+function ttrpgOpenCommonOracleProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-common-oracle-context')).createTtrpgOpenCommonOracleContextProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenCommonOracleInput',
+    providerVersion: 'ttrpg-open-common-oracle-provider-v1', normalizationVersion: 'ttrpg-open-common-oracle-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+function ttrpgOpenEntityProvider(): ContextResourceProviderV1 {
+  const load = async () => (await import('../ttrpg/open-entity-context')).createTtrpgOpenEntityContextProviderV1()
+  return { version: 'context-resource-provider-v1', providerId: 'storyforge.ttrpgOpenEntityInput',
+    providerVersion: 'ttrpg-open-entity-provider-v1', normalizationVersion: 'ttrpg-open-entity-json-v1', kinds: ['fact', 'reference'],
+    listMetadata: async input => (await load()).listMetadata(input), searchMetadata: async input => (await load()).searchMetadata(input),
+    read: async input => (await load()).read(input), readOriginal: async input => (await load()).readOriginal(input),
+    fingerprint: async scope => (await load()).fingerprint(scope),
+    openReadSession: async scope => (await load()).openReadSession!(scope) }
+}
+
 // Upper-product readers are lazy for the same reason as adaptation readers:
 // their production Harnesses import the Skill registry, so eager imports here
 // would create CONTEXT_SOURCES -> product Harness -> Skill -> CONTEXT_SOURCES.
 async function readProductProductionBriefContext(input: AssembleContextInput): Promise<string> {
   return (await import('../product-production/context')).readProductProductionBriefContext(input)
+}
+async function ttrpgOpenProductionTaskProjectionEnabledV3(input: AssembleContextInput): Promise<boolean> {
+  if (!Number.isSafeInteger(input.productProductionId) || !Number.isSafeInteger(input.productBuildId)
+    || !input.productProductionTaskKey?.startsWith('ttrpg.open.')) return false
+  return (await import('../product-production/context')).canReadTtrpgOpenProductionTaskProjectionV3(input)
+}
+async function readTtrpgOpenProductionTaskBriefContextV3(input: AssembleContextInput): Promise<string> {
+  return (await import('../product-production/context')).readTtrpgOpenProductionTaskBriefContextV3(input)
+}
+async function readTtrpgOpenProductionMediaInputsV3(input: AssembleContextInput): Promise<string> {
+  return (await import('../product-production/context')).readTtrpgOpenProductionMediaInputsV3(input)
 }
 async function readProductProductionArtifactInputs(input: AssembleContextInput): Promise<string> {
   return (await import('../product-production/context')).readProductProductionArtifactInputs(input)
@@ -692,6 +814,135 @@ async function readProductRuntimeContext(input: AssembleContextInput): Promise<s
   ].join('\n')
 }
 
+async function readChatMemoryReviewContext(input: AssembleContextInput): Promise<string> {
+  if (!input.scope || input.productRuntimeSessionId == null || input.chatMemoryCandidateRunId == null) return ''
+  const {readChatMemoryReviewSourceV1} = await import('../character-interaction/memory-review-source')
+  return `【待审查记忆及实际共同可见来源；尚未采用】\n${await readChatMemoryReviewSourceV1(input.scope, input.productRuntimeSessionId, input.chatMemoryCandidateRunId, input.worldGroupId ?? null)}`
+}
+
+async function readChatSituationCandidateContext(input: AssembleContextInput): Promise<string> {
+  if (!input.scope || input.productRuntimeSessionId == null || input.chatSituationCandidateRunId == null) return ''
+  const {readLatestVerifiedAgentRunCheckpointV1} = await import('../agent/run/checkpoint')
+  const saved = await readLatestVerifiedAgentRunCheckpointV1(input.scope, input.chatSituationCandidateRunId, {owner: 'instance'})
+  if (!saved || saved.snapshot.run.productRuntimeSessionId !== input.productRuntimeSessionId) return ''
+  const candidate = saved.resumePayload as {kind?: string; draft?: unknown}
+  if (candidate?.kind !== 'chat-situation-candidate') return ''
+  const {parseChatSituationDraftV1} = await import('../character-interaction/narrative-situations')
+  return `【本次持久化情境候选，仅供审查，尚未发生】\n${JSON.stringify(parseChatSituationDraftV1(candidate.draft))}`
+}
+
+async function readChatActionCandidateValue(input: AssembleContextInput) {
+  if (!input.scope || input.productRuntimeSessionId == null || input.chatActionCandidateRunId == null) return null
+  const {readLatestVerifiedAgentRunCheckpointV1} = await import('../agent/run/checkpoint')
+  const saved = await readLatestVerifiedAgentRunCheckpointV1(input.scope, input.chatActionCandidateRunId, {owner: 'instance'})
+  if (!saved || saved.snapshot.run.productRuntimeSessionId !== input.productRuntimeSessionId) return null
+  const candidate = saved.resumePayload as {kind?: string; participantKey?: string; action?: unknown; options?: unknown; handoff?: unknown}
+  if (!candidate?.participantKey) return null
+  if (candidate.kind === 'chat-narrative-options-candidate') {
+    const {parseChatNarrativeOptionsV1, CHAT_NARRATIVE_OPTION_KEYS_V1} = await import('../character-interaction/narrative-options')
+    return {snapshot: saved.snapshot, value: {actorKey: candidate.participantKey,
+      options: parseChatNarrativeOptionsV1(candidate.options).map((action, index) => ({optionKey: CHAT_NARRATIVE_OPTION_KEYS_V1[index], action}))}}
+  }
+  if (candidate.kind === 'chat-control-handoff-candidate') {
+    const {parseChatControlHandoffV1, readChatControlHandoffBasisV1} = await import('../character-interaction/control-handoff-contract')
+    const {assertChatControlHandoffBindingsV1} = await import('../character-interaction/control-handoff-wire')
+    const {readChatActionChoiceEvidenceV1} = await import('../character-interaction/action-choice-evidence')
+    assertChatControlHandoffBindingsV1(saved.snapshot.contract, parseChatControlHandoffV1(candidate.handoff))
+    const {choice} = await readChatActionChoiceEvidenceV1({scope: input.scope, snapshot: saved.snapshot, participantKey: candidate.participantKey})
+    const handoff = parseChatControlHandoffV1(candidate.handoff)
+    const state = await readProductRuntimeStateForContext(input.productRuntimeSessionId)
+    if (!state.interaction) return null
+    return {snapshot: saved.snapshot, value: {actorKey: candidate.participantKey, handoff, actionChoice: choice,
+      basisMessages: readChatControlHandoffBasisV1(state.interaction, candidate.participantKey, handoff)}}
+  }
+  if (candidate.kind !== 'chat-narrative-action-candidate') return null
+  const {parseChatNarrativeActionV1} = await import('../character-interaction/narrative-actions')
+  return {snapshot: saved.snapshot, value: {actorKey: candidate.participantKey, action: parseChatNarrativeActionV1(candidate.action)}}
+}
+
+async function readChatActionRevisionContext(input: AssembleContextInput): Promise<string> {
+  if (!input.scope || input.productRuntimeSessionId == null || !input.interactionParticipantKey || input.chatActionRevisionCurrentRunId == null) return ''
+  const {readChatActionRevisionSourceV1} = await import('../character-interaction/action-revision')
+  const source = await readChatActionRevisionSourceV1({scope: input.scope, sessionId: input.productRuntimeSessionId,
+    actorKey: input.interactionParticipantKey, currentRunId: input.chatActionRevisionCurrentRunId})
+  if (!source) return ''
+  // Only a failed check code, never coordinator reasons or hidden facts.
+  return `【明确请求修订的未生效行动；不是已发生事实】\n${JSON.stringify({schema: 'storyforge.chat-action-revision-source', version: 1,
+    candidateHash: source.candidateHash, reviewHash: source.reviewHash, failedChecks: ['consequences'], action: source.action})}`
+}
+
+async function readChatActionCandidateContext(input: AssembleContextInput): Promise<string> {
+  const saved = await readChatActionCandidateValue(input)
+  if (!saved) return ''
+  const candidate = saved.value
+  return `${'options' in candidate ? '【本次持久化行动候选组，仅供逐项审查，彼此互斥且均未发生】' : 'handoff' in candidate ? '【本次持久化交还控制候选及完整对话依据，仅供审查，无新台词或后果】' : '【本次持久化行动候选，仅供审查，尚未展示或提交】'}\n${'handoff' in candidate ? canonicalStringify(candidate) : JSON.stringify(candidate)}`
+}
+
+async function readChatSituationRuntimeProjection(input: AssembleContextInput) {
+  if (input.productRuntimeSessionId == null || !input.scope) return {text: ''}
+  const {assertInstanceBinding} = await import('../product/runtime-instances')
+  const session = await assertInstanceBinding(input.productRuntimeSessionId, input.scope)
+  if (session.kind !== 'character-interaction' || session.projectId !== input.projectId) return {text: ''}
+  if (input.worldGroupId !== undefined && (session.worldGroupId ?? null) !== (input.worldGroupId ?? null)) return {text: ''}
+  const playable = await verifyPlayableRuntimeSession({scope: input.scope, session})
+  if (playable.runtimePackage.productType !== 'character-interaction' || !playable.runtimePackage.interaction?.chatNarrative) return {text: ''}
+  const state = await readProductRuntimeStateForContext(session.id!)
+  if (!state.interaction) return {text: ''}
+  const {projectChatCoordinatorContextV1} = await import('../character-interaction/coordinator-selection')
+  const project = (candidate: Parameters<typeof projectChatCoordinatorContextV1>[1]) => projectChatCoordinatorContextV1(state.interaction!, candidate)
+  const sourceUnits = playable.runtimePackage.interaction.chatSource?.version === 6 ? playable.runtimePackage.interaction.chatSource.sourceUnits : undefined
+  const saved = await readChatActionCandidateValue(input)
+  const {chatCoordinatorAudienceVersionV1} = await import('../character-interaction/coordinator-audience')
+  const {readChatCandidateRetrievalVersion} = await import('../character-interaction/context-reader-version')
+  if (!saved) {
+    let discoveryEvidence = false
+    let audienceVersion: 1 | 2 = 1
+    let inquiryEvidence: 1 | 2 | 3 | 4 | 5 | undefined
+    const {usesChatDiscoveryEvidenceContextV1} = await import('../character-interaction/discovery-evidence-context')
+    const {chatInquiryEvidenceVersionForContractV1} = await import('../character-interaction/inquiry-evidence')
+    if (input.chatSituationConstructionRunId != null) {
+      const {readInstanceAgentRunV1} = await import('../agent/run/event-store')
+      const producer = await readInstanceAgentRunV1(input.scope, input.chatSituationConstructionRunId)
+      if (producer.run.productRuntimeSessionId !== session.id || producer.projection.state !== 'running'
+        || !producer.contract.executionBindings?.some(b => b.stepId === 'interaction:runtime-candidate' && b.skillId === 'character.chat-situation-construction')) {
+        throw new Error('情境证据读取缺少当前实例的生成合同')
+      }
+      const {assertRuntimeHarnessFreshV1} = await import('../agent/run/runtime-scope')
+      await assertRuntimeHarnessFreshV1({scope: input.scope, contractScope: producer.contract.scope, participantKey: 'player', view: 'chat-situation'})
+      audienceVersion = chatCoordinatorAudienceVersionV1(producer.contract)
+      discoveryEvidence = usesChatDiscoveryEvidenceContextV1(producer)
+      inquiryEvidence = chatInquiryEvidenceVersionForContractV1(producer.contract)
+    }
+    let retrievalVersion: import('../character-interaction/context-selection').ChatRetrievalVersion = 'chat-relevance-v9'
+    if (input.chatSituationCandidateRunId != null) {
+      const {readLatestVerifiedAgentRunCheckpointV1} = await import('../agent/run/checkpoint')
+      const producer = await readLatestVerifiedAgentRunCheckpointV1(input.scope, input.chatSituationCandidateRunId, {owner: 'instance'})
+      if (!producer || producer.snapshot.run.productRuntimeSessionId !== input.productRuntimeSessionId) return {text: ''}
+      retrievalVersion = await readChatCandidateRetrievalVersion(producer.snapshot, input.projectId, 'chatSituationRuntime')
+      audienceVersion = chatCoordinatorAudienceVersionV1(producer.snapshot.contract)
+      discoveryEvidence = usesChatDiscoveryEvidenceContextV1(producer.snapshot)
+      inquiryEvidence = chatInquiryEvidenceVersionForContractV1(producer.snapshot.contract)
+    }
+    return project({text: await readChatSituationCandidateContext(input), retrievalVersion, discoveryEvidence, inquiryEvidence, audienceVersion, ...(sourceUnits ? {sourceUnits} : {})})
+  }
+  const retrievalVersion = await readChatCandidateRetrievalVersion(saved.snapshot, input.projectId, 'interactionRuntime', saved.value.actorKey, state.interaction)
+  return project({text: JSON.stringify(saved.value), actorKey: saved.value.actorKey, retrievalVersion, audienceVersion: chatCoordinatorAudienceVersionV1(saved.snapshot.contract), ...(sourceUnits ? {sourceUnits} : {})})
+}
+
+async function readChatSituationRuntimeContext(input: AssembleContextInput): Promise<string> {
+  return (await readChatSituationRuntimeProjection(input)).text
+}
+
+/** Replays the registered projection against the locked state. Audit identities
+ * stay in the durable packet, outside the model budget. A mismatched assembly
+ * is rejected rather than attaching evidence for a different request. */
+export async function readChatCoordinatorSelectionEvidenceV1(input: AssembleContextInput, assembledText: string) {
+  const projection = await readChatSituationRuntimeProjection(input)
+  if (!('selection' in projection) || !projection.selection) return undefined
+  if (!projection.text || !assembledText.includes(projection.text)) throw new Error('协调历史选择证据与实际输入不一致。')
+  return projection.selection
+}
+
 async function readInteractionRuntimeContext(input: AssembleContextInput): Promise<string> {
   if (input.productRuntimeSessionId == null) return ''
   const participantKey = input.interactionParticipantKey?.trim()
@@ -715,9 +966,25 @@ async function readInteractionRuntimeContext(input: AssembleContextInput): Promi
   const profile = state.interaction.profiles.find(item => item.participantKey === participantKey)
   if (!profile) return ''
   const { buildInteractionContextWindow } = await import('../character-interaction/runtime')
+  let retrievalVersion: import('../character-interaction/context-selection').ChatRetrievalVersion = 'chat-relevance-v10'
+  if (input.chatActionContextRunId != null) {
+    if (!input.scope || session.kind !== 'character-interaction') throw new Error('角色对话标识读取缺少实例作用域')
+    const {readInstanceAgentRunV1} = await import('../agent/run/event-store')
+    const producer = await readInstanceAgentRunV1(input.scope, input.chatActionContextRunId)
+    const {chatActionContextVersionsV1, usesChatActionBoundContextV1} = await import('../character-interaction/context-selection')
+    const binding = producer.contract.executionBindings?.find(b => b.stepId === 'interaction:runtime-candidate')
+    if (producer.run.productRuntimeSessionId !== session.id || producer.projection.state !== 'running'
+      || !binding || !usesChatActionBoundContextV1(binding)) {
+      throw new Error('角色对话标识读取缺少当前实例的生成合同')
+    }
+    const {assertRuntimeHarnessFreshV1} = await import('../agent/run/runtime-scope')
+    await assertRuntimeHarnessFreshV1({scope: input.scope, contractScope: producer.contract.scope, participantKey})
+    retrievalVersion = chatActionContextVersionsV1(binding.promptVersion).retrievalVersion
+  }
   const view = buildInteractionContextWindow(state.interaction, participantKey, {
     maxCharacters: 24_000,
     maxRecentMessages: 32,
+    retrievalVersion,
   })
   const town = state.town
   const townResident = town?.content.residents.find(item => {
@@ -741,21 +1008,8 @@ async function readInteractionRuntimeContext(input: AssembleContextInput): Promi
     ...(townMemories.length ? townMemories.map(memory => `- ${memory.summary}｜证据=${memory.sourceSequences.join(',') || '初始'}`) : ['- 无']),
     '【小镇行为边界】你拥有自己的生活和立场；只能谈论自己知道的事实；不得替玩家决定行动；不得把私密想法当作玩家已知信息。',
   ] : []
-  return [
-    `【角色互动视角】${profile.name}｜key=${profile.participantKey}｜身份=${profile.roleLabel}`,
-    `【说话约束】${profile.voiceRules}`,
-    `【当前场景】${view.activeScene?.title ?? '未开始'}｜${view.activeScene?.purpose ?? ''}`,
-    '【该角色已知事实】',
-    ...(view.knowledge.length ? view.knowledge.map(item => `- ${item.knowledgeKey}｜${item.status}｜${item.content}`) : ['- 无']),
-    '【该角色持久记忆】',
-    ...(view.memories.length ? view.memories.map(item => `- ${item.kind}｜重要度=${item.importance}｜${item.content}`) : ['- 无']),
-    '【该角色关系视图】',
-    ...(view.relationships.length ? view.relationships.map(item => `- ${item.toParticipantKey}｜${item.label}=${item.value}`) : ['- 无']),
-    '【该角色可见对话】',
-    ...(view.messages.length ? view.messages.map(message => `- #${message.eventSequence}｜${message.speakerKey}｜${message.text}`) : ['- 无']),
-    `【预算证据】省略早期消息=${view.omittedMessageCount}｜字符=${view.characterCount}`,
-    ...townLines,
-  ].join('\n')
+  const {formatInteractionRuntimeContextV1} = await import('../character-interaction/context-format')
+  return formatInteractionRuntimeContextV1(profile, view, townLines)
 }
 
 async function readAiTownRuntimeContext(input: AssembleContextInput): Promise<string> {
@@ -1874,6 +2128,137 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     read: readTtrpgGmRuntimeContextV1,
   },
   {
+    key: 'ttrpgOpenVoiceText', label: 'open 跑团原预留配音的准确朗读片段',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 8000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    enabled: input => !!input.ttrpgVoiceRequest,
+    read: async input => (await import('../ttrpg/open-voice-context')).readTtrpgOpenVoiceTextSourceV1(input),
+  },
+  {
+    key: 'ttrpgOpenAuthority', label: 'open 跑团角色权限与机械状态',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 10_000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenAuthority'),
+    read: async () => { throw new Error('[ttrpg-open-context] 角色来源只经有明确 POV/allow-list 的 Context Gateway 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenKnowledge', label: 'open 跑团当前角色知识',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 10_000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenKnowledge'),
+    read: async () => { throw new Error('[ttrpg-open-context] 角色来源只经有明确 POV/allow-list 的 Context Gateway 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenCommonIdentities', label: 'open 跑团全体当前队员共同身份与原可靠性',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 6000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgCommonIdentityProvider(),
+    read: async () => { throw new Error('[ttrpg-common-identities] 共同身份只经全体现队员交集与完整资源 allow-list 读取') },
+  },
+  {
+    key: 'ttrpgOpenLearnedIdentities', label: 'open 跑团角色已识别身份与原可靠性',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 6000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgLearnedIdentityProvider(),
+    read: async () => { throw new Error('[ttrpg-identities] 身份知识只经本人 POV 与完整资源 allow-list 读取') },
+  },
+  {
+    key: 'ttrpgOpenOracleHistory', label: 'open 跑团角色可读 Oracle 历史',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 6000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenOracleHistory'),
+    read: async () => { throw new Error('[ttrpg-open-context] Oracle 历史只经明确 POV/allow-list 的 Context Gateway 读取') },
+  },
+  {
+    key: 'ttrpgOpenFacts', label: 'open 跑团角色可读会话叙事事实',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 10000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenFacts'),
+    read: async () => { throw new Error('[ttrpg-open-context] 会话事实只经明确 POV/allow-list 的 Context Gateway 读取') },
+  },
+  {
+    key: 'ttrpgOpenKpInput', label: 'open 跑团共同可见结算叙述输入', scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true, requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenKpInput'),
+    read: async () => { throw new Error('[ttrpg-kp] KP 只经登记 Skill、实际叙述步骤与冻结共同可见 allow-list 读取') },
+  },
+  {
+    key: 'ttrpgOpenGmOracleInput', label: 'open 跑团受限 GM Oracle 解释输入',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenProvider('ttrpgOpenGmOracleInput'),
+    read: async () => { throw new Error('[ttrpg-open-gm] 主持解释只经登记 Skill、明确 GM POV 和冻结单个 Oracle allow-list 读取') },
+  },
+  {
+    key: 'ttrpgOpenActorContext', label: 'open 跑团角色情境指引与已保存叙述',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenGuidanceProvider('actor', 'ttrpgOpenActorContext'),
+    read: async () => { throw new Error('[ttrpg-open-context] 情境只经准确消费角色、冻结 allow-list 与完整 JSON 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenPartyContext', label: 'open 跑团共同叙述情境指引与已保存叙述',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenGuidanceProvider('party-narrator', 'ttrpgOpenPartyContext'),
+    read: async () => { throw new Error('[ttrpg-open-context] 情境只经准确消费角色、冻结 allow-list 与完整 JSON 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenGmContext', label: 'open 跑团GM 助手情境指引与已保存叙述',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenGuidanceProvider('gm-assistant', 'ttrpgOpenGmContext'),
+    read: async () => { throw new Error('[ttrpg-open-context] 情境只经准确消费角色、冻结 allow-list 与完整 JSON 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenMemory', label: 'open 跑团活动角色获准接收的记忆',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 8000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenMemoryProvider('actor', 'ttrpgOpenMemory'),
+    read: async () => { throw new Error('[ttrpg-memory] 记忆只经准确角色、冻结 allow-list 与完整 JSON 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenPartyMemory', label: 'open 跑团全队共同可见的记忆',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 8000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenMemoryProvider('party-narrator', 'ttrpgOpenPartyMemory'),
+    read: async () => { throw new Error('[ttrpg-memory] 共同记忆只经全队接收者交集、冻结 allow-list 与完整 JSON 渐进读取') },
+  },
+  {
+    key: 'ttrpgOpenBriefInput', label: 'open 跑团阶段复盘的全队共同资料',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenBriefProvider(),
+    read: async () => { throw new Error('[ttrpg-brief] 复盘只经准确本桌交集、冻结 allow-list 和实际交付来源读取') },
+  },
+  {
+    key: 'ttrpgOpenSituationInput', label: 'open 跑团独立局势生成的模型 GM 资料',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenSituationProvider(),
+    read: async () => { throw new Error('[ttrpg-situation] 局势资料只经本桌独立生成窗口、模型 GM 权限与完整 JSON 资源读取') },
+  },
+  {
+    key: 'ttrpgOpenPublicSituationInput', label: 'open 跑团共同局势的全体玩家资料交集',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenPublicSituationProvider(),
+    read: async () => { throw new Error('[ttrpg-public-situation] 共同局势只经真实全体交集、冻结 allow-list 与完整来源读取') },
+  },
+  {
+    key: 'ttrpgOpenEntityInput', label: 'open 跑团原咨询下的分范围实体提案资料',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenEntityProvider(),
+    read: async () => { throw new Error('[ttrpg-entity] 实体提案只经原咨询、单一接收者范围和完整模板/地点资源读取') },
+  },
+  {
+    key: 'ttrpgOpenCommonOracleInput', label: 'open 跑团共同 Oracle 事实的全体玩家资料交集',
+    scope: 'runtime', layer: 'L0', ownerFrom: 'instance', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true, requiresProductRuntimeSessionId: true,
+    requiresResourceKeyAllowList: true, resources: ttrpgOpenCommonOracleProvider(),
+    read: async () => { throw new Error('[ttrpg-common-oracle] 共同事实只经真实全体交集、冻结单个 Oracle allow-list 与完整来源读取') },
+  },
+  {
     key: 'ttrpgPrivateGuidance', label: '正式 TTRPG 单角色私密指引', scope: 'runtime', layer: 'L0', ownerFrom: 'work',
     budgetTokens: 8000, protectedFromTrim: true, requiresProductRuntimeSessionId: true,
     read: async input => (await import('../ttrpg/private-guidance')).readTtrpgPrivateGuidanceContextV1(input),
@@ -1920,6 +2305,12 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     read: readTtrpgPlayerRuntimeContextV1,
   },
   {
+    key: 'ttrpg.open.authoring-design', label: '开放跑团作者设计的准确草稿与冻结来源', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 24000, protectedFromTrim: true, atomic: true,
+    enabled: input => Number.isSafeInteger(input.ttrpgAuthoringDesignRevision),
+    read: async input => (await import('../ttrpg/open-authoring-design-context')).readTtrpgOpenAuthoringDesignContextV1(input),
+  },
+  {
     key: 'ai-town.authoring', label: 'AI 小镇 作者方案与会谈', scope: 'project', layer: 'L0', ownerFrom: 'work',
     budgetTokens: 16000, protectedFromTrim: true,
     read: async input => {
@@ -1940,13 +2331,77 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     },
   },
   {
+    key: 'chat.runtime-visuals', label: '角色聊天已提交事件的画面依据', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 12000, protectedFromTrim: true, atomic: true,
+    enabled: input => Number.isInteger(input.productRuntimeSessionId),
+    read: async input => {
+      if (!input.productRuntimeSessionId) throw new Error('请选择当前聊天存档')
+      const {readChatRuntimeVisualContextV1} = await import('../character-interaction/runtime-visual-context')
+      return JSON.stringify(await readChatRuntimeVisualContextV1(await resolveScope(input), input.productRuntimeSessionId))
+    },
+  },
+  {
     key: 'chat.authoring', label: '角色聊天作者方案与会谈', scope: 'project', layer: 'L0', ownerFrom: 'work',
     budgetTokens: 16000, protectedFromTrim: true,
     read: async input => {
       const scope = await resolveScope(input)
       const rows = await readOwnedRows<import('../character-interaction/authoring-contract').ChatAuthoringDraftV1>(scope, 'chatAuthoringDrafts', { owner: 'work' })
       const draft = rows[0]
-      return draft ? JSON.stringify({ revision: draft.revision, settings: JSON.parse(draft.settingsJson), conversation: (JSON.parse(draft.conversationJson) as import('../character-interaction/draft-service').ChatConversationTurnV1[]).filter(turn=>!turn.archived), worldSelected: draft.worldReleaseId != null }) : ''
+      if (!draft) return ''
+      const settings = JSON.parse(draft.settingsJson) as import('../character-interaction/authoring-contract').ChatAuthoringSettings
+      const {chatSettingsForAIContextV1} = await import('../character-interaction/experience-info')
+      return JSON.stringify({ revision: draft.revision, settings: chatSettingsForAIContextV1(settings), conversation: (JSON.parse(draft.conversationJson) as import('../character-interaction/draft-service').ChatConversationTurnV1[]).filter(turn=>!turn.archived), worldSelected: draft.worldReleaseId != null })
+    },
+  },
+  {
+    key: 'chat.consultation', label: '角色聊天本轮方案与所选证据', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true, atomic: true,
+    enabled: input => input.chatConsultationRequest !== undefined,
+    read: async input => {
+      if (!input.chatConsultationRequest) throw new Error('请指定本轮方案会谈')
+      const {readChatConsultationContextV2} = await import('../character-interaction/consultation-context')
+      return JSON.stringify(await readChatConsultationContextV2(await resolveScope(input), input.chatConsultationRequest))
+    },
+  },
+  {
+    key: 'chat.source-review', label: '角色聊天作者选中的原文资料', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true, atomic: true,
+    enabled: input => input.chatSourceReviewRequest !== undefined,
+    read: async input => {
+      if (!input.chatSourceReviewRequest) throw new Error('请明确选择需要整理的原文片段')
+      const request = structuredClone(input.chatSourceReviewRequest)
+      const {readChatSourceReviewContextV1} = await import('../character-interaction/source-review-context')
+      return JSON.stringify(await readChatSourceReviewContextV1(await resolveScope(input), request))
+    },
+  },
+  {
+    key: 'chat.source-units', label: '角色聊天待整理事实的完整原文', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true, atomic: true,
+    enabled: input => input.chatSourceUnitsRequest !== undefined,
+    read: async input => {
+      if (!input.chatSourceUnitsRequest) throw new Error('请指定事实整理原文')
+      const {readChatSourceUnitsContextV1} = await import('../character-interaction/source-units-context')
+      return JSON.stringify(await readChatSourceUnitsContextV1(await resolveScope(input), input.chatSourceUnitsRequest))
+    },
+  },
+  {
+    key: 'chat.source-units-review', label: '角色聊天事实候选与完整原文复核', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true, atomic: true,
+    enabled: input => input.chatSourceUnitsReviewRequest !== undefined,
+    read: async input => {
+      if (!input.chatSourceUnitsReviewRequest) throw new Error('请指定事实复核候选')
+      const {readChatSourceUnitsReviewContextV1} = await import('../character-interaction/source-units-context')
+      return JSON.stringify(await readChatSourceUnitsReviewContextV1(await resolveScope(input), input.chatSourceUnitsReviewRequest))
+    },
+  },
+  {
+    key: 'chat.source-unit-confirmation', label: '角色聊天事实与权限确认复核', scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true, atomic: true,
+    enabled: input => input.chatSourceUnitConfirmationRequest !== undefined,
+    read: async input => {
+      if (!input.chatSourceUnitConfirmationRequest) throw new Error('请指定待确认的事实与权限')
+      const {readChatSourceUnitConfirmationContextV1} = await import('../character-interaction/source-unit-confirmation-context')
+      return JSON.stringify(await readChatSourceUnitConfirmationContextV1(await resolveScope(input), input.chatSourceUnitConfirmationRequest))
     },
   },
   {
@@ -1961,6 +2416,72 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     read: readProductProductionBriefContext,
   },
   {
+    key: 'product-production.avg-task-inputs',
+    label: 'AVG 准确任务需求与依赖凭证',
+    scope: 'project', layer: 'L0', ownerFrom: 'work',
+    budgetTokens: 20_000, protectedFromTrim: true,
+    enabled: input => Number.isInteger(input.productBuildId) && !!input.productProductionTaskKey,
+    read: async input => {
+      // This reader is also used by sealed audio admission. Only module loading
+      // is transaction-free; all context/producer reads keep the caller's RW
+      // transaction and its exact scope/version fences.
+      const load = () => import('../avg/task-context')
+      const reader = await (Dexie.currentTransaction ? Dexie.waitFor(Dexie.ignoreTransaction(load)) : load())
+      return reader.readAvgTaskExecutionContextV1(input)
+    },
+  },
+  {
+    key: 'product-production.avg-sound-planning-inputs',
+    label: 'AVG 声音用途及冻结来源闭集',
+    scope: 'project', layer: 'L0', ownerFrom: 'work', budgetTokens: 24_000, protectedFromTrim: true,
+    enabled: input => Number.isInteger(input.productBuildId) && !!input.productProductionTaskKey,
+    read: async input => {
+      const load = () => import('../avg/sound-planning-context')
+      const reader = await (Dexie.currentTransaction ? Dexie.waitFor(Dexie.ignoreTransaction(load)) : load())
+      return reader.readAvgSoundPlanningContextV1(input)
+    },
+  },
+  {
+    key: 'product-production.avg-visual-planning-inputs',
+    label: 'AVG 专业视觉用途与已确认方向',
+    scope: 'project', layer: 'L0', ownerFrom: 'work', budgetTokens: 24_000, protectedFromTrim: true,
+    enabled: input => Number.isInteger(input.productBuildId) && !!input.productProductionTaskKey,
+    read: async input => {
+      // A cached browser import can still yield beyond the current IDB turn.
+      // Keep only module loading alive; the reader must use the same snapshot.
+      const load = () => import('../avg/visual-planning-context')
+      const reader = await (Dexie.currentTransaction ? Dexie.waitFor(Dexie.ignoreTransaction(load)) : load())
+      return reader.readAvgVisualPlanningContextV4(input)
+    },
+  },
+  {
+    key: 'product-production.avg-visual-planning-inputs-v5',
+    label: 'AVG 新参考策略、公开用途与已确认方向',
+    scope: 'project', layer: 'L0', ownerFrom: 'work', budgetTokens: 24_000, protectedFromTrim: true,
+    enabled: input => Number.isInteger(input.productBuildId) && !!input.productProductionTaskKey,
+    read: async input => {
+      const load = () => import('../avg/visual-planning-context-v5')
+      const reader = await (Dexie.currentTransaction ? Dexie.waitFor(Dexie.ignoreTransaction(load)) : load())
+      return reader.readAvgVisualPlanningContextV5(input)
+    },
+  },
+  {
+    key: 'product-production.ttrpg-open-task-brief', label: '开放跑团 V3 原授权任务方案投影',
+    // A complete frozen author policy must not hit an unrelated 8k atom cap.
+    // The atomic source is still bounded by this ceiling AND the exact task input budget.
+    scope: 'project', layer: 'L0', ownerFrom: 'work', budgetTokens: 100_000,
+    protectedFromTrim: true, atomic: true,
+    enabled: ttrpgOpenProductionTaskProjectionEnabledV3,
+    read: readTtrpgOpenProductionTaskBriefContextV3,
+  },
+  {
+    key: 'product-production.ttrpg-open-media-inputs', label: '开放跑团已采纳的媒资槽位与身份锚点',
+    scope: 'project', layer: 'L0', ownerFrom: 'work', budgetTokens: 16000,
+    protectedFromTrim: true, atomic: true,
+    enabled: async input => input.productProductionTaskKey === 'ttrpg.open.media-plan' && await ttrpgOpenProductionTaskProjectionEnabledV3(input),
+    read: readTtrpgOpenProductionMediaInputsV3,
+  },
+  {
     key: 'product-production.artifact-inputs',
     label: '上层产品生产任务依赖',
     scope: 'project',
@@ -1969,6 +2490,14 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     budgetTokens: 24_000,
     enabled: input => Number.isInteger(input.productBuildId) && !!input.productArtifactKeys?.length,
     read: readProductProductionArtifactInputs,
+  },
+  {
+    key: 'product-production.chat-opening-review-inputs',
+    label: '角色聊天开场审查来源与引用目录',
+    scope: 'project', layer: 'L1', ownerFrom: 'work', budgetTokens: 24_000,
+    protectedFromTrim: true,
+    enabled: input => Number.isInteger(input.productBuildId) && input.productProductionTaskKey === 'content.chat-opening-review',
+    read: async input => (await import('../character-interaction/opening-review-references')).readChatOpeningReviewReferenceContextV1(input),
   },
   {
     key: 'product-production.adventure-scene-script-inputs',
@@ -2581,12 +3110,51 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     read: readOpenWorldRuntimeContext,
   },
   {
-    key: 'interactionRuntime',
-    label: '角色互动单一视角',
+    key: 'chatActionRevision', label: '未通过回复的受限修订来源',
+    scope: 'runtime', ownerFrom: 'instance', layer: 'L0', budgetTokens: 6000,
+    atomic: true, protectedFromTrim: true, requiresProductRuntimeSessionId: true,
+    enabled: input => input.chatActionRevisionCurrentRunId != null, read: readChatActionRevisionContext,
+  },
+  {
+    key: 'chatMemoryReview', label: '记忆正文与实际共同来源', atomic: true,
+    scope: 'runtime', ownerFrom: 'instance', layer: 'L0', budgetTokens: 20000,
+    protectedFromTrim: true, requiresProductRuntimeSessionId: true,
+    enabled: input => input.chatMemoryCandidateRunId != null, read: readChatMemoryReviewContext,
+  },
+  {
+    key: 'chatActionCandidate', label: '待审查的持久化行动候选',
+    scope: 'runtime', ownerFrom: 'instance', layer: 'L0', budgetTokens: 8000,
+    protectedFromTrim: true, requiresProductRuntimeSessionId: true,
+    enabled: input => input.chatActionCandidateRunId != null, read: readChatActionCandidateContext,
+  },
+  {
+    key: 'chatSituationCandidate',
+    label: '待审查的持久化情境候选',
+    scope: 'runtime', ownerFrom: 'instance', layer: 'L0', budgetTokens: 8000,
+    protectedFromTrim: true, requiresProductRuntimeSessionId: true,
+    enabled: input => input.chatSituationCandidateRunId != null,
+    read: readChatSituationCandidateContext,
+  },
+  {
+    key: 'chatSituationRuntime',
+    label: '角色聊天情境协调视角',
     scope: 'runtime',
     ownerFrom: 'instance',
     layer: 'L0',
-    budgetTokens: 8000,
+    budgetTokens: CHAT_COORDINATOR_SOURCE_TOKENS_V1,
+    atomic: true,
+    protectedFromTrim: true,
+    requiresProductRuntimeSessionId: true,
+    read: readChatSituationRuntimeContext,
+  },
+  {
+    key: 'interactionRuntime',
+    label: '角色互动单一视角',
+    atomic: true,
+    scope: 'runtime',
+    ownerFrom: 'instance',
+    layer: 'L0',
+    budgetTokens: CHAT_CONTEXT_SOURCE_TOKENS_V1,
     protectedFromTrim: true,
     requiresProductRuntimeSessionId: true,
     enabled: input => !!input.interactionParticipantKey?.trim(),
@@ -2692,16 +3260,21 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     scope: 'manual',
     layer: 'L0',
     budgetTokens: 100_000,
-    enabled: input => !!input.ragEntryKeys?.length,
+    enabled: input => !!input.ragEntryKeys?.length || !!input.ragAnnotationTarget,
     resources: CANON_RESOURCE_PROVIDER_V1,
-    read: input => readRagSelectionContext({
+    read: input => {
+      if (input.ragAnnotationTarget && input.productRuntimeSessionId != null) throw new Error('产品运行只能读取冻结世界，不能读取作者草稿注释')
+      return readRagSelectionContext({
       projectId: input.projectId,
       scope: input.scope,
       worldGroupId: input.worldGroupId,
       entryKeys: input.ragEntryKeys,
+      originalEvidence: input.ragReadMode === 'original-evidence-v1',
+      annotationTarget: input.ragAnnotationTarget,
       inputBudgetTokens: input.inputBudgetTokens,
       trace: input.ragSelectionTrace,
-    }),
+      })
+    },
   },
   {
     key: 'manualText',
@@ -2907,14 +3480,18 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     key: 'canonAssertions',
     label: '世界宪法(已确认设定断言)',
     scope: 'world',
-    ownerFrom: 'world',
+    ownerFrom: 'work',
     layer: 'L1',
-    budgetTokens: 1800,
+    budgetTokens: 8_000,
     protectedFromTrim: true,
     requiresWorldGroupId: true,
-    read: async input => formatCanonAssertionsContext(
-      await readCanonAssertions(input.projectId, input.worldGroupId),
-    ),
+    read: async input => {
+      if (input.productRuntimeSessionId != null) throw new Error('产品运行只能读取冻结世界，不能读取作者草稿注释')
+      return [
+        formatCanonAssertionsContext(await readCanonAssertions(input.projectId, input.worldGroupId, input.scope)),
+        await readNarrativeCanonContextV1({ scope: input.scope!, worldGroupId: input.worldGroupId }),
+      ].filter(Boolean).join('\n\n')
+    },
   },
   {
     key: 'constitutionScanSources',
@@ -3382,3 +3959,4 @@ export const CONTEXT_SOURCES: ContextSource[] = [
 export const CONTEXT_SOURCE_BY_KEY: ReadonlyMap<string, ContextSource> = new Map(
   CONTEXT_SOURCES.map(source => [source.key, source] as const),
 )
+import {canonicalStringify} from '../agent/run/hash'

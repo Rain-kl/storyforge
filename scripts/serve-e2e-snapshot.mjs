@@ -10,8 +10,26 @@ const configuredPort = Number(portFlagIndex >= 0 ? process.argv[portFlagIndex + 
 const port = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 4178
 const snapshotEntries = [
   'scripts/local-codex',
+  // Local voice replay imports this pinned, model-free reading descriptor.
+  'scripts/ttrpg-local-tts/reading-profile.json',
+  'scripts/ttrpg-local-tts/product-profile.json',
+  // The browser verifies historical raw against this immutable V2 wire core.
+  'scripts/ttrpg-local-tts/product-profile-v2.json',
+  'scripts/ttrpg-local-tts/product-qwen-uncle_fu-v1.json',
+  'scripts/ttrpg-local-tts/product-qwen-serena-v1.json',
+  // Vite's inactive local transport still needs its Node module imports.
+  // Python inference and installed assets remain outside ordinary E2E.
+  'scripts/ttrpg-local-tts/product-bridge.mjs',
+  'scripts/ttrpg-local-tts/product-jobs.mjs',
+  'scripts/ttrpg-local-tts/product-contract.mjs',
+  'scripts/ttrpg-local-tts/reading-preview.mjs',
   'scripts/distribution/proxies.mjs',
   'scripts/distribution/diagnostics.mjs',
+  // Browser sound contracts import these pinned public metadata files. Copy
+  // only JSON, never local weights, runtimes, provider journals or credentials.
+  'scripts/avg-local-music/model-source.json',
+  'scripts/avg-local-music/library-source.json',
+  'scripts/avg-local-music/publisher-library-source.json',
   'data',
   'showcase/short-novel',
   'showcase/screenplay',
@@ -29,6 +47,9 @@ const snapshotEntries = [
   'src',
   'tailwind.config.ts',
   'tests/helpers',
+  'tests/acceptance/narrative-world/corpus-v1.json',
+  'tests/acceptance/narrative-world/worldrelease-v4-content-golden.json',
+  'tests/acceptance/narrative-world/scale-plan-20261015-v1.json',
   'tsconfig.json',
   'vite.config.ts',
 ]
@@ -48,6 +69,9 @@ for (const entry of snapshotEntries) {
 await symlink(join(workspaceRoot, 'node_modules'), join(snapshotRoot, 'node_modules'), 'dir')
 
 const viteEntry = join(workspaceRoot, 'node_modules', 'vite', 'bin', 'vite.js')
+const snapshotEnv = { ...process.env, STORYFORGE_E2E_SNAPSHOT: '1' }
+delete snapshotEnv.STORYFORGE_TTRPG_LOCAL_TTS_RUNTIME_DIR
+delete snapshotEnv.STORYFORGE_TTRPG_QWEN_TTS_RUNTIME_DIR
 const child = spawn(process.execPath, [
   viteEntry,
   '--host', '127.0.0.1',
@@ -55,7 +79,7 @@ const child = spawn(process.execPath, [
   '--strictPort',
 ], {
   cwd: snapshotRoot,
-  env: { ...process.env, STORYFORGE_E2E_SNAPSHOT: '1' },
+  env: snapshotEnv,
   stdio: 'inherit',
 })
 

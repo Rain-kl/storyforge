@@ -1,3 +1,6 @@
+import { lookupContextResourceMetadataV1 } from './resource-metadata'
+import { canonicalStringify } from '../agent/run/hash'
+import { sha256Text } from '../ai/chapter-memory/text-normalization'
 import type {
   ContextResourceDescriptorV1,
   FrozenResourceScopeV1,
@@ -5,12 +8,18 @@ import type {
 } from '../registry/types'
 import {
   assertWorldReleaseIdentityCurrentV1,
+  WORLD_RELEASE_RESOURCE_PROVIDER_V1,
   listAllWorldReleaseResourceDescriptorsV1,
   openWorldReleaseV1,
   readWorldResourceV1,
   type OpenWorldReleaseV1,
   worldReleaseIdentityTransactionTablesV1,
 } from './world-release-provider'
+import type { ProductSourcePlan, WorldReferenceV1 } from '../types/world-product-contracts'
+import type { WorldQueryAccessV1, WorldReferenceV2 } from '../types/world-query'
+import { createWorldReference, resolveWorldReferenceResourceScope } from '../world-engine/world-reference-v2'
+import { openProductPreparationWorldQueryV1, openProductPlanWorldQueryV1, openAuthorWorldQueryAccessV1, bindWorldQueryResourcesV1,
+  describeWorldQueryAccessV1, closeWorldQueryAccessV1 } from './world-query-client'
 
 const MAX_RESOURCE_READ_TOKENS = 100_000
 
@@ -18,12 +27,106 @@ export interface WorldSemanticResourceSnapshotV1 {
   descriptor: ContextResourceDescriptorV1 & {
     worldSemantic: NonNullable<ContextResourceDescriptorV1['worldSemantic']>
   }
-  /** Canonical semantic row returned by the provider, never a table envelope. */
+  /** Full registered read: a v3 semantic row or a v4 authorized atom envelope. */
   value: Record<string, unknown>
+}
+
+// A v4 descriptor identifies an authorized materialization, not the hash of
+// JSON(value). Keep the actual full-read witness in memory; serialized/cloned
+// data cannot stand in for a registered read, and later mutation invalidates it.
+const verifiedProductReads = new WeakMap<WorldSemanticResourceSnapshotV1, string>()
+
+export function assertVerifiedProductWorldResourceSnapshotV2(resource: WorldSemanticResourceSnapshotV1): void {
+  if (verifiedProductReads.get(resource) !== canonicalStringify(resource)) {
+    throw new Error('[world-release-client] 世界资源缺少完整读取证据或读取后已变化')
+  }
 }
 
 export interface WorldSemanticResourceCatalogV1 extends OpenWorldReleaseV1 {
   resources: ContextResourceDescriptorV1[]
+}
+
+/** Neutral release metadata only; avoids projecting every semantic row for a scope identity check. */
+export function describeWorldSemanticReleaseV1(input: {
+  localReleaseRecordId: number; expectedProjectId: number; expectedWorldId?: number
+}): Promise<OpenWorldReleaseV1> {
+  return openWorldReleaseV1(input)
+}
+
+export interface WorldProductResourceCatalogV2 {
+  description: Pick<OpenWorldReleaseV1['description'], 'identity' | 'sourceManifestHash'> & {
+    worldReference: WorldReferenceV1 | WorldReferenceV2
+  }
+  scope: OpenWorldReleaseV1['scope']
+  resources: ContextResourceDescriptorV1[]
+  worldQueryAccess?: WorldQueryAccessV1
+}
+
+/** Same registered provider, explicit version and product dispatch. S2 gets
+ * only a preparation catalog. Explicit chat review uses an author grant;
+ * formal reads still require the frozen exact plan and cannot reuse it. */
+export async function openProductWorldResourceCatalogV2(input: {
+  localReleaseRecordId: number; expectedProjectId: number; expectedWorldId?: number
+  productType: string; sourcePlan?: ProductSourcePlan
+  authorReview?: true
+}): Promise<WorldProductResourceCatalogV2> {
+  if (input.authorReview && (input.sourcePlan || input.productType !== 'character-interaction')) {
+    throw new Error('[world-release-client] 作者资料检查仅用于聊天确认，不能替代正式来源计划')
+  }
+  const reference = input.sourcePlan?.worldReference ?? await createWorldReference(input.localReleaseRecordId)
+  if (reference.localReleaseRecordId !== input.localReleaseRecordId) throw new Error('[world-release-client] 计划 locator 不一致')
+  if (reference.version === 1) return openWorldSemanticResourceCatalogV1(input)
+  if (input.productType !== 'character-interaction' && input.productType !== 'avg') throw new Error('[world-release-client] 此产品尚未登记 v4 来源编译器')
+  const scope = await resolveWorldReferenceResourceScope(reference)
+  if (scope.projectId !== input.expectedProjectId || scope.worldId === undefined
+    || (input.expectedWorldId !== undefined && scope.worldId !== input.expectedWorldId)) throw new Error('[world-release-client] 世界来源越过产品 owner')
+  const access = input.sourcePlan?.version === 2
+    ? await openProductPlanWorldQueryV1({ scope: { ...scope, worldId: scope.worldId }, sourcePlan: input.sourcePlan })
+    : input.authorReview
+      ? await openAuthorWorldQueryAccessV1({scope: {...scope, worldId: scope.worldId}, localReleaseRecordId: reference.localReleaseRecordId,
+        view: 'canon', perspective: {kind: 'author'}, knowledgeThrough: null, disclosedThrough: null})
+      : await openProductPreparationWorldQueryV1({ scope: { ...scope, worldId: scope.worldId },
+        localReleaseRecordId: reference.localReleaseRecordId, productType: input.productType })
+  try {
+    const provider = await bindWorldQueryResourcesV1(access), resources: ContextResourceDescriptorV1[] = []
+    let cursor: string | undefined
+    const cursors = new Set<string>()
+    do {
+      const page = await provider.listMetadata({ scope: access.scope, limit: 100, cursor })
+      resources.push(...page.items)
+      if (resources.length > 20000 || (page.nextCursor && cursors.has(page.nextCursor))) throw new Error('[world-release-client] 目录超限或游标未前进')
+      cursor = page.nextCursor ?? undefined
+      if (cursor) cursors.add(cursor)
+    } while (cursor)
+    return { description: { ...await describeWorldQueryAccessV1(access), worldReference: access.reference },
+      scope: { ...access.scope, worldId: scope.worldId, worldReleaseId: reference.localReleaseRecordId, worldReleaseHash: reference.releaseHash },
+      resources: resources.sort((a, b) => a.resourceKey.localeCompare(b.resourceKey)), worldQueryAccess: access }
+  } catch (error) { await closeWorldQueryAccessV1(access); throw error }
+}
+
+export async function closeProductWorldResourceCatalogV2(catalog: WorldProductResourceCatalogV2): Promise<void> {
+  if (catalog.worldQueryAccess) await closeWorldQueryAccessV1(catalog.worldQueryAccess)
+}
+
+export async function readProductWorldResourcesV2(input: {
+  catalog: WorldProductResourceCatalogV2; descriptors: ContextResourceDescriptorV1[]
+}): Promise<WorldSemanticResourceSnapshotV1[]> {
+  const access = input.catalog.worldQueryAccess
+  if (!access) return readWorldSemanticResourcesV1({ scope: input.catalog.scope, descriptors: input.descriptors })
+  const scope = structuredClone(input.catalog.scope), descriptors = structuredClone(input.descriptors)
+  const provider = await bindWorldQueryResourcesV1(access)
+  const resources: WorldSemanticResourceSnapshotV1[] = []
+  for (const descriptor of descriptors) {
+    if (!hasWorldSemantic(descriptor)) throw new Error('[world-release-client] 不是世界语义资源')
+    const read = await provider.read({ scope, resourceKey: descriptor.resourceKey, depth: 'full', maxTokens: MAX_RESOURCE_READ_TOKENS })
+    if (read.descriptor.contentHash !== descriptor.contentHash) throw new Error('[world-release-client] 读取内容身份已变化')
+    if (canonicalStringify(read.descriptor) !== canonicalStringify(descriptor)) throw new Error('[world-release-client] 读取元数据已变化')
+    if (await sha256Text(read.content) !== read.contentHash) throw new Error('[world-release-client] 完整读取内容与证据不一致')
+    const resource = { descriptor: structuredClone(descriptor), value: parseSemanticValue(read.content, descriptor.resourceKey) }
+    verifiedProductReads.set(resource, canonicalStringify(resource))
+    resources.push(resource)
+  }
+  return resources
 }
 
 function hasWorldSemantic(
@@ -70,16 +173,15 @@ export async function describeWorldSemanticResourceV1(input: {
 }): Promise<ContextResourceDescriptorV1 & {
   worldSemantic: NonNullable<ContextResourceDescriptorV1['worldSemantic']>
 }> {
-  const read = await readWorldResourceV1({
+  const descriptor = (await lookupContextResourceMetadataV1({
+    provider: WORLD_RELEASE_RESOURCE_PROVIDER_V1,
     scope: input.scope,
-    resourceKey: input.resourceKey,
-    depth: 'index',
-    maxTokens: 1,
-  })
-  if (!hasWorldSemantic(read.descriptor)) {
-    throw new Error(`[world-release-client] 资源不是世界语义资源:${input.resourceKey}`)
+    resourceKeys: [input.resourceKey],
+  })).get(input.resourceKey)
+  if (!descriptor || !hasWorldSemantic(descriptor)) {
+    throw new Error(`[world-release-client] 世界语义资源不可用:${input.resourceKey}`)
   }
-  return read.descriptor
+  return descriptor
 }
 
 function parseSemanticValue(content: string, resourceKey: string): Record<string, unknown> {
@@ -162,5 +264,6 @@ export async function readWorldSemanticResourcesV1(input: {
 
 /** Paginated author-facing browsing uses the same neutral frozen protocol as
  * product readers. It never exposes a physical release manifest. */
-export { openWorldReleaseV1, searchWorldReleaseV1, readWorldResourceV1, readWorldOriginalEvidenceV1, type OpenWorldReleaseV1 } from './world-release-provider'
+export { openWorldReleaseV1, openWorldReleaseAuthorBrowserV1, listWorldReleaseV1, searchWorldReleaseV1, readWorldResourceV1, readWorldOriginalEvidenceV1, type OpenWorldReleaseV1 } from './world-release-provider'
+export { openAuthorWorldQueryAccessV1, bindWorldQueryResourcesV1, queryWorldReleaseV1, closeWorldQueryAccessV1, authorWorldQueryV1 } from './world-query-client'
 export { WORLD_RELEASE_RESOURCE_KINDS_V1 } from './world-release-provider-contract'

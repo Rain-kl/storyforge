@@ -66,6 +66,10 @@ function assertScope(scope: ContextResourceDescriptorV1['scope']): void {
     fail('invalid-scope', 'worldReleaseId 非法')
   }
   if (scope.worldReleaseHash != null) requireHash(scope.worldReleaseHash, 'scope.worldReleaseHash')
+  if (scope.runtimeActorKey !== undefined && (scope.productRuntimeSessionId == null
+    || typeof scope.runtimeActorKey !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/.test(scope.runtimeActorKey))) {
+    fail('invalid-scope', 'runtimeActorKey 必须属于明确 instance 并使用合法稳定 key')
+  }
 }
 
 export function contextSourceRefOwnerV1(ref: ContextSourceRefV1): DomainOwnershipSpec {
@@ -134,6 +138,25 @@ export function assertContextResourceDescriptorV1(input: {
     if (!descriptor.worldSemantic.area.trim() || !descriptor.worldSemantic.resourceKind.trim()
       || !descriptor.worldSemantic.resourceCoordinate.trim()) {
       fail('invalid-world-semantic', `${descriptor.resourceKey} 世界语义身份非法`)
+    }
+    const narrative = descriptor.worldSemantic.narrative
+    const authorSource = descriptor.worldSemantic.authorSource
+    if (authorSource && (descriptor.sourceKey !== 'worldRelease' || !narrative || !descriptor.scope.worldReleaseHash
+      || Object.keys(authorSource).sort().join(',') !== 'sourceResourceKey,sourceRevision,title,version'
+      || authorSource.version !== 1 || typeof authorSource.title !== 'string' || !authorSource.title.trim()
+      || typeof authorSource.sourceResourceKey !== 'string' || !authorSource.sourceResourceKey.trim()
+      || typeof authorSource.sourceRevision !== 'string' || !authorSource.sourceRevision.trim())) {
+      fail('invalid-world-semantic', `${descriptor.resourceKey} 作者来源目录合同非法`)
+    }
+    if (narrative && (descriptor.sourceKey !== 'worldRelease' || narrative.version !== 1
+      || narrative.resolverVersion !== 'narrative-neutral-closure-v1'
+      || !Array.isArray(narrative.requiredResourceKeys) || narrative.requiredResourceKeys.length > 500
+      || new Set(narrative.requiredResourceKeys).size !== narrative.requiredResourceKeys.length
+      || narrative.requiredResourceKeys.some(key => typeof key !== 'string' || !/^world-narrative:[a-f0-9]{64}$/.test(key))
+      || (narrative.relationEndpoints !== null && (!Array.isArray(narrative.relationEndpoints)
+        || narrative.relationEndpoints.length !== 2
+        || narrative.relationEndpoints.some(key => !narrative.requiredResourceKeys.includes(key) && key !== descriptor.resourceKey))))) {
+      fail('invalid-world-semantic', `${descriptor.resourceKey} 叙事依赖合同非法`)
     }
   }
   if (descriptor.sourceRefs.length === 0) fail('missing-source-ref', `${descriptor.resourceKey} 没有 Canon/source ref`)

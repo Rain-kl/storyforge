@@ -1,5 +1,30 @@
 # Changelog
 
+
+
+## October 28, 2026 · Longform recovery and interactive-production instructions
+
+- Chapter generation/continuation accepts instructions before starting; cancellation retains input without a request. Malformed story stages preserve originals and provide explicit backup, inspection, and repair saving. See [prose and story-stage recovery](/en/features/longform/writing), from [#209](https://github.com/yuanbw2025/storyforge/pull/209) and [#226](https://github.com/yuanbw2025/storyforge/pull/226).
+- Text-adventure navigation retains the workspace and isolates stale reads. Custom model IDs remain saved, with official-service output limits and streaming usage passed according to support. See [text adventure](/en/features/interactive/text-adventure) and [model configuration](/en/getting-started/model-config), from [#208](https://github.com/yuanbw2025/storyforge/pull/208) and [#217](https://github.com/yuanbw2025/storyforge/pull/217).
+- Open TTRPG adds trial, session-recovery, and narration-preview instructions; character chat covers three-track production, original-image confirmation, and save-image recovery; AVG covers images, per-line voice, local processing, and prototype acceptance. All remain previews. See [TTRPG](/en/features/interactive/ttrpg), [character chat](/en/features/interactive/character-chat), and [AVG](/en/features/interactive/avg), from [#196](https://github.com/yuanbw2025/storyforge/pull/196), [#172](https://github.com/yuanbw2025/storyforge/pull/172), and [#219](https://github.com/yuanbw2025/storyforge/pull/219).
+- [Backup instructions](/en/guides/backup-restore) now reflect main's database v13 and backup v17 while retaining strict older-format validation. See [compatibility](/en/updates/compatibility) for formal versions and release preparation. [Development status](/en/updates/development-status) re-enumerates all existing branches/worktrees, separating merged chains, candidate release work, and pending longform repairs.
+
+## October 26, 2026 · Open-world production and repair integration
+
+The workspace checks progress and blockers across game content, product systems, and media. Open and explicitly review each image before passing publication quality checks. Partial repair creates a child build while preserving older releases and saves. Players can use More → Read local experience records to inspect and explicitly export local feedback. See the [open-world guide](/en/features/interactive/open-world#three-track-production-image-review-and-partial-repair). Source: [PR #134](https://github.com/yuanbw2025/storyforge/pull/134). General production still requires independent-model calibration and two human-played endings.
+
+## October 26, 2026 · Character-candidate editing and knowledge-base review
+
+Invalid or unsaved edits to supplementation or lifecycle candidates now show a reason and block adoption; correct the text to continue with the original candidate. Native error reporting avoids requeuing the same historical occurrence while retaining independent new failures. See [candidate editing](/en/features/longform/character-driven#when-an-edited-character-candidate-cannot-be-adopted) and [troubleshooting](/en/guides/troubleshooting). Source: [PR #201](https://github.com/yuanbw2025/storyforge/pull/201). [Development status](/en/updates/development-status) records the full local branch/worktree review and deduplication.
+
+## October 25, 2026 · Narrative-world engineering preview
+
+The local experimental preview adds narrative annotations, resumable compilation and sealing, original-evidence queries by time and character perspective, and change-impact checklists. Enhanced entries remain hidden by default, with coverage gaps and review items explicit. Semantic impact quality, scale performance, and human revision benefits still require acceptance. See [world-engine steps](/en/features/world-engine#local-experimental-narrative-world-preview). Source: [PR #197](https://github.com/yuanbw2025/storyforge/pull/197).
+
+## October 24, 2026 · Retrying failed module loads
+
+For module or CSS resource-load failures, Retry on the error page saves edits before reloading. If saving fails, the page remains open with a recovery message. See [recovery steps](/en/guides/troubleshooting#retrying-a-failed-module-load). Source: [PR #195](https://github.com/yuanbw2025/storyforge/pull/195).
+
 ## October 23, 2026 · Saving and restoring large run contracts
 
 With larger run inputs, valid run contracts can be saved and revised in full, then read after a reload or complete-backup restoration, without being rejected by a smaller event-record limit. Oversized records still fail explicitly. Context snapshots are never truncated; model-call budgets, candidate adoption, permissions and freshness checks remain unchanged. Preserve the original work and backup after a capacity error rather than deleting contract fields. Evidence: [PR #185](https://github.com/yuanbw2025/storyforge/pull/185). See [backup and recovery](/en/guides/backup-restore).
@@ -18,6 +43,12 @@ Added [checks and retry steps after detailed-outline interruption](/en/features/
 See [outlines and writing](/en/features/longform/writing), [PR #141](https://github.com/yuanbw2025/storyforge/pull/141), [PR #171](https://github.com/yuanbw2025/storyforge/pull/171), and [Issue #183](https://github.com/yuanbw2025/storyforge/issues/183).
 
 Feature updates, fixes, and workflow improvements are organized by user impact. See [compatibility](/en/updates/compatibility) for version information.
+
+## In development: Candidate character-chat flows (unreleased)
+
+The character-chat branch is integrating character-card conversion, experience-package installation/export, compatible save-upgrade copies, and three original starter drafts. The committed baseline is `a4f16fd9`; the subsequent changes observed here remain uncommitted and are not released features. See [Character chat](/en/features/interactive/character-chat#new-flows-in-the-development-branch-unreleased) for candidate instructions and limitations, and [pending development records](/en/updates/development-status#character-chat-candidate) for delivery status.
+
+The candidate also includes authorship and usage statements frozen with each release, and fixes installation numbering that could break a complete backup when a newer version was installed first. Full validation remains in progress.
 
 ## October 20, 2026 · System-fiction planning, whole-chapter review, and scoped revision
 
@@ -87,6 +118,12 @@ This review confirms that [PR #119](https://github.com/yuanbw2025/storyforge/pul
 - Formally released works meeting the existing human-playtest and candidate requirements can Export standalone web game as a static ZIP. Players need neither StoryForge nor an AI configuration. Export does not upload or publish the work, and unpublished playtests cannot bypass eligibility gates.
 
 See [Text adventure](/en/features/interactive/text-adventure), [Backup and restore](/en/guides/backup-restore), and [Compatibility](/en/updates/compatibility). Technical cases and merged code do not establish human acceptance or public release of specific works such as Tidal Bell Isles.
+
+## 2026-10-13 · Text open world productization branch preview
+
+The development branch adds three production responsibility summaries, missing-artifact and usage details, versioned assembly source snapshots, per-image human review, and local player experience records with categorized feedback exports. See the [feature guide](/en/features/interactive/open-world) and [pending work](/en/updates/development-status).
+
+Implementation baseline: `45c541e9`; W0 audit commit: `351bb52f`. Implementation: [614fe1ca](https://github.com/yuanbw2025/storyforge/commit/614fe1ca), [3216158f](https://github.com/yuanbw2025/storyforge/commit/3216158f), [ae1b3f3a](https://github.com/yuanbw2025/storyforge/commit/ae1b3f3a), [2505ef9d](https://github.com/yuanbw2025/storyforge/commit/2505ef9d), [404f5cf0](https://github.com/yuanbw2025/storyforge/commit/404f5cf0). This entry describes branch development, not a merge, deployment, real-model validation, or human acceptance.
 
 ## October 13, 2026 · v4.0.0 local portable release
 

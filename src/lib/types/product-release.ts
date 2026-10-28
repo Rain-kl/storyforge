@@ -9,6 +9,8 @@ import type {
 import type { AdventureContentV1 } from './adventure'
 import type { AdventureContent } from './adventure-v2'
 import type { AvgPresentationContentV1 } from './avg'
+import type { AvgRuntimeModuleV1 } from '../avg/runtime-contract-v2'
+import type { AvgRuntimeModuleV2 } from '../avg/executable-module'
 import type { FrozenProductMediaAsset } from './product-media'
 import type { OpenWorldEvolutionContentV1 } from './open-world-evolution'
 import type { OpenWorldContentV1 } from './open-world'
@@ -27,6 +29,11 @@ export interface ProductWorldSourceSelectionV1 {
   resourceKeys: string[]
   roleBindings: Record<string, string[]>
 }
+export interface ProductWorldSourceSelectionV2 extends Omit<ProductWorldSourceSelectionV1, 'version' | 'productType'> {
+  version: 2
+  productType: 'character-interaction' | 'avg'
+}
+export type ProductWorldSourceSelection = ProductWorldSourceSelectionV1 | ProductWorldSourceSelectionV2
 
 export const NARRATIVE_BEAT_KINDS = ['narration', 'dialogue', 'action', 'system'] as const
 export type NarrativeBeatKind = typeof NARRATIVE_BEAT_KINDS[number]
@@ -127,6 +134,16 @@ export interface FrozenInteractionRuntimeV2 {
   playerKey: 'player'
   profiles: FrozenInteractionCharacterProfile[]
   sceneTemplates: FrozenInteractionSceneTemplate[]
+  chatSource?: import('./character-interaction').FrozenChatSourceProjectionV1
+  /** Experimental chat narrative module; absent in existing releases. */
+  chatNarrative?: import('./chat-narrative').FrozenChatNarrativeV1
+  /** Player-visible images owned by this frozen product, never by the world. */
+  chatMedia?: import('../character-interaction/media-contract').ChatMediaBindingsV1
+  chatVisualDesign?: import('../character-interaction/visual-design').ChatVisualDesignV1
+  /** Attribution for converted external cards; never copied into role knowledge. */
+  chatCardCredits?: import('../character-interaction/card-credits').ChatCharacterCardCreditsV1
+  /** Public author statements, frozen per release and excluded from AI knowledge. */
+  chatExperienceInfo?: import('../character-interaction/experience-info').ChatExperienceInfoV1
 }
 
 export interface FrozenRuntimeMediaAssetV2 extends FrozenProductMediaAsset {
@@ -152,7 +169,7 @@ export interface ProductRuntimePackageV1 {
   }
   sourceWorld: {
     contentHash: string
-    selection: ProductWorldSourceSelectionV1
+    selection: ProductWorldSourceSelection
   }
   narrative: FrozenProductNarrativeV1
   interaction?: FrozenInteractionRuntimeV2
@@ -187,9 +204,9 @@ export interface ProductReleaseManifestV1 {
     rootTerminalReceiptHash: string
   }
   sourceContracts: {
-    sourcePlan: import('./world-product-contracts').ProductSourcePlanV1
+    sourcePlan: import('./world-product-contracts').ProductSourcePlan
     confirmedBrief: import('./world-product-contracts').ConfirmedProductBriefV1
-    sourceManifest: import('./world-product-contracts').ProductSourceManifestV1
+    sourceManifest: import('./world-product-contracts').ProductSourceManifest
   } | import('./text-open-world-production').TextOpenWorldCreatorReleaseSourceContractsV1
   /** Hash of every release field except lineage. */
   releaseIdentityHash: string
@@ -258,7 +275,44 @@ export type PlayableTextOpenWorldProductRuntimePackageV1 =
   | TextOpenWorldHybridProductRuntimePackageV1
   | TextOpenWorldVNextOnlyProductRuntimePackageV1
 
-export type AnyProductReleaseManifest = ProductReleaseManifestV1
+/** Shared V2 carrier. Product-owned modules are admitted only by registered
+ * typed codecs. BASE-00B admits an inert AVG module; V2 runtime remains closed. */
+export interface ProductRuntimePackageV2 {
+  schema: 'storyforge.product-runtime-package'
+  version: 2
+  productType: 'avg'
+  definition: ProductRuntimePackageV1['definition']
+  sourceWorld: ProductRuntimePackageV1['sourceWorld']
+  narrative: FrozenProductNarrativeV1
+  modules: Array<AvgRuntimeModuleV1 | AvgRuntimeModuleV2>
+  presentation?: undefined
+  interaction?: undefined
+  adventure?: undefined
+  openWorldEvolution?: undefined
+  openWorld?: undefined
+  textOpenWorldVNext?: undefined
+  ttrpg?: undefined
+  town?: undefined
+}
+
+export type AnyProductRuntimePackage = ProductRuntimePackageV1 | ProductRuntimePackageV2
+  | import('../ttrpg/content-version').ProductRuntimePackageWithTtrpgV2
+
+export interface ProductReleaseManifestV2 extends Omit<ProductReleaseManifestV1,
+  'version' | 'productType' | 'runtimePackage' | 'sourceContracts' | 'lineage'> {
+  version: 2
+  productType: 'avg'
+  runtimePackage: ProductRuntimePackageV2
+  sourceContracts: {
+    sourcePlan: import('./world-product-contracts').ProductSourcePlan
+    confirmedBrief: import('./world-product-contracts').ConfirmedProductBriefV1
+    sourceManifest: import('./world-product-contracts').ProductSourceManifest
+  }
+  lineage: import('./world-product-contracts').ProductReleaseLineageV1
+}
+
+export type AnyProductReleaseManifest = ProductReleaseManifestV1 | ProductReleaseManifestV2
+  | import('../ttrpg/content-version').ProductReleaseManifestWithTtrpgV2
 
 export interface ProductReleaseMarketplaceProvenanceV1 {
   source: 'marketplace' | 'community-bundle'
@@ -290,9 +344,20 @@ export interface ProductReleaseLocalFileProvenanceV1 {
   importedAt: number
 }
 
+/** A verified, self-contained file; it carries no marketplace or creator claim. */
+export interface ProductReleaseLocalBundleProvenanceV1 {
+  source: 'local-bundle'
+  bundleHash: string
+  originalReleaseHash: string
+  remoteCreatorIdentityVerified: false
+  localCopyPreserved: true
+  importedAt: number
+}
+
 export type ProductReleaseDistributionProvenanceV1 =
   | ProductReleaseMarketplaceProvenanceV1
   | ProductReleaseLocalFileProvenanceV1
+  | ProductReleaseLocalBundleProvenanceV1
 
 export interface ProductRelease {
   id?: number
@@ -310,3 +375,6 @@ export interface ProductRelease {
   createdAt: number
   distributionProvenance?: ProductReleaseDistributionProvenanceV1
 }
+
+/** Player view preserves the actual package version; no V2-to-V1 conversion. */
+export type AvgPlayableRuntimePackage = AvgProductRuntimePackageV1 | ProductRuntimePackageV2

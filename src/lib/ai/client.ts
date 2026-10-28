@@ -1,5 +1,6 @@
 import { assertGenerationAvailable } from '../showcase/policy'
-import { streamCodex, CODEX_BASE_URL } from './codex-transport'
+import { streamCodex, CODEX_BASE_URL, type CodexRequestRefV1 } from './codex-transport'
+import type { CodexTerminalFailureV1 } from './codex-terminal-failure'
 import type { AIConfig, ChatMessage } from '../types'
 import { AIError, CodexRequestError } from '../types'
 import { createLog, updateLog, type TokenUsage } from './logger'
@@ -9,6 +10,7 @@ import { buildOpenAIEndpoint } from './openai-endpoint'
 import { getAIConfigPresetSessionApiKey, useAIConfigStore } from '../../stores/ai-config'
 import { resolveAIConfigForTask, type AITaskKind } from './task-routing'
 import { AICompletionResponseErrorV1, inspectCompletionResponseV1, requireCompletionTextV1 } from './completion-response'
+import { allowsSamplingTemperature, targetsOfficialProvider } from './provider-model-lifecycle'
 
 /** 调用元信息（用于消耗统计分类） */
 export interface AICallMeta {
@@ -118,6 +120,12 @@ export interface StreamResult {
 /** 可变容器，chat 写入非流式调用返回的真实 token 用量。 */
 export interface ChatResult {
   usage?: TokenUsage
+  /** Optional durable caller hook. Must finish saving the exact local request
+   * reference before its single POST. Failure prevents dispatch; no retry.
+   * Opt-in receipts are held until this owner saves and acknowledges them.
+   * This is transport metadata only, not candidate or adoption authority. */
+  onCodexRequestPrepared?: (request: Readonly<CodexRequestRefV1>) => Promise<void>
+  localCodexRequest?: Readonly<CodexRequestRefV1>
   /**
    * Observable transport boundary for callers that must make durable retry
    * and billing decisions. This records only delivery state and HTTP status;
@@ -127,6 +135,8 @@ export interface ChatResult {
     phase: 'pre-dispatch' | 'request-dispatched' | 'response-observed'
     responseStatus: number | null
   }
+  /** Confirmed local turn failure; delivery remains dispatched and never auto-retryable. */
+  terminalFailure?: CodexTerminalFailureV1
   /** Raw OpenAI-compatible tool_calls; the Agent protocol validates it. */
   toolCalls?: unknown
   toolCallsPresent?: boolean
@@ -146,7 +156,7 @@ export interface ChatRequestOptions {
   tools?: readonly ChatToolDefinition[]
   toolChoice?: 'auto'
   responseFormat?: 'json_object'
-  /** Explicit DeepSeek mode for bounded structured extraction; other providers ignore it. */
+  /** Explicit mode for bounded extraction on DeepSeek and documented Agnes Flash models. */
   thinkingMode?: 'enabled' | 'disabled'
   jsonSchema?: {
     name: string
@@ -208,17 +218,18 @@ function buildRequest(
   }
 
   // 流式请求时要求返回 token 用量
-  // stream_options 仅 OpenAI / DeepSeek / Qwen 等兼容 provider 支持
-  // 智谱 GLM / 文心 / Poe / Gemini 等不支持，传了会报参数错误
+  // Retain legacy exclusions for private/unknown targets. Current official Poe
+  // and Gemini OpenAI compatibility contracts support requesting stream usage.
   const NO_STREAM_OPTIONS: Set<string> = new Set(['glm', 'wenxin', 'poe', 'gemini', 'ollama', 'longcat'])
-  if (stream && !NO_STREAM_OPTIONS.has(config.provider)) {
+  const officialUsageTarget = (config.provider === 'poe' || config.provider === 'gemini') && targetsOfficialProvider(config)
+  if (stream && (!NO_STREAM_OPTIONS.has(config.provider) || officialUsageTarget)) {
     body.stream_options = { include_usage: true }
   }
 
-  // Poe 官方文档明确只需 model + messages，不要传额外参数
-  // （Claude 模型在 Poe 上自动启用 thinking，传 max_tokens/temperature 会冲突报 400）
+  // Preserve Poe sampling/default behavior and private gateway contracts.
+  // The official API supports an explicitly configured positive output limit.
   if (config.provider === 'poe') {
-    // Poe: 不传额外参数
+    if (officialUsageTarget && config.maxTokens && config.maxTokens > 0) body.max_tokens = config.maxTokens
   } else if (config.provider === 'deepseek') {
     const isThinkingModel = options?.thinkingMode
       ? options.thinkingMode === 'enabled' : config.model.includes('v4-pro')
@@ -244,7 +255,13 @@ function buildRequest(
     }
     if (config.maxTokens && config.maxTokens > 0) body.max_tokens = config.maxTokens
   } else {
-    if (config.temperature !== undefined) body.temperature = config.temperature
+    // Agnes documents this boolean extension for 2.5/3.0 Flash. Keep it
+    // opt-in so ordinary calls and other providers retain their own defaults.
+    if (config.provider === 'agnes' && options?.thinkingMode
+      && ['agnes-2.5-flash', 'agnes-3.0-flash'].includes(config.model)) {
+      body.chat_template_kwargs = { enable_thinking: options.thinkingMode === 'enabled' }
+    }
+    if (config.temperature !== undefined && allowsSamplingTemperature(config)) body.temperature = config.temperature
     // maxTokens > 0 才传，0 = 不限制（由模型自身决定）
     if (config.maxTokens && config.maxTokens > 0) body.max_tokens = config.maxTokens
   }
@@ -504,6 +521,7 @@ export async function chat(
   assertGenerationAvailable()
   if (result) {
     result.requestLifecycle = { phase: 'pre-dispatch', responseStatus: null }
+    delete result.terminalFailure
   }
   const resolved = frozenResolution ?? resolveRequestConfig(config, meta)
   warnRouteFallback(resolved, meta)

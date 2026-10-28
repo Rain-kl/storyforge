@@ -42,6 +42,7 @@ const Outlet = lazy(
   () => import("../components/world-engine/WorldResourceBrowser"),
 );
 const Inspector = lazy(() => import("../components/avg/BuildInspector"));
+const AssemblyWorkbench = lazy(() => import('../components/avg/AssemblyWorkbench'));
 const Consultation = lazy(() => import("../components/avg/Consultation"));
 type Row = {
   project: Project;
@@ -61,7 +62,10 @@ export default function AvgPage() {
   useEffect(() => {
     contentNavRef.current?.querySelector<HTMLElement>('[aria-current="page"]')?.scrollIntoView({block:'nearest'});
   }, [pageId, contentMenu]);
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const nativeFlushRef = useRef<(()=>Promise<void>)|null>(null);
+  const registerNativeFlush = useCallback((flush:(()=>Promise<void>)|null)=>{nativeFlushRef.current=flush},[]);
+  const narrativePreview = import.meta.env.DEV && params.has('narrative-preview');
   const navigate = useNavigate();
   const projectId = Number(params.get("project")) || null;
   const workId = Number(params.get("work")) || null;
@@ -102,6 +106,10 @@ export default function AvgPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [row?.project.id, row?.work.worldId, row?.work.id],
   );
+  const nativeAssembly = useMemo(()=>{
+    if(params.get('assembly')==='1')return true;
+    try{return !!row?.draft?.editorJson&&JSON.parse(row.draft.editorJson).schema==='storyforge.avg.author-workspace'}catch{return false}
+  },[params,row?.draft?.editorJson]);
   useAutoBackup(projectId);
   useGistAutoBackup(projectId);
   useEffect(() => {
@@ -147,10 +155,10 @@ export default function AvgPage() {
     }
   }, [row?.work.id, row?.draft?.revision, dirty]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    void listLocalWorldReferenceChoicesV1()
+    void listLocalWorldReferenceChoicesV1(narrativePreview ? { narrativeProductType: 'avg' } : {})
       .then(setWorlds)
       .catch((e) => setError(String(e)));
-  }, [pageId, row?.draft?.worldReleaseId]);
+  }, [pageId, row?.draft?.worldReleaseId, narrativePreview]);
   useEffect(() => {
     const before = (event: BeforeUnloadEvent) => {
       if (dirty) {
@@ -162,7 +170,7 @@ export default function AvgPage() {
     return () => window.removeEventListener("beforeunload", before);
   }, [dirty]);
   const path = (id: string, target = row, extra = "") =>
-    `/avg/${id}${target ? `?project=${target.project.id}&work=${target.work.id}${(target === row ? productionId : target.productionId) ? `&production=${target === row ? productionId : target.productionId}` : ""}${extra}` : ""}`;
+    `/avg/${id}${target ? `?project=${target.project.id}&work=${target.work.id}${(target === row ? productionId : target.productionId) ? `&production=${target === row ? productionId : target.productionId}` : ""}${extra}` : ""}${narrativePreview ? `${target ? '&' : '?'}narrative-preview=1` : ''}`;
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -198,10 +206,11 @@ export default function AvgPage() {
   };
   const go = (id: string) =>
     void run(async () => {
+      await nativeFlushRef.current?.();
       const target = dirty ? await save() : row;
       setMenu(false);
       setContentMenu(false);
-      navigate(path(id, target, ["play", "history"].includes(id) && sessionId ? `&session=${sessionId}` : ""));
+      navigate(path(id, target, (["play", "history"].includes(id) && sessionId ? `&session=${sessionId}` : "")+(params.get('assembly')==='1'?'&assembly=1':'')));
     });
   const update = <K extends keyof AvgAuthoringSettingsV1>(
     key: K,
@@ -286,6 +295,14 @@ export default function AvgPage() {
     <div
       className={`longform-app avg-app ${menu ? "lf-navigation-open" : ""} ${contentMenu ? "lf-step-menu-open" : ""}`}
       data-testid="avg-page"
+      onClickCapture={event=>{
+        if(!nativeFlushRef.current||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+        const anchor=event.target instanceof Element?event.target.closest('a'):null;
+        const href=anchor?.getAttribute('href');
+        if(!anchor||!href?.startsWith('/')||anchor.hasAttribute('download')||anchor.target==='_blank')return;
+        event.preventDefault();event.stopPropagation();
+        void run(async()=>{await nativeFlushRef.current?.();navigate(href.replace(/^\/storyforge(?=\/)/,''))});
+      }}
     >
       <header className="lf-top">
         <Link className="lf-brand" to="/" aria-label="返回首页">
@@ -311,15 +328,15 @@ export default function AvgPage() {
         <small>VISUAL NOVEL</small>
         <h1>AVG</h1>
         <p>让每一次选择，都有回声。</p>
-        <button className="lf-current" onClick={() => go("library")}>
+        <button className="lf-current" disabled={busy} onClick={() => go("library")}>
           <BookOpen />
           {row?.work.title ?? "选择或新建 AVG"}
         </button>
         <nav aria-label="AVG 页面导航">
           {AVG_PRIMARY_NAV.map(([id, label, entry]) => (
-            <button key={id} aria-current={primaryId === id ? 'page' : undefined} onClick={() => go(entry)}>{label}</button>
+            <button key={id} disabled={busy} aria-current={primaryId === id ? 'page' : undefined} onClick={() => go(nativeAssembly&&id==='workbench'?'production':entry)}>{label}</button>
           ))}
-          <button onClick={() => void run(async () => { if (dirty) await save(); navigate('/home/settings'); })}>通用设置</button>
+          <button disabled={busy} onClick={() => void run(async () => { await nativeFlushRef.current?.(); if (dirty) await save(); navigate('/home/settings'); })}>通用设置</button>
         </nav>
       </aside>
       <section className="lf-main">
@@ -335,7 +352,7 @@ export default function AvgPage() {
                 ["vision", "S2 · 产品定向"],
                 ["production", "S3 · 产品执行"],
               ].map(([id, label]) => (
-                <button key={id} aria-current={(id === 'source' ? page[0] === 'source' : id === 'vision' ? page[2] === 'S2 · 产品定向' : page[2] === 'S3 · 产品执行') ? 'step' : undefined} onClick={() => go(id)}>
+                <button key={id} disabled={busy} aria-current={(id === 'source' ? page[0] === 'source' : id === 'vision' ? page[2] === 'S2 · 产品定向' : page[2] === 'S3 · 产品执行') ? 'step' : undefined} onClick={() => go(id)}>
                   {label}
                 </button>
               ))}
@@ -350,8 +367,8 @@ export default function AvgPage() {
             <nav aria-label="AVG 内容导航">
               {primaryId === 'workbench' ? AVG_WORKBENCH_GROUPS.map(group => <section key={group.label}>
                 <h3>{group.label}</h3>
-                {group.pages.map(item => <button key={item[0]} aria-current={page[0] === item[0] ? 'page' : undefined} onClick={() => go(item[0])}>{item[1]}</button>)}
-              </section>) : <section><h3>游玩与记录</h3>{AVG_PLAYER_PAGES.map(item => <button key={item[0]} aria-current={page[0] === item[0] ? 'page' : undefined} onClick={() => go(item[0])}>{item[1]}</button>)}</section>}
+                {group.pages.map(item => <button key={item[0]} disabled={busy} aria-current={page[0] === item[0] ? 'page' : undefined} onClick={() => go(item[0])}>{item[1]}</button>)}
+              </section>) : <section><h3>游玩与记录</h3>{AVG_PLAYER_PAGES.map(item => <button key={item[0]} disabled={busy} aria-current={page[0] === item[0] ? 'page' : undefined} onClick={() => go(item[0])}>{item[1]}</button>)}</section>}
             </nav>
           </aside>}
           <main ref={contentRef} className="lf-content">
@@ -593,6 +610,7 @@ export default function AvgPage() {
                     {row && !row.draft && (
                       <button
                         className="lf-action"
+                        disabled={busy}
                         onClick={() => go("production")}
                       >
                         打开已有制作记录
@@ -612,6 +630,7 @@ export default function AvgPage() {
                         </Link>
                         <button
                           className="lf-action"
+                          disabled={busy}
                           onClick={() => go("vision")}
                         >
                           返回制作方案
@@ -632,6 +651,7 @@ export default function AvgPage() {
                             </h4>
                             <p>
                               {w.worldCode} · v{w.version}
+                              {w.narrative ? ' · 叙事世界接入（实验性）' : ''}
                             </p>
                           </div>
                           <button
@@ -717,6 +737,10 @@ export default function AvgPage() {
                     }
                     onSource={() => go("source")}
                   />
+                ) : scope&&nativeAssembly&&['confirm','production','narrative','variables','visual','audio','media-all','review','release'].includes(page[0]) ? (
+                  <AssemblyWorkbench key={scope.workId} scope={scope} productionId={productionId??row?.draft?.productionId??row?.productionId??null}
+                    page={page[0]} onRegisterFlush={registerNativeFlush} onSource={()=>go('source')}
+                    onPreviewStarted={id=>navigate(path('play',row,`&session=${id}`))}/>
                 ) : ["confirm", "production", "review", "release"].includes(
                     page[0],
                   ) ? (
@@ -729,6 +753,7 @@ export default function AvgPage() {
                         </p>
                         <button
                           className="lf-action"
+                          disabled={busy}
                           onClick={() => go("vision")}
                         >
                           填写制作方案
@@ -736,6 +761,9 @@ export default function AvgPage() {
                       </section>
                     ) : (
                       <>
+                        <section className="lf-paper"><h3>系统与效果组装（实验）</h3><p>使用作者输入和合法导入素材，确认后组装规则、对白、物件与舞台。可先验证系统效果。</p>
+                          <button className="lf-action" onClick={()=>void run(async()=>{if(dirty)await save();navigate(path('production',row,'&assembly=1'))})}>打开系统与效果工作台</button>
+                        </section>
                         {row?.draft && !row.draft.worldReleaseId ? (
                           <section className="lf-paper">
                             <h3>开始制作，需要一个世界引擎</h3>
@@ -744,6 +772,7 @@ export default function AvgPage() {
                             </p>
                             <button
                               className="lf-action lf-action-primary"
+                              disabled={busy}
                               onClick={() => go("source")}
                             >
                               选择世界引擎
@@ -823,12 +852,14 @@ export default function AvgPage() {
                 ) : page[0] === "play" || page[0] === "history" ? (
                   scope && row ? (
                     <Player
-                      key={`${scope.workId}:${sessionId ?? ""}`}
+                      key={scope.workId}
                       project={row.project}
                       scope={scope}
                       worldGroupId={null}
                       initialSessionId={sessionId}
                       initialPanel={page[0] === "history" ? "saves" : null}
+                      onSessionChanged={id=>{const next=new URLSearchParams(params);if(id==null)next.delete('session');else next.set('session',String(id));setParams(next,{replace:true})}}
+                      onReturnToWorkbench={nativeAssembly?()=>go('production'):undefined}
                     />
                   ) : (
                     <section className="lf-paper">

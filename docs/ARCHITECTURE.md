@@ -1,6 +1,6 @@
 # StoryForge 当前架构总览
 
-> 版本：2.9.1 · 更新：2026-09-25 · 权威层级：L1
+> 版本：2.9.2 · 更新：2026-10-13 · 权威层级：L1
 > 本文描述当前主干代码事实与目标架构接缝。产品边界以项目总纲为准；代码偏差见对齐审计。
 
 ## 1. 运行形态
@@ -108,12 +108,12 @@ flowchart TB
 | 当前事实 | 数值 | 单一事实源 |
 |---|---:|---|
 | 应用语义版本 | `4.0.4` | `package.json` |
-| TypeScript 生产源码 | 1500 个文件 / 522361 行 | `tsconfig.json` |
-| IndexedDB schema | v11 / 128 张 required tables | `schema.ts` / `REQUIRED_TABLES` |
-| PROJECT_TABLES | 128 张表 | `project-tables.ts` |
+| TypeScript 生产源码 | 2555 个文件 / 651698 行 | `tsconfig.json` |
+| IndexedDB schema | v13 / 130 张 required tables | `schema.ts` / `REQUIRED_TABLES` |
+| PROJECT_TABLES | 130 张表 | `project-tables.ts` |
 | Prompt 主线 | 65 个 moduleKey / 238 条内置模板 | `PromptModuleKey` / `prompt-seeds*.ts` |
-| CONTEXT_SOURCES | 134 个上下文源 | `context-sources.ts` |
-| 写回治理 | 57 个通用 adopt target / 59 个领域扩展 | `adoption-schema.ts` |
+| CONTEXT_SOURCES | 173 个上下文源 | `context-sources.ts` |
+| 写回治理 | 59 个通用 adopt target / 68 个领域扩展 | `adoption-schema.ts` |
 <!-- project-metrics:end -->
 
 ## 4. 分层架构
@@ -158,6 +158,8 @@ AI 入口注册表同时允许有明确边界的 `auxiliary`、`evaluation` 和 
 
 Field Registry 决定 AI 可写字段；Adoption Schema/Extension 决定集合身份、外键、替换范围和领域事务。候选不是正式数据；stale 校验、作者确认和 post-state 回读构成采纳闭环。
 
+开放跑团 S2 的战役愿景页通过 `open-authoring-design` facade 复用登记来源、冻结 Skill/正式入口、单次 Run、原回答与候选。三方向/分区选择及新事实核对由作者明确确认；写回只经登记 `settingsJson` 的原事务策略和草稿服务。正常界面不发放可序列化写票据，不绕过旧只读 Run 的冻结权限；未知结果只读恢复，历史采纳回执不覆盖当前人工草稿。此入口受开发预览开关控制，正式生产开始另行授权。
+
 ### 6.3 `PROJECT_TABLES`
 
 当前 required tables 与 `PROJECT_TABLES` 数量由检查器保持一致。注册表派生导出、导入、删除、迁移、作用域和引用重映射，覆盖普通记录、运行账本和共享 blob object。任何新表先登记再使用。
@@ -183,6 +185,8 @@ Field Registry 决定 AI 可写字段；Adoption Schema/Extension 决定集合�
 世界领域提供显式 world-draft、按 `World/Work` scope 隔离的语义能力投影、稳定 world code、revision/release、显式作品派生、多世界关系以及不可变资源目录。`WorldRelease` 只从 `PROJECT_TABLES.worldSemantic` 派生确认 Canon，并记录选入/遗漏、候选、冲突、证据和 hash；不含媒资、production、build、可执行蓝图或 runtime。
 
 上层产品先通过 `listWorldReferenceCatalogV1` 取得只读、中立的可选世界来源，不获取物理 `WorldRelease` 行、manifest 或 Provider。资源出口由 `describeWorldReleaseV1`、`searchWorldReleaseV1`、`readWorldResourceV1` 和 `readWorldOriginalEvidenceV1` 构成；产品侧只依赖 `world-release-client` / Context Gateway 的中立接口。目录按稳定 resource UID、release/hash 和关系导航；有界缓存只缓存已校验 release 投影，千级资源规模回归阻止逐行 IndexedDB 游标退化。跑团、角色互动、AI 小镇、文字冒险、AVG、文字开放世界分别拥有需求适配器，证明统一协议不等于统一 payload。
+
+v3 基线搜索不执行 entityKeys/storyArcKeys/timeRange 过滤；temporalFacts/knowledgeLedger 的确认行可封存，旧资源画像不能表示时态或人物视角索引。NW 分支已实现 v4 冻结索引、typed query 与权限过滤，以及角色聊天/AVG 的精确来源计划接缝；默认封存仍使用旧格式，新封存与派生入口仅在开发预览显式开启。目标合同见 [世界引擎专项](./products/WORLD-ENGINE.md) §10～19，分支实现和证据见 §24～30；完整交付、性能与外部质量门未齐备，不标记正式放行或上线。推演仍为后续研究。
 
 ### 7.5 上层产品
 
@@ -210,6 +214,10 @@ flowchart LR
 ## 9. 失败与恢复
 
 Durable Harness 将运行状态写入 ledger/checkpoint；provider 调用有 attempt identity；候选保存输入/目标 revision；采纳使用事务和 post-state。网络结果未知、认证/配额、stale、协议错误和不可恢复错误分开处理。
+
+开放跑团的内部意图服务通过角色专用 `ttrpgOpenAuthority` / `ttrpgOpenKnowledge` Provider 与 Context Gateway 冻结实际读取。发送前持久化 selector、packet、来源原文、完整请求及 V2 输入 manifest；V3 Run 保存 Skill 和正式入口快照，产品调用账本在事务中复验真实证据，只有首次派发返回发送许可。响应原文先留存、用量先入账，再检查既有 `TtrpgOpenIntentV1` 和生成 CreativeArtifact；响应后才形成完整 V3 Context Manifest。候选能回读且需要后续真人决定，不能自动裁定规则、扣资源或推进时间。实际账单金额未知时保持 null 和预留额度，不把价格估算标成实际收费。此链尚未接通公共 open 界面与候选正式采用，实际 provider 和联合玩家验收仍单独记录。
+
+开放跑团的候选增量还增加独立队友目的和结算后 KP 目的。队友使用其自身玩家投影；KP 通过 `ttrpgOpenKpInput` 只读取实际接收者共同可见内容及公开结算结果。它们共用原 Harness，叙述采用只写 session 叙述账本；规则/事实/知识仍由既有唯一 owner 提交。Session Zero 预授权与逐次真人批准分别留证；有限交接不发送请求、不重开授权窗口。完整恢复入口 `resumeTtrpgOpenPlayV1` 遇选择、审批、收束、质量门与叙述确认明确停止。该候选尚未连接公共 open 玩家界面。
 
 UI 刷新后必须从 durable 状态恢复。没有 checkpoint 的辅助调用只能返回内存结果或只读报告，不得静默写正式数据。
 
@@ -242,13 +250,12 @@ src/
 - Project/World/Work 可以位于同一本地物理工作区，但身份权威已经拆分：Project 只管理工作区，World 管理世界身份，Work 管理独立作品；存在内部 World 语义 scope 不等于建立了可分享世界。
 - 分步骤长篇 Phase 5 工程主链和 10万/30万/100万字符规模门已经完成；真实作者长期文学一致性仍需持续研究，但不是尚未完成的功能施工项。
 - 世界 Release、中立资源协议、六类上层产品的需求适配器、五项逻辑契约校验、`S1 世界封存 → S2 产品定向 → S3 产品执行` runtime 闸门和产品成熟度门已经形成共享架构基线；它们规定接入方式，不替代各上层产品的 Brief/production/media/runtime 专项实现。
-- 当前 schema v10 直接表达 Product Production/Build/Release、Product Runtime、World、Work、独立创作产品、漫剧前期生产与 AVG 作者方案/媒资草稿与跑团、AI 小镇及角色聊天 S2 草稿；保留 v1→v2→v3→v4→v5→v6→v7→v8→v9→v10 的受支持加表与索引迁移（v8 允许不同 Brief revision 使用同一内容 hash，已有记录不改写；v9 新增小镇草稿表，v10 集成角色聊天草稿表）以保护作者数据，不包含旧字段投影、双读或退役运行入口。非受支持数据库版本和非当前备份明确拒绝。
+- 当前分支 schema v12 直接表达 Product Production/Build/Release、Product Runtime、World、Work、独立创作产品、漫剧前期生产与 AVG 作者方案/媒资草稿与跑团、AI 小镇及角色聊天 S2 草稿；保留 v1→v2→v3→v4→v5→v6→v7→v8→v9→v10→v11→v12 的受支持加表与索引迁移（v8 允许不同 Brief revision 使用同一内容 hash，已有记录不改写；v9 新增小镇草稿表，v10 集成角色聊天草稿表，v11 加入插件设施，v12 增加可丢弃且不进入备份的 worldNarrativeIndexCaches）以保护作者数据，不包含旧字段投影、双读或退役运行入口。非受支持数据库版本明确拒绝；备份当前为 v16，严格校验的 v14 经 v15、v15 经显式转换进入 v16；缺失叙事注释保持缺失，其余历史版本拒绝。
 - ProductRelease 谱系已经有跨产品逻辑 validator，并在角色互动参考纵切面落地；其它上层产品在转为 released 前仍需按自己的物理 schema 接入同一逻辑闸门。
 - 节点官方模板已绑定正式长篇领域 action，通用生成仅限显式 experimental draft 且不能采纳 Canon；完整跨模式真实 UI 体验仍是节点产品维护事项。
 - 账户、云端社区、支付和商业平台不是当前核心运行前提；相关代码必须 capability gate / experimental，不能掩盖主产品未完成。
 
-当前能力与缺口以 [`roadmap/CAPABILITY-BASELINE.md`](./roadmap/CAPABILITY-BASELINE.md) 和
-[`audits/CURRENT-ARCHITECTURE-AUDIT-20260903.md`](./audits/CURRENT-ARCHITECTURE-AUDIT-20260903.md) 为准。
+当前能力与缺口以 [能力基线](./roadmap/CAPABILITY-BASELINE.md)、当前代码及本次验证为准；[2026-09-04 架构清场审计](./audits/CURRENT-ARCHITECTURE-AUDIT-20260903.md) 是带日期的历史证据，不覆盖后续 schema/能力事实。
 
 ## 12. 交付门
 
@@ -264,6 +271,10 @@ src/
 AVG 会谈使用 `avg.consult.v1` 和 `avg.authoring` 注册上下文，经 durable Run、manifest、候选 checkpoint 与验证 receipt 保存。会谈只起草产品定向，正式世界读取仍由生产需求适配器执行。作者确认后回填同一 S2 草稿，历史会谈可归档后继续讨论。
 
 作者修改叙事图、对白、条件、变量和演出，先保存带基线 previewHash 的草稿。提交修订冻结到 Brief 的 AVG 专项 `avgRevision`；同一生产 scheduler 执行素材引用验证、运行包装配和质量检查。旧 Build/Release/存档保持不变，新版本仍需明确开始和发布。没有新增第二套叙事或模型调用系统；商业候选仍受真实试玩、媒资与性能回执限制。
+
+AVG 的逐句配音与背景音乐、音效、环境声加工复用同一零供应商请求的确定性音频任务。可选加工要求保存在原 Work 草稿，准备/开始时精确冻结核对；原件、加工工件、独立审听和作者采用分开留证。声音选择与沿用来源显式使用后继版本，旧 V1 保持严格；Stage、权利和备份恢复读取实际采用的加工字节，不把加工结果改写成原始响应。详见[媒资生产与绑定](products/avg-production/03-MEDIA-PRODUCTION-AND-BINDING.md)。
+
+显式动态与重采样后继使用独立 recipe/receipt/payload/plan V2，原 V1 codec 与算法保持严格。固定计算和复算 Worker 在同一20秒界内真实重建并核对 PCM；主线程不执行完整 DSP。工作台默认原增益，作者选择尖峰缓和或目标采样率后才冻结 V2，未编辑条目的明确参数不降级。 既有 `VITE_STORYFORGE_AVG_AUDIO_PROCESSING=1` 现控制已接通 WAV 加工的实验执行，默认关闭；产品生产、开始授权和独立试听/采用仍各自核对。加工配音在准确当前 Preview 冻结后复用原历史 producer/字节证明只读回听，不恢复作者写权。
 
 ### 角色聊天接入
 

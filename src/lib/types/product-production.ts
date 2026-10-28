@@ -1,4 +1,4 @@
-import type { ProductRuntimePackageV1 } from "./product-release";
+import type { AnyProductRuntimePackage, ProductRuntimePackageV1, ProductRuntimePackageV2 } from "./product-release";
 import type { ProductMediaKind } from "./product-media";
 import type { ProductionProductKindV1 } from "./product-identity";
 import type { AiTownProductionBriefV1 } from "./ai-town";
@@ -39,11 +39,31 @@ export type ProductRuntimeSourceV1 =
   | { kind: "release"; productReleaseId: number }
   | { kind: "build"; productBuildId: number; expectedPreviewHash: string };
 
-export interface ResolvedProductRuntimeSourceV1 {
+/** V2 carries the new package without reinterpreting V1 media bindings. */
+export interface ProductBuildPreviewManifestV2 extends Omit<ProductBuildPreviewManifestV1,
+  'version' | 'runtimePackage' | 'mediaBindings'> {
+  version: 2;
+  runtimePackage: ProductRuntimePackageV2;
+  mediaBindings: ProductBuildPreviewManifestV1['mediaBindings'];
+}
+
+export type AnyProductBuildPreviewManifest = ProductBuildPreviewManifestV1 | ProductBuildPreviewManifestV2
+  | (Omit<ProductBuildPreviewManifestV1, 'runtimePackage'> & { runtimePackage: import('../ttrpg/content-version').ProductRuntimePackageWithTtrpgV2 });
+
+/** Verified protocol inspection; this is not a playable-source admission. */
+export interface VerifiedProductRuntimeSourceEnvelope {
   source: ProductRuntimeSourceV1;
-  runtimePackage: ProductRuntimePackageV1;
+  runtimePackage: AnyProductRuntimePackage;
   packageHash: string;
   runtimeSourceHash: string;
+}
+
+export interface ResolvedProductRuntimeSourceV1 {
+  source: ProductRuntimeSourceV1;
+  runtimePackage: AnyProductRuntimePackage;
+  packageHash: string;
+  runtimeSourceHash: string;
+  sourceManifest?: import('./world-product-contracts').ProductRuntimeSourceManifestV1;
   mediaResolver: ProductMediaResolverV1;
 }
 
@@ -57,6 +77,8 @@ export interface ProductMediaResolverV1 {
   preload(input: {
     assetKeys: string[];
     maximumBytes: number;
+    /** Opt-in bounded window; legacy callers retain their cached catalog. */
+    retainOnlyRequested?: boolean;
   }): Promise<ResolvedMediaCatalogV1>;
   read(assetKey: string): Promise<Blob>;
   dispose(): void;
@@ -137,13 +159,17 @@ export const PRODUCT_PRODUCTION_COMMAND_TYPES = [
   "save-brief-revision",
   "save-text-open-world-creator-brief",
   "authorize-start",
+  "adopt-avg-artifact",
   "authorize-text-open-world-creator-start",
   "authorize-text-open-world-creator-repair",
   "authorize-text-open-world-creator-media",
+  "authorize-text-open-world-creator-budget-recovery",
   "pause",
   "resume",
   "stop",
   "resolve-blocker",
+  "book-original-response",
+  "book-local-no-dispatch",
   "request-preview",
   "revise-media-asset",
   "revise-media-assets",
@@ -489,7 +515,7 @@ export interface ProductProductionBriefV3 {
   source: {
     worldReleaseId: number;
     worldContentHash: string;
-    selection: import("./product-release").ProductWorldSourceSelectionV1;
+    selection: import("./product-release").ProductWorldSourceSelection;
     startingPoint: ProductStartingPointV1;
   };
   intent: {
@@ -514,10 +540,22 @@ export interface ProductProductionBriefV3 {
   completionContract: ProductProductionCompletionContractV1;
   unresolvedDecisionKeys: string[];
   /** Closed TTRPG construction contract; required exactly when productType=ttrpg. */
-  characterChat?: import('../character-interaction/authoring-contract').ChatAuthoringSettingsV1;
+  characterChat?: import('../character-interaction/authoring-contract').ChatAuthoringSettings;
+  /** Snapshot of separately governed, author-confirmed role interpretation records. */
+  characterChatProfiles?: import('../character-interaction/role-profile').ChatRoleProfileSetV1;
+  characterChatSourceUnits?: import('../character-interaction/source-unit-authorization').ChatSourceUnitSetV1;
   avg?: import('../avg/authoring-contract').AvgAuthoringSettingsV1;
   avgRevision?: { version: 1; basePackageHash: string; runtimePackage: import('./product-release').ProductRuntimePackageV1 };
+  avgAssembly?: import('../avg/assembly-contract').AvgAssemblyBrief;
+  /** Explicit next AVG contract; mutually exclusive with legacy assembly. */
+  avgVisualPlanning?: import('../avg/visual-planning-brief-codec').AvgVisualPlanningBrief;
+  /** Frozen sound-production declaration; execution requires its own readiness. */
+  avgSoundPlanning?: import('../avg/sound-production-brief').AvgSoundPlanningBrief;
+  /** AVG-only explicit frozen local processing; no raw-request or author authority. */
+  avgAudioProcessing?: import('../avg/audio-production-contract').AvgAudioProductionProcessingPlan;
   ttrpg?: TtrpgProductionBriefV2;
+  /** Open construction uses the same production budgets and lifecycle, with its own frozen content contract. */
+  ttrpgOpen?: import('../ttrpg/production-brief-v3').TtrpgProductionBriefContentV3;
   /** Closed AI Town construction contract; required exactly when productType=ai-town. */
   aiTown?: AiTownProductionBriefV1;
   /** Closed text-adventure construction contract; required exactly for text-adventure. */
@@ -578,6 +616,8 @@ export interface ProductProductionPlanTaskV3 {
   reuse: ProductArtifactReuseDecisionV1 | null;
   /** Exact author draft, authorized by a durable child-Build command. */
   authorRevision?: TextAdventureContentRevisionV1 & { commandId: string; sourceBuildNumber: number };
+  /** Exact registered input projection for deterministic AVG V3 tasks. */
+  contextProfile?: "avg-task-v1" | "avg-visual-planning-v4" | "avg-visual-planning-v5" | "avg-sound-planning-v1";
 }
 
 export interface ProductProductionPlanV3 {
@@ -688,10 +728,15 @@ export interface ProductEvolutionImpactV1 {
 export interface ProductProductionBlockerResolutionV1 {
   action:
     "retry" | "author-edit" | "fallback" | "waive-soft-gate" | "change-capability"
-    | "accept-product-private-expansion" | "confirm-character-anchors" | "cancel";
+    | "accept-product-private-expansion" | "confirm-character-anchors" | "confirm-chat-situation" | "confirm-chat-media" | "cancel";
   note: string;
+  /** Exact initial-situation candidate and source approved by the author. */
+  chatSituation?: {candidatesHash: string; sourceHash: string; selectedOptionKey: string};
+  chatMedia?: import('../character-interaction/media-selection').ChatMediaProductionDecisionV1;
   /** Explicit authored replacement; validated by the same task parser before acceptance. */
   authorDraftJson?: string;
+  /** Explicit reference to an already retained and booked complete original response. */
+  originalResponseSource?: { captureRunId: number; captureReceiptHash: string };
   /**
    * Required before retrying an attempt whose provider result or usage has not
    * been fully settled. The exact durable attempt is named explicitly so a
@@ -707,11 +752,34 @@ export interface ProductProductionBlockerResolutionV1 {
   };
 }
 
+/** In-progress open-world repair binds all siblings of one registered task. */
+export interface TextOpenWorldContentRevisionV1 {
+  taskKey: string;
+  expectedPlanHash: string;
+  expectedControlEpoch: number;
+  expectedArtifacts: Array<{ artifactKey: string; version: number; contentHash: string }>;
+  note: string;
+  authorDraftJson: string;
+}
+
 /** Explicit replacement bound to one accepted, registered content artifact. */
 export interface TextAdventureContentRevisionV1 {
   artifactKey: 'content.product-module' | 'content.story-bible' | 'content.cast-bible' | 'content.adventure-architecture' | 'content.narrative-arc-scenes' | 'content.narrative-decision-plan' | 'content.ending-route-plan' | 'content.main-quest-plan' | 'content.adventure-side-quests' | 'content.adventure-ambient-events' | 'content.scene-script.act-1.part-1' | 'content.scene-script.act-1.part-2' | 'content.scene-script.act-2.part-1' | 'content.scene-script.act-2.part-2' | 'content.scene-script.act-3.part-1' | 'content.scene-script.act-3.part-2' | 'content.dialogue-pass.act-1' | 'content.dialogue-pass.act-2' | 'content.dialogue-pass.act-3' | 'content.quest-script.main.act-1.single' | 'content.quest-script.main.act-1.multi' | 'content.quest-script.main.act-2.single' | 'content.quest-script.main.act-2.multi' | 'content.quest-script.main.act-3.single' | 'content.quest-script.main.act-3.multi' | 'content.quest-script.supplemental';
   expectedArtifactVersion: number;
   expectedArtifactHash: string;
+  note: string;
+  authorDraftJson: string;
+}
+
+/** Same-Build author revision of an accepted open TTRPG content task. */
+export interface TtrpgOpenContentRevisionV1 {
+  artifactKey: 'ttrpg.open.source-facts' | 'ttrpg.open.rule-system' | 'ttrpg.open.situation-layer';
+  expectedArtifactVersion: number;
+  expectedArtifactHash: string;
+  expectedPlanHash: string;
+  expectedControlEpoch: number;
+  /** Freezes the reviewed recovery effects and current executable bindings. */
+  expectedImpactHash?: string;
   note: string;
   authorDraftJson: string;
 }
@@ -750,6 +818,36 @@ export interface ProductBuildCompatibilityReportV1 {
 }
 
 export type ProductProductionCommandV1 =
+  | {
+      type: "book-local-no-dispatch";
+      commandId: string;
+      expectedStateRevision: number;
+      buildNumber: number;
+      controlEpoch: number;
+      planHash: string;
+      ledgerHash: string;
+      anchor: {
+        artifactKey: TtrpgOpenContentRevisionV1['artifactKey'];
+        version: number;
+        contentHash: string;
+      };
+      /** Stable proof hashes, never portable local Run locators. */
+      proofs: Array<{ attemptKeyHash: string; proofHash: string }>;
+    }
+  | {
+      type: "book-original-response";
+      commandId: string;
+      expectedStateRevision: number;
+      buildNumber: number;
+      controlEpoch: number;
+      planHash: string;
+      taskKey: string;
+      originalRunId: number;
+      originalAttempt: number;
+      captureRunId: number;
+      captureReceiptHash: string;
+      disposition: "use-native-token-usage" | "charge-reservation-upper-bound";
+    }
   | {
       type: "create-intent";
       commandId: string;
@@ -819,6 +917,17 @@ export type ProductProductionCommandV1 =
       authorizedAt: number;
     }
   | {
+      type: "authorize-text-open-world-creator-budget-recovery";
+      commandId: string;
+      expectedStateRevision: number;
+      baseBuildNumber: number;
+      expectedBasePlanHash: string;
+      expectedPrefixHash: string;
+      expectedTargetPlanHash: string;
+      authorizationNonce: string;
+      authorizedAt: number;
+    }
+  | {
       type: "authorize-text-open-world-creator-media";
       commandId: string;
       expectedStateRevision: number;
@@ -837,6 +946,17 @@ export type ProductProductionCommandV1 =
       authorizedAt: number;
     }
   | {
+      type: "adopt-avg-artifact";
+      commandId: string;
+      expectedStateRevision: number;
+      expectedBuildRevision: number;
+      controlEpoch: number;
+      buildNumber: number;
+      artifactKey: string;
+      candidateVersion: number;
+      candidateHash: string;
+    }
+  | {
       type: "pause";
       commandId: string;
       expectedStateRevision: number;
@@ -849,6 +969,8 @@ export type ProductProductionCommandV1 =
       /** Required only when pause froze one or more in-flight provider reservations. */
       pausedReservationDispositions?: ProductProductionPausedReservationDispositionV1[];
       contentRevision?: TextAdventureContentRevisionV1;
+      ttrpgContentRevision?: TtrpgOpenContentRevisionV1;
+      openWorldContentRevision?: TextOpenWorldContentRevisionV1;
     }
   | {
       type: "stop";
@@ -1070,6 +1192,8 @@ export interface ProductBuildRecordV1 {
   qualityReportHash: string;
   compatibilityJson: string;
   rootTerminalReceiptHash: string | null;
+  /** Immutable v2 root hash preimage evidence. Historical IDs inside are never live references. */
+  rootBudgetEvidenceJson?: string;
   adoptionIntentHash: string | null;
   releasedProductReleaseId: number | null;
   failureJson: string;

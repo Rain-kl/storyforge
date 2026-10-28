@@ -9,6 +9,29 @@ const registryPath = 'src/lib/agent/ai-entry-registry.json'
 const registry = JSON.parse(fs.readFileSync(path.join(root, registryPath), 'utf8'))
 const failures = []
 
+// Offline evaluation runners do not enter the application's UI/Harness or
+// own a creative-data writer. Keep their explicit, non-adopting boundary in
+// this same registry instead of silently exempting a new raw model entry.
+const offlineIds = new Set()
+for (const entry of registry.offlineEvaluations ?? []) {
+  if (!entry.entryId?.startsWith('eval.') || offlineIds.has(entry.entryId)
+    || entry.boundary !== 'eval-only' || entry.adoptAllowed !== false || entry.adoptionTargets?.length
+    || !['local-codex-subscription', 'configured-chat-audio-input-v1'].includes(entry.transport) || !entry.reason
+    || !/^scripts\/evaluate-[a-z-]+\.mjs$/.test(entry.caller ?? '')
+    || !/^scripts\/[a-z-]+-contract\.mjs$/.test(entry.contract ?? '')
+    || !fs.existsSync(path.join(root, entry.caller ?? '')) || !fs.existsSync(path.join(root, entry.contract ?? ''))) {
+    failures.push('离线评测入口边界无效: ' + entry.entryId)
+    continue
+  }
+  offlineIds.add(entry.entryId)
+  const caller = fs.readFileSync(path.join(root, entry.caller), 'utf8')
+  const contract = fs.readFileSync(path.join(root, entry.contract), 'utf8')
+  const bound = entry.transport === 'local-codex-subscription'
+    ? caller.includes('assertOfflineEntry()') && caller.includes('runtime.generate(')
+    : caller.includes('assertOfflineAudioEntry()') && caller.includes('calibrateAudioInputs(')
+  if (!contract.includes(`'${entry.entryId}'`) || !bound) failures.push('离线评测缺少实际合同绑定: ' + entry.entryId)
+}
+
 function walk(dir, acc = []) {
   for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
     const file = `${dir}/${entry.name}`
@@ -54,6 +77,8 @@ export function analyzeAIEntrySource(source, file = 'entry.tsx') {
   const rawNamespaces = new Set()
   const registeredExecutors = new Set(['executeRegisteredAIEntryV1'])
   const frozenExecutors = new Set(['executeFrozenFormalAIEntryV1'])
+  const audioExecutors = new Set(['executeFrozenFormalAudioEntryV1'])
+  const formalNamespaces = new Set()
   const streamExecutors = new Set(['streamRegisteredAIEntryV1'])
   const voiceGuards = new Set(['assertVoiceTransport'])
   const transports = []
@@ -89,18 +114,28 @@ export function analyzeAIEntrySource(source, file = 'entry.tsx') {
     }
     if (moduleName.endsWith('/agent/formal-ai-entry')
       || moduleName.endsWith('lib/agent/formal-ai-entry')) {
+      if (ts.isNamespaceImport(clause.namedBindings)) formalNamespaces.add(clause.namedBindings.name.text)
       if (ts.isNamedImports(clause.namedBindings)) {
         for (const specifier of clause.namedBindings.elements) {
           const imported = specifier.propertyName?.text ?? specifier.name.text
           if (imported === 'executeRegisteredAIEntryV1') registeredExecutors.add(specifier.name.text)
           if (imported === 'executeFrozenFormalAIEntryV1') frozenExecutors.add(specifier.name.text)
+          if (imported === 'executeFrozenFormalAudioEntryV1') audioExecutors.add(specifier.name.text)
           if (imported === 'streamRegisteredAIEntryV1') streamExecutors.add(specifier.name.text)
         }
       }
     }
   }
 
+  function audioExecutor(expression) {
+    if (ts.isIdentifier(expression)) return audioExecutors.has(expression.text)
+    const owner = (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) && expression.expression
+    if (!owner || !ts.isIdentifier(owner) || !formalNamespaces.has(owner.text)) return false
+    const member = ts.isPropertyAccessExpression(expression) ? propertyName(expression.name) : propertyName(expression.argumentExpression)
+    return member === 'executeFrozenFormalAudioEntryV1'
+  }
   function collectBindings(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && audioExecutor(node.initializer)) audioExecutors.add(node.name.text)
     if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
       && ts.isIdentifier(node.initializer.expression) && hookFactories.has(node.initializer.expression.text)) {
       if (ts.isIdentifier(node.name)) hookVariables.add(node.name.text)
@@ -153,6 +188,8 @@ export function analyzeAIEntrySource(source, file = 'entry.tsx') {
         registerGovernedCall(node, node.arguments[0], node.arguments[3])
       } else if (ts.isIdentifier(expression) && frozenExecutors.has(expression.text)) {
         registerGovernedCall(node, node.arguments[0], node.arguments[6], node.arguments[3])
+      } else if (audioExecutor(expression)) {
+        registerGovernedCall(node, node.arguments[0], node.arguments[5], node.arguments[3])
       } else if (ts.isIdentifier(expression) && streamExecutors.has(expression.text)
         && file !== 'src/hooks/useAIStream.ts') {
         registerGovernedCall(node, objectProperty(node.arguments[2], 'formalEntryId'), node.arguments[2])
@@ -192,7 +229,7 @@ const skillSource = fs.readFileSync(path.join(root, 'src/lib/agent/skill-registr
 const skillIds = new Set([...skillSource.matchAll(/\bid:\s*'([^']+)'/g)].map(match => match[1]))
 const registered = new Map()
 for (const entry of registry.entries ?? []) {
-  if (!entry?.entryId || registered.has(entry.entryId)) {
+  if (!entry?.entryId || registered.has(entry.entryId) || offlineIds.has(entry.entryId)) {
     failures.push(`${registryPath}: 重复或无效 entryId ${String(entry?.entryId)}`)
     continue
   }
@@ -217,6 +254,12 @@ const scannedFiles = [
   // Q07/Q08: step and node review/revision share this formal provider service.
   'src/lib/prose/quality-transport.ts',
   'src/lib/ai-town/consultation.ts',
+  // CHAT-01: source suggestions remain read-only; role profiles require explicit governed adoption.
+  'src/lib/character-interaction/source-review-harness.ts',
+  'src/lib/character-interaction/role-profile-harness.ts',
+  'src/lib/character-interaction/source-units-harness.ts',
+  'src/lib/character-interaction/source-unit-confirmation-harness.ts',
+  'src/lib/character-interaction/consultation-harness.ts',
   // G5-02 creator consultation is a formal durable service rather than a UI
   // hook; keep its literal entry/category binding under the same machine gate.
   'src/lib/open-world/creator-brief.ts',
@@ -226,6 +269,16 @@ const scannedFiles = [
   // G6-01 owns the only frozen provider gateway for all six vNext open-world
   // runtime AI skills. Later UI work must call this governed service.
   'src/lib/open-world/runtime-ai-execution.ts',
+  // Open TTRPG has its own actor-scoped, one-send governed transport boundary.
+  'src/lib/ttrpg/open-intent-harness.ts',
+  // S2 author proposals use their own frozen Work-owned request and raw receipt.
+  'src/lib/ttrpg/open-authoring-design-harness.ts',
+  'src/lib/ttrpg/open-voice-execution.ts',
+  // Fixed-fixture offline speech evaluation is a limited transport, never a
+  // creative binding or an application/provider fallback.
+  'scripts/ttrpg-local-tts/evaluate.mjs',
+  'scripts/ttrpg-local-tts/timbre-evaluate.mjs',
+  'scripts/ttrpg-local-tts/native-voice-evaluate.mjs',
   // G6-10's independent semantic grader is an eval-only formal model entry.
   // It may judge redacted observations, but can never adopt product content.
   'src/lib/evals/open-world-runtime/judge.ts',
@@ -249,9 +302,13 @@ const limited = new Map()
 for (const entry of registry.limitedTransports ?? []) {
   if (!entry.entryId || registered.has(entry.entryId) || limited.has(entry.entryId)
     || entry.adoptAllowed !== false || entry.adoptionTargets?.length
-    || !['ephemeral-author-input', 'read-only-audio'].includes(entry.boundary)
+    || !['ephemeral-author-input', 'ephemeral-player-input', 'read-only-audio', 'offline-fixture-audio-eval'].includes(entry.boundary)
     || !entry.allowedCallers?.length || !entry.reason) {
     failures.push('有限语音入口边界无效: ' + entry.entryId)
+  }
+  if (entry.boundary === 'offline-fixture-audio-eval'
+    && entry.allowedCallers.some(caller => !/^scripts\/ttrpg-local-tts\/[a-z-]+\.mjs$/.test(caller))) {
+    failures.push('离线语音评测不能成为产品入口: ' + entry.entryId)
   }
   limited.set(entry.entryId, entry)
 }
@@ -316,6 +373,21 @@ const frozenAliasSelfTest = analyzeAIEntrySource(
 if (!frozenAliasSelfTest.violations.some(item => item.includes('caller 字面量'))) {
   failures.push('守卫自测失败：未阻断伪造 caller 的 frozen formal entry alias')
 }
+const audioAliasSelfTest = analyzeAIEntrySource(
+  "import { executeFrozenFormalAudioEntryV1 as sendAudio } from '../lib/agent/formal-ai-entry'; sendAudio('x', snapshot, skill, caller, invoke, { category: 'x' });",
+  'src/lib/AudioAlias.ts',
+)
+if (!audioAliasSelfTest.violations.some(item => item.includes('caller 字面量'))) failures.push('守卫自测失败：未阻断伪造 caller 的 frozen audio entry alias')
+const audioNamespaceSelfTest = analyzeAIEntrySource(
+  "import * as api from '../lib/agent/formal-ai-entry'; api.executeFrozenFormalAudioEntryV1('x', snapshot, skill, 'wrong.ts', invoke, { category: 'x' });",
+  'src/lib/AudioNamespace.ts',
+)
+if (!audioNamespaceSelfTest.violations.some(item => item.includes('caller 字面量'))) failures.push('守卫自测失败：未阻断 namespace 音频 caller 冒用')
+const audioMemberAliasSelfTest = analyzeAIEntrySource(
+  "import * as api from '../lib/agent/formal-ai-entry'; const send = api['executeFrozenFormalAudioEntryV1']; send('x', snapshot, skill, 'src/lib/AudioMember.ts', invoke, { category: 'x' });",
+  'src/lib/AudioMember.ts',
+)
+if (audioMemberAliasSelfTest.calls.length !== 1 || audioMemberAliasSelfTest.violations.length) failures.push('守卫自测失败：未识别 namespace member 音频 alias')
 
 if (failures.length) {
   console.error('[ai-entry-registry] ❌ 正式 AI 入口机器绑定未闭合:\n')

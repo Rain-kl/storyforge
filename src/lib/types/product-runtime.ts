@@ -10,6 +10,7 @@ import type {
   NarrativeChoiceHistoryEntry,
 } from "./text-game";
 import type { InteractionRelationshipRule } from "./character-interaction";
+import type {ChatMemoryReviewReceiptV1} from './chat-memory';
 import type { AdventureRuntimeState } from "./adventure";
 import type { AvgRuntimePresentationState } from "./avg";
 import type { OpenWorldEvolutionState } from "./open-world-evolution";
@@ -221,6 +222,16 @@ export interface TtrpgRuntimeState {
   campaign: TtrpgRuntimeCampaignState;
   /** Formal ProductRelease projection. */
   product: TtrpgRuntimeProductStateV1;
+  /**
+   * Protocol-2/open sessions add this key only after the explicit
+   * `ttrpg.open.run.started` event. Legacy scripted readers must keep this
+   * field out of their exact-key parser.
+   */
+  openRun?: unknown;
+  /** Explicit protocol-2 child identity/authority; never inserted into V1 JSON. */
+  sessionKey?: string;
+  authorization?: unknown;
+  epochBudget?: unknown;
 }
 
 export interface TtrpgRuntimeProductStateV1 {
@@ -921,7 +932,7 @@ export interface TtrpgRuntimeCampaignState {
 
 export type InteractionSceneStatus = "active" | "ended";
 export type InteractionMemoryStatus =
-  "proposed" | "accepted" | "rejected" | "superseded";
+  "proposed" | "accepted" | "rejected" | "superseded" | "disabled" | "revoked";
 export type InteractionMemoryKind =
   | "scene-summary"
   | "key-memory"
@@ -967,6 +978,8 @@ export interface InteractionRuntimeScene extends InteractionRuntimeSceneTemplate
 }
 
 export interface InteractionRuntimeMessage {
+  /** New narrative player messages retain explicit private versus present-room intent. */
+  playerConversation?: 'private' | 'present'
   messageId: string;
   eventSequence: number;
   role: "player" | "character" | "system";
@@ -999,6 +1012,13 @@ export interface InteractionRuntimeMemory {
   proposalSequence: number;
   decisionSequence: number | null;
   supersededByMemoryId: string | null;
+  /** Present only for a player-confirmed correction; legacy/model proposals
+   * must not be inferred to have passed a visibility or fidelity review. */
+  authorship?: "player-correction";
+  contentReview?: ChatMemoryReviewReceiptV1;
+  /** Explicit player retrieval preference. Absence keeps legacy serialization;
+   * importance and memory kind never imply that the player pinned an entry. */
+  playerPinned?: true;
 }
 
 export interface InteractionRuntimeRelationship {
@@ -1051,6 +1071,7 @@ export interface CharacterInteractionRuntimeState {
   threads: InteractionRuntimeThread[];
   totalPlayerTurns: number;
   remainingDirectorBudget: number;
+  chatNarrative?: import('./chat-narrative').ChatNarrativeStateV1;
 }
 
 export interface ProductNarrativeRuntimeNodeSnapshot {
@@ -1088,6 +1109,9 @@ export interface ProductNarrativeRuntimeState {
 }
 
 export interface ProductRuntimeState {
+  /** Omitted for legacy sources so their serialized state/hash is unchanged. */
+  avgReading?: import('../avg/reading-contract').AvgReadingRuntimeStateV1;
+  avgRules?: import('../avg/executable-module').AvgRuntimeRulesStateV1;
   version: 1;
   clock: number;
   entities: Record<string, RuntimeEntityState>;
@@ -1140,6 +1164,8 @@ interface ProductRuntimeSessionBase {
   runtimeHeadSequence: number;
   runtimeHeadStateJson: string;
   runtimeHeadStateHash: string;
+  /** Character-chat UI draft only; absent on old saves and never copied into a branch. */
+  chatComposerDraft?: import('./character-interaction').ChatComposerDraftV1;
   parentSessionId: number | null;
   parentThroughSequence: number | null;
   createdAt: number;
@@ -1181,6 +1207,7 @@ export const PRODUCT_RUNTIME_EVENT_TYPES = [
   "ttrpg.character.customized",
   "ttrpg.character.advanced",
   "ttrpg.session-zero.completed",
+  "ttrpg.memory.recorded",
   "ttrpg.safety.changed",
   "ttrpg.clue.discovered",
   "ttrpg.intent.receipted",
@@ -1196,12 +1223,92 @@ export const PRODUCT_RUNTIME_EVENT_TYPES = [
   "ttrpg.media.available",
   "ttrpg.media.failed",
   "ttrpg.media.cancelled",
+  "ttrpg.audio.voice.reserved",
+  "ttrpg.audio.voice.cancelled",
+  "ttrpg.audio.cue.applied",
+  "ttrpg.open.run.started",
+  "ttrpg.open.epoch.started",
+  "ttrpg.open.epoch.closed",
+  "ttrpg.open.hosting.delegated",
+  "ttrpg.open.hosting.stopped",
+  "ttrpg.open.call.reserved",
+  "ttrpg.open.call.dispatched",
+  "ttrpg.open.call.finished",
+  "ttrpg.open.source.inherited",
+  "ttrpg.open.operation.started",
+  "ttrpg.open.operation.step.completed",
+  "ttrpg.open.operation.completed",
+  "ttrpg.open.intent.disposed",
+  "ttrpg.open.intent.clarified",
+  "ttrpg.open.intent.previewed",
+  "ttrpg.open.intent.confirmed",
+  "ttrpg.open.choice.disclosed",
+  "ttrpg.open.table-message.posted",
+  "ttrpg.oracle.consulted",
+  "ttrpg.open.oracle.reviewed",
+  "ttrpg.fact.asserted",
+  "ttrpg.fact.retired",
+  "ttrpg.open.knowledge.discovered",
+  "ttrpg.open.knowledge.shared",
+  "ttrpg.open.knowledge.identity-confirmed",
+  "ttrpg.open.knowledge.identity-shared",
+  "ttrpg.world-turn.advanced",
+  "ttrpg.open.pressure.planned",
+  "ttrpg.open.pressure.settled",
+  "ttrpg.open.pressure.effect.confirmed",
+  "ttrpg.open.pressure.effect.applied",
+  "ttrpg.open.pressure.situation.completed",
+  "ttrpg.open.situations.planned",
+  "ttrpg.open.situations.changed",
+  "ttrpg.open.situations.settled",
+  "ttrpg.open.situations.effect.confirmed",
+  "ttrpg.open.situations.effect.applied",
+  "ttrpg.clock.ticked",
+  "ttrpg.front.telegraphed",
+  "ttrpg.front.advanced",
+  "ttrpg.situation.changed",
+  "ttrpg.front.defeated",
+  "ttrpg.open.stage.opened",
+  "ttrpg.open.stage.closed",
+  "ttrpg.open.stage.clock.advanced",
+  "ttrpg.open.stage.settled",
+  "ttrpg.open.stage.effect.confirmed",
+  "ttrpg.open.stage.effect.applied",
+  "ttrpg.open.gates.evaluated",
+  "ttrpg.open.terminal.evaluated",
+  "ttrpg.open.handoff.offered",
+  "ttrpg.open.narration.recorded",
+  "ttrpg.open.narration.accepted",
+  "ttrpg.open.situation.accepted",
+  "ttrpg.open.entity.proposed",
+  "ttrpg.open.entity.model-proposed",
+  "ttrpg.open.entity.confirmed",
+  "ttrpg.open.entity.materialized",
+  "ttrpg.open.entity.disposed",
+  "ttrpg.open.situation.activated",
+  "ttrpg.open.intent.rejected",
+  "ttrpg.open.companion.preauthorized",
+  "ttrpg.open.gates.settled",
+  "ttrpg.open.gates.recovered",
+  "ttrpg.open.gates.recovery-stopped",
+  "ttrpg.open.failure.logged",
   "interaction.scene.started",
+  "interaction.release.upgraded",
   "interaction.scene.ended",
   "interaction.participant.joined",
   "interaction.participant.left",
   "interaction.player.message.committed",
   "interaction.character.reply.committed",
+  "interaction.narrative.trigger.requested",
+  "interaction.narrative.edit.requested",
+  "interaction.narrative.edit.cancelled",
+  "interaction.narrative.message-retrieval.changed",
+  "interaction.narrative.memory-control.changed",
+  "interaction.narrative.memory.corrected",
+  "interaction.narrative.action.committed",
+  "interaction.narrative.action-reviewed.committed",
+  "interaction.narrative.control-handoff.committed",
+  "interaction.narrative.situation.committed",
   "interaction.memory.proposed",
   "interaction.memory.accepted",
   "interaction.memory.rejected",
@@ -1229,6 +1336,11 @@ export const PRODUCT_RUNTIME_EVENT_TYPES = [
   "adventure.narrative.synced",
   "adventure.action.committed",
   "adventure.action.rejected",
+  "avg.reading.voice.started",
+  "avg.reading.voice.observed",
+  "avg.audio.once.started",
+  "avg.audio.once.observed",
+  "avg.inventory.action.committed",
   "presentation.beat.reached",
   "presentation.media.failed",
   "open-world-evolution.turn.started",

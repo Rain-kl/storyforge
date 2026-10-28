@@ -1,3 +1,8 @@
+import { assertFrozenRuntimePackageSessionV1, parseProductRuntimeState } from '../product/runtime-core'
+import type { AnyProductBuildPreviewManifest } from '../types'
+import { avgExecutableModule } from '../avg/executable-module'
+import { verifyAvgBranchOriginV1 } from '../avg/branch-origin'
+import { isTtrpgRuntimeContentV2 } from '../ttrpg/content-version'
 /**
  * 注册表派生的项目导出引擎(AUDIT-1)
  *
@@ -8,9 +13,10 @@
  * 输出只遵循当前便携备份契约；不存在历史格式分支。
  */
 import Dexie from 'dexie'
+import { prepareProductBuildRootBudgetEvidenceExportV1 } from '../product-production/root-budget-evidence-portability'
 import { db } from '../db/schema'
 import { PROJECT_TABLES, REGISTRY_BY_NAME } from '../registry/project-tables'
-import { remapWorldPortalTargets } from '../utils/world-portals'
+import { parseWorldPortals, remapWorldPortalTargets } from '../utils/world-portals'
 import type { TableSpec } from '../registry/types'
 import type { ProjectExportData } from './json-export'
 import { redactAuthoringSecrets } from '../node-authoring/contracts'
@@ -18,14 +24,121 @@ import { resolveWorkspaceOwnership } from '../workspace/ownership'
 import { portableizeAgentRunLedgerExportV1 } from '../agent/run/ledger-portability'
 import { assertAgentRunArtifactRecordIntegrityV1 } from '../memory/artifact-record'
 import { readVerifiedMediaBlobObjectData } from '../product-production/media-blob-store'
-import type { ProductReleaseManifestV1, ProductRuntimeEvent } from '../types'
+import { assertProductRuntimeSourceSnapshotV3 } from '../product/runtime-source-branch'
+import { remapNarrativeDomainFieldV1 } from '../narrative-domain/references'
+import { assertNarrativeDomainReferenceRowsV1 } from '../narrative-domain/integrity'
+import { assertNarrativeLineageRowsV1 } from '../world-engine/narrative-lineage-lifecycle'
+import type { AnyProductReleaseManifest, ProductRuntimeEvent } from '../types'
+import { mapNarrativeDomainReferencesV1 } from '../narrative-domain/codec'
+import { narrativeDomainReferenceTargetV1 } from '../narrative-domain/references'
+import { canonicalNarrativeJsonV1, compareUnicodeCodePointsV1 } from '../narrative-domain/json'
+import { isPortableResourceUidV1 } from '../context-gateway/resource-uid'
 
 /** 当前完整便携备份契约。 */
-export const CURRENT_EXPORT_VERSION = 15
+export const CURRENT_EXPORT_VERSION = 17
 
 export interface StrictProjectExportSnapshot {
   data: ProjectExportData
   exportIds: ReadonlyMap<string, ReadonlyMap<number, number>>
+}
+
+/** The release compiler supplies an already captured semantic scope. Reuse
+ * the backup encoder without reading or materializing product/media tables.
+ * Unlike a best-effort backup, an explicit release selection may not silently
+ * drop a row or turn a live reference into a tombstone. */
+export function deriveRegisteredSemanticRowsV1(input: {
+  rows: ReadonlyMap<string, readonly Record<string, unknown>[]>
+  worldId: number
+  workId: number
+}): { records: Record<string, Record<string, unknown>[]>; exportIds: Map<string, Map<number, number>> } {
+  assertNarrativeDomainReferenceRowsV1(new Map([
+    ...input.rows,
+    ['worlds', [{ id: input.worldId }]],
+    ['works', [{ id: input.workId, worldId: input.worldId }]],
+  ]), 'local')
+  const idMaps = new Map<string, Map<number, number>>([
+    ['worlds', new Map([[input.worldId, 0]])], ['works', new Map([[input.workId, 0]])],
+  ])
+  const ordered = new Map<string, Record<string, unknown>[]>()
+  for (const [table, rows] of input.rows) {
+    const spec = REGISTRY_BY_NAME.get(table)
+    if (!spec?.worldSemantic || !spec.resourceIdentity || !spec.exportable) throw new Error(`[semanticExport] ${table} 未登记为可发布语义`)
+    const identity = spec.resourceIdentity
+    const seen = new Set<string>(), ids = new Map<number, number>()
+    for (const row of rows) {
+      const uid = row[identity.field]
+      if (!isPortableResourceUidV1(uid, identity.resourceKind) || seen.has(uid.toLowerCase())
+        || !Number.isSafeInteger(row.id) || (row.id as number) <= 0) throw new Error(`[semanticExport] ${table} 稳定身份缺失或重复`)
+      seen.add(uid.toLowerCase())
+    }
+    const sorted = [...rows].sort((a, b) => compareUnicodeCodePointsV1(String(a[identity.field]), String(b[identity.field])))
+    sorted.forEach((row, index) => {
+      if (ids.has(row.id as number)) throw new Error(`[semanticExport] ${table} 本地坐标重复`)
+      ids.set(row.id as number, index)
+    })
+    ordered.set(table, sorted); idMaps.set(table, ids)
+  }
+  const records: Record<string, Record<string, unknown>[]> = {}
+  const exactArray = (value: unknown, label: string): unknown[] => {
+    if (value === undefined || value === null || value === '') return []
+    if (typeof value === 'string') {
+      try { value = JSON.parse(value) } catch { throw new Error(`[semanticExport] ${label} 不是合法数组`) }
+    }
+    if (!Array.isArray(value)) throw new Error(`[semanticExport] ${label} 不是合法数组`)
+    return value
+  }
+  const cleanOptionalFields = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(cleanOptionalFields)
+    if (value && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+      return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined).map(([key, item]) => [key, cleanOptionalFields(item)]))
+    }
+    return value
+  }
+  for (const [table, rows] of ordered) {
+    const spec = REGISTRY_BY_NAME.get(table)!
+    records[table] = rows.map((row, index) => {
+      for (const ref of spec.exportRemap ?? []) {
+        const id = row[ref.field]
+        if (id == null && (ref.onUnmapped === 'require' || ref.onUnmapped === 'drop')) throw new Error(`[semanticExport] ${table}.${ref.field} 必填引用缺失`)
+        if (id != null && !idMaps.get(ref.selfTree ? table : ref.remapVia)?.has(id as number)) {
+          throw new Error(`[semanticExport] ${table}.${ref.field} 引用不在封存范围内`)
+        }
+      }
+      for (const ref of spec.exportRefRemap ?? []) {
+        if (ref.kind === 'narrative-source-refs-v1') {
+          if (row[ref.field] !== undefined) mapNarrativeDomainReferencesV1(ref.field, row[ref.field], source => {
+            const target = narrativeDomainReferenceTargetV1(source)
+            if (target.id !== null && !idMaps.get(target.table)?.has(target.id)) throw new Error(`[semanticExport] ${table}.${ref.field} 证据或依赖未选入`)
+            return source
+          })
+          continue
+        }
+        const requireTarget = (id: unknown) => {
+          if (!Number.isSafeInteger(id) || !idMaps.get(ref.remapVia)?.has(id as number)) throw new Error(`[semanticExport] ${table}.${ref.field} 嵌套引用未选入`)
+        }
+        const items = exactArray(row[ref.field], `${table}.${ref.field}`)
+        if (ref.kind === 'id-array') items.forEach(requireTarget)
+        else if (ref.kind === 'scene-character-ids') for (const scene of items) {
+          if (!scene || typeof scene !== 'object' || Array.isArray(scene)) throw new Error(`[semanticExport] ${table}.${ref.field} 场景无效`)
+          exactArray((scene as Record<string, unknown>).characterIds, `${table}.${ref.field}.characterIds`).forEach(requireTarget)
+        }
+        else if (ref.kind === 'portals') {
+          const portals = parseWorldPortals(row[ref.field] as string | undefined)
+          if (items.length !== portals.length) throw new Error(`[semanticExport] ${table}.${ref.field} 通道无效`)
+          portals.forEach(portal => requireTarget(portal.targetWorldId))
+        } else if (row[ref.field] !== undefined) throw new Error(`[semanticExport] ${table}.${ref.field} 需要新的语义导出版本`)
+      }
+      const portable = toExportRow(spec, row, index, idMaps, true)
+      if (!portable) throw new Error(`[semanticExport] ${table} 不能丢弃已选来源`)
+      for (const ref of spec.exportRefRemap ?? []) if (ref.kind === 'scene-character-ids' && Array.isArray(portable[ref.field])) {
+        portable[ref.field] = portable[ref.field].map((scene: Record<string, unknown>) => ({ ...scene, characterIds: [] }))
+      }
+      const cleaned = cleanOptionalFields(portable) as Record<string, unknown>
+      canonicalNarrativeJsonV1(cleaned)
+      return cleaned
+    })
+  }
+  return { records, exportIds: idMaps }
 }
 
 interface CapturedProjectExportSnapshot extends StrictProjectExportSnapshot {
@@ -42,6 +155,10 @@ function maximumRuntimeSequenceForExport(sequences: ReadonlySet<number> | undefi
 async function assertProductRuntimeExportIntegrityV1(
   rowsByTable: ReadonlyMap<string, readonly any[]>,
 ): Promise<void> {
+  const { validateEnhancedProductSourcePlanRecordV2 } = await import('../product/exact-source-contracts')
+  for (const brief of rowsByTable.get('productProductionBriefs') ?? []) {
+    if (typeof brief.sourcePlanJson === 'string') await validateEnhancedProductSourcePlanRecordV2(brief)
+  }
   const builds = rowsByTable.get('productBuilds') ?? []
   const qualityReceipts = rowsByTable.get('productQualityGateReceipts') ?? []
   const sessions = rowsByTable.get('productRuntimeSessions') ?? []
@@ -49,13 +166,32 @@ async function assertProductRuntimeExportIntegrityV1(
   const checkpoints = rowsByTable.get('productRuntimeCheckpoints') ?? []
   const releases = rowsByTable.get('productReleases') ?? []
   const releasesById = new Map<number, any>()
-  const releaseManifestsById = new Map<number, ProductReleaseManifestV1>()
+  const releaseManifestsById = new Map<number, AnyProductReleaseManifest>()
   const buildsById = new Map<number, any>()
+  const productionsById = new Map((rowsByTable.get('productProductions') ?? []).map(row => [row.id, row]))
+  const buildPreviewVersions = new Map<number, 1 | 2>()
+  const executableAvgBuilds = new Set<number>()
+  const executableAvgPreviews = new Map<number, AnyProductBuildPreviewManifest>()
+  const previewCodec = builds.length ? await import('../product-production/preview-manifest') : null
   for (const build of builds) {
     if (!Number.isSafeInteger(build.id) || build.id < 1 || buildsById.has(build.id)) {
       throw new Error('[deriveExport] ProductBuild 本地主键无效')
     }
     buildsById.set(build.id, build)
+    try {
+      const preview = await previewCodec!.verifyStoredProductBuildPreview(build, { ttrpgProtocol: 2 })
+      if (preview) {
+        const production = productionsById.get(build.productionId)
+        if (!production || preview.productionKey !== production.productionKey
+          || preview.runtimePackage.productType !== production.productType
+          || build.projectId !== production.projectId || build.worldId !== production.worldId
+          || build.workId !== production.workId) throw new Error('production-mismatch')
+        buildPreviewVersions.set(build.id, preview.version)
+        if (avgExecutableModule(preview.runtimePackage)) { executableAvgBuilds.add(build.id); executableAvgPreviews.set(build.id, preview) }
+      }
+    } catch (error) {
+      throw new Error(`[deriveExport] ProductBuild Preview 无效:${error instanceof Error ? error.message : String(error)}`)
+    }
   }
   if (qualityReceipts.length > 0) {
     const { verifyProductQualityGateReceiptRecordV1 } = await import('../product-production/quality-receipts')
@@ -83,7 +219,7 @@ async function assertProductRuntimeExportIntegrityV1(
         throw new Error('[deriveExport] ProductRelease 本地主键无效')
       }
       try {
-        const manifest = await runtimePackage.verifyProductReleaseManifestV1(release.manifestJson)
+        const manifest = await runtimePackage.verifyProductReleaseManifest(release.manifestJson, { ttrpgProtocol: 2 })
         if (await productionHash.hashProductProductionValueV2(manifest) !== release.contentHash
           || release.productType !== manifest.productType
           || release.productionKey !== manifest.productionProvenance.productionKey
@@ -98,12 +234,45 @@ async function assertProductRuntimeExportIntegrityV1(
     }
   }
   const sessionsById = new Map<number, any>()
+  const sourceManifestContract = await import('../product/runtime-source-manifest')
+  const briefsByRevision = new Map((rowsByTable.get('productProductionBriefs') ?? [])
+    .map(brief => [`${brief.productionId}:${brief.revision}`, brief]))
   let migrationContract: typeof import('../open-world/player-save-migration-contract') | null = null
   for (const session of sessions) {
     if (!Number.isSafeInteger(session.id) || session.id < 1 || sessionsById.has(session.id)) {
       throw new Error('[deriveExport] ProductRuntimeSession 本地主键无效')
     }
+    if ((session.productReleaseId != null && releaseManifestsById.get(session.productReleaseId)?.version === 2
+      && !avgExecutableModule(releaseManifestsById.get(session.productReleaseId)!.runtimePackage))
+      || (session.productBuildId != null && buildPreviewVersions.get(session.productBuildId) === 2 && !executableAvgBuilds.has(session.productBuildId))) {
+      throw new Error('[deriveExport] V2 未登记可玩模块，不能包含运行会话')
+    }
+    const avgSource = (session.productReleaseId != null ? releaseManifestsById.get(session.productReleaseId) : executableAvgPreviews.get(session.productBuildId))
+    if (avgSource && avgExecutableModule(avgSource.runtimePackage)) {
+      const sourceRow = session.productReleaseId != null ? releasesById.get(session.productReleaseId) : buildsById.get(session.productBuildId)
+      if (!sourceRow || ['projectId','worldId','workId'].some(key => session[key] !== sourceRow[key])) throw new Error('[deriveExport] AVG 会话跨 owner')
+      if (session.runtimeSourceHash !== avgSource.packageHash) throw new Error('[avg] 备份会话来源 hash 不一致')
+      const branchOrigin = await verifyAvgBranchOriginV1({ canonSnapshotJson: session.canonSnapshotJson,
+        initialState: JSON.parse(session.initialStateJson), runtimeSourceHash: avgSource.packageHash })
+      assertFrozenRuntimePackageSessionV1({ session: { kind: session.kind, initialState: parseProductRuntimeState(session.initialStateJson) },
+        runtimePackage: avgSource.runtimePackage, runtimeSourceHash: avgSource.packageHash,
+        origin: session.parentSessionId != null || branchOrigin ? 'branch' : session.productReleaseId != null ? 'release' : 'preview' })
+    }
     sessionsById.set(session.id, session)
+    let runtimeSourceManifest = null
+    if (session.productReleaseId != null) {
+      const manifest = releaseManifestsById.get(session.productReleaseId)
+      if (!manifest) throw new Error('[deriveExport] ProductRuntimeSession 产品来源缺失')
+      runtimeSourceManifest = await sourceManifestContract.runtimeSourceManifestFromReleaseV1(manifest)
+    } else if (session.productBuildId != null) {
+      const build = buildsById.get(session.productBuildId)
+      const brief = build && briefsByRevision.get(`${build.productionId}:${build.briefRevision}`)
+      if (!build || !brief) throw new Error('[deriveExport] ProductRuntimeSession 预览来源缺失')
+      runtimeSourceManifest = await sourceManifestContract.runtimeSourceManifestFromBuildRecordsV1({ build, brief })
+    }
+    if (runtimeSourceManifest && (session.runtimeSourceHash !== runtimeSourceManifest.packageHash
+      || session.kind !== runtimeSourceManifest.productType)) throw new Error('[deriveExport] ProductRuntimeSession 来源身份不一致')
+    await assertProductRuntimeSourceSnapshotV3({ session, manifest: runtimeSourceManifest })
   }
 
   const sequencesBySession = new Map<number, Set<number>>()
@@ -138,6 +307,20 @@ async function assertProductRuntimeExportIntegrityV1(
     if (hasParent !== hasParentSequence) {
       throw new Error('[deriveExport] ProductRuntimeSession 分支 lineage 配对无效')
     }
+    const upgradeReceipts = (eventsBySession.get(session.id) ?? []).filter(event => event.type === 'interaction.release.upgraded')
+    if (upgradeReceipts.length > 1) throw new Error('[deriveExport] 升级回执不能重复')
+    const upgradeReceipt = upgradeReceipts[0]
+    if (upgradeReceipt) {
+      const childManifest = releaseManifestsById.get(session.productReleaseId)
+      if (!childManifest) throw new Error('[deriveExport] 角色聊天升级副本缺少冻结版本')
+      if (childManifest.version !== 1 || childManifest.productType !== 'character-interaction') {
+        throw new Error('[deriveExport] 角色聊天升级副本的发布协议或产品类型不匹配')
+      }
+      const contract = await import('../character-interaction/release-upgrade-branch')
+      const {parseProductReleaseManifestV1} = await import('../product-production/runtime-package')
+
+      await contract.verifyChatReleaseUpgradeReceiptV1({childSession: session, childManifest: parseProductReleaseManifestV1(childManifest), receipt: upgradeReceipt})
+    }
     if (!hasParent) continue
     const parent = sessionsById.get(session.parentSessionId)
     const parentMaximumSequence = maximumRuntimeSequenceForExport(
@@ -154,7 +337,7 @@ async function assertProductRuntimeExportIntegrityV1(
     const sameSource = parent.runtimeSourceHash === session.runtimeSourceHash
       && parent.productReleaseId === session.productReleaseId
       && parent.productBuildId === session.productBuildId
-    if (sameSource) continue
+    if (sameSource && !upgradeReceipt) continue
     if (parent.productReleaseId == null || session.productReleaseId == null
       || parent.productBuildId != null || session.productBuildId != null) {
       throw new Error('[deriveExport] ProductRuntimeSession 分支 lineage 或序号无效')
@@ -163,11 +346,36 @@ async function assertProductRuntimeExportIntegrityV1(
     const childRelease = releasesById.get(session.productReleaseId)
     const parentManifest = releaseManifestsById.get(parent.productReleaseId)
     const childManifest = releaseManifestsById.get(session.productReleaseId)
-    if (!parentRelease || !childRelease || !parentManifest || !childManifest) {
+    if (!parentRelease || !childRelease || !parentManifest || !childManifest
+      || parentManifest.version !== 1 || childManifest.version !== 1) {
       throw new Error('[deriveExport] ProductRuntimeSession 迁移Release缺失')
     }
+    if (parent.kind === 'ttrpg' && JSON.parse(session.initialStateJson).ttrpg?.openRun?.releaseContinuation) {
+      const { assertTtrpgOpenContinuationParentV1 } = await import('../ttrpg/open-release-continuation-backup')
+      const parentContent = parentManifest.runtimePackage.ttrpg, targetContent = childManifest.runtimePackage.ttrpg
+      if (!parentContent || !targetContent || !isTtrpgRuntimeContentV2(parentContent) || !isTtrpgRuntimeContentV2(targetContent)
+        || parent.runtimeSourceHash !== parentManifest.packageHash || session.runtimeSourceHash !== childManifest.packageHash) {
+        throw new Error('[deriveExport] open 续团发布或冻结来源不一致')
+      }
+      await assertTtrpgOpenContinuationParentV1({ parent, child: session, parentEvents: eventsBySession.get(parent.id) ?? [],
+        throughSequence: session.parentThroughSequence, parentContent, targetContent, targetRuntimePackage: childManifest.runtimePackage })
+      continue
+    }
     try {
+      if (session.kind === 'character-interaction') {
+        if (parentManifest.version !== 1 || childManifest.version !== 1
+          || parentManifest.productType !== 'character-interaction' || childManifest.productType !== 'character-interaction') {
+          throw new Error('[deriveExport] 角色聊天升级分支的发布协议或产品类型不匹配')
+        }
+        const contract = await import('../character-interaction/release-upgrade-branch')
+        const {parseProductReleaseManifestV1} = await import('../product-production/runtime-package')
+
+        await contract.verifyChatReleaseUpgradeBranchV1({parentSession: parent, childSession: session, parentManifest: parseProductReleaseManifestV1(parentManifest), childManifest: parseProductReleaseManifestV1(childManifest),
+          parentEvents: eventsBySession.get(parent.id) ?? [], childEvents: eventsBySession.get(session.id) ?? []})
+        continue
+      }
       migrationContract ??= await import('../open-world/player-save-migration-contract')
+      const { parseProductReleaseManifestV1 } = await import('../product-production/runtime-package')
       const sourceStateHash = await migrationContract.replayTextOpenWorldMigrationSourceStateHashV1({
         session: parent,
         events: eventsBySession.get(parent.id) ?? [],
@@ -178,8 +386,8 @@ async function assertProductRuntimeExportIntegrityV1(
         childSession: session,
         parentRelease,
         childRelease,
-        parentManifest,
-        childManifest,
+        parentManifest: parseProductReleaseManifestV1(parentManifest),
+        childManifest: parseProductReleaseManifestV1(childManifest),
         sourceStateHash,
       })
     } catch (error) {
@@ -264,7 +472,12 @@ function toExportRow(
   if (spec.exportIdField) obj._exportId = index
 
   for (const rr of spec.exportRefRemap ?? []) {
-    if (rr.kind === 'portals') {
+    if (rr.kind === 'narrative-source-refs-v1') {
+      if (Object.prototype.hasOwnProperty.call(obj, rr.field)) {
+        obj[rr.exportAs] = remapNarrativeDomainFieldV1(rr.field, obj[rr.field], 'export', idMaps)
+        delete obj[rr.field]
+      }
+    } else if (rr.kind === 'portals') {
       const map = idMaps.get(rr.remapVia)
       obj[rr.field] = remapWorldPortalTargets(obj[rr.field], (targetId: number) => map?.get(targetId))
     } else if (rr.kind === 'id-array') {
@@ -520,6 +733,8 @@ async function captureProjectExportInTransaction(
     rows.forEach((r, i) => { if (r.id != null) idMap.set(r.id, i) })
     idMaps.set(spec.name, idMap)
   }
+  assertNarrativeDomainReferenceRowsV1(rowsByTable, 'local')
+  await Dexie.waitFor(assertNarrativeLineageRowsV1(rowsByTable, 'local'))
   // 第二遍:逐行转导出对象
   const projectSpec = REGISTRY_BY_NAME.get('projects')
   if (!projectSpec) throw new Error('[deriveExport] PROJECT_TABLES 缺少 projects 根表')
@@ -542,7 +757,7 @@ async function captureProjectExportInTransaction(
   return { data: result as ProjectExportData, exportIds: idMaps, integrityRows: rowsByTable }
 }
 
-async function captureProjectExport(projectId: number, version: number, strictOwners: boolean): Promise<StrictProjectExportSnapshot> {
+async function captureProjectExport(projectId: number, version: number, strictOwners: boolean): Promise<CapturedProjectExportSnapshot> {
   const tables = [...new Set(PROJECT_TABLES.filter(spec => spec.exportable).map(spec => spec.table))]
   const captured = await db.transaction(
     'r',
@@ -553,12 +768,17 @@ async function captureProjectExport(projectId: number, version: number, strictOw
   // rows captured by the read transaction. Keeping them outside IndexedDB
   // avoids both premature auto-commit and an artificial Dexie.waitFor lock.
   await assertProductRuntimeExportIntegrityV1(captured.integrityRows)
-  return { data: captured.data, exportIds: captured.exportIds }
+  return captured
 }
 
-async function portableizeSnapshot(snapshot: StrictProjectExportSnapshot): Promise<StrictProjectExportSnapshot> {
+async function portableizeSnapshot(snapshot: CapturedProjectExportSnapshot, options: { freezeContextEvidence?: boolean } = {}): Promise<StrictProjectExportSnapshot> {
+  if (PROJECT_TABLES.some(spec => spec.portableData?.kind === 'product-build-root-budget')) {
+    await prepareProductBuildRootBudgetEvidenceExportV1({
+      data: snapshot.data, originalRows: snapshot.integrityRows, exportIds: snapshot.exportIds,
+    })
+  }
   if (PROJECT_TABLES.some(spec => spec.portableData?.kind === 'agent-run-root')) {
-    const portableLedger = portableizeAgentRunLedgerExportV1(snapshot.data, snapshot.exportIds)
+    const portableLedger = portableizeAgentRunLedgerExportV1(snapshot.data, snapshot.exportIds, options)
     if (Dexie.currentTransaction) await Dexie.waitFor(portableLedger)
     else await portableLedger
   }
@@ -670,12 +890,11 @@ export async function deriveStrictExportProjectSnapshotInCurrentTransaction(
     throw new Error('[strictExport] 当前事务快照只能在已打开的 Dexie 事务中派生')
   }
   const captured = await captureProjectExportInTransaction(projectId, CURRENT_EXPORT_VERSION, true)
-  // `portableizeSnapshot()` is deliberately asynchronous even when this
-  // particular project has no portable Blob rows. Keeping the whole promise
-  // inside Dexie.waitFor prevents a real browser from auto-committing the
-  // caller-owned revision transaction between the final export read and the
-  // subsequent worldRevisions write.
-  const snapshot = await Dexie.waitFor(portableizeSnapshot(captured))
+  // Conversion reads only the captured rows. Start it outside the transaction
+  // context while waitFor keeps the caller's snapshot alive.
+  // Passing an already-running promise would let inner hash/blob keepalives
+  // join the same wait chain and prevent it from completing.
+  const snapshot = await Dexie.waitFor(Dexie.ignoreTransaction(() => portableizeSnapshot(captured, { freezeContextEvidence: false })))
   const worldExportId = snapshot.exportIds.get('worlds')?.get(ownership.worldId)
   const workExportId = snapshot.exportIds.get('works')?.get(ownership.workId)
   if (worldExportId == null || workExportId == null) {

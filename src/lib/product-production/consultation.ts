@@ -1,4 +1,11 @@
-import { parseChatAuthoringSettingsV1, type ChatAuthoringSettingsV1 } from '../character-interaction/authoring-contract'
+import {chatVisualMediaProfileV1} from '../character-interaction/visual-intent'
+import { parseChatAuthoringSettings, type ChatAuthoringSettings } from '../character-interaction/authoring-contract'
+import { readPreparedChatSourceProjectionViewV1 } from '../character-interaction/source-projection'
+import {readChatRoleProfilesV1} from '../character-interaction/role-profile-store'
+import {readChatSourceUnitSetV1} from '../character-interaction/source-unit-store'
+import {validateChatSourceUnitSetForProjectionV1} from '../character-interaction/source-unit-authorization'
+import {validateChatRoleProfilesForSourceV1} from '../character-interaction/role-profile'
+import { parseProductWorldSourceSelection } from './runtime-package'
 import { parseAvgAuthoringSettingsV1, type AvgAuthoringSettingsV1 } from '../avg/authoring-contract'
 import type {
   ProductionProductKindV1,
@@ -8,9 +15,9 @@ import type {
   ProductProductionSourceOptionsV1,
   ProductProductionSourceSelectionV1,
   ProductStartingPointSuggestionV1,
-  ProductWorldSourceSelectionV1,
   WorkspaceScope,
   AiTownBriefSettingsV1,
+  AiTownProductionBriefV1,
 } from '../types'
 import { resolveScope } from '../workspace/scope'
 import { compileUpperProductWorldRoleBindingsV1 } from '../product/world-requirement-adapters'
@@ -19,6 +26,7 @@ import { parseProductProductionBriefV3 } from './contracts'
 import { freezeAiTownWorldSourceSelectionV1, loadAiTownWorldSourceCatalogV1 } from '../ai-town/world-source'
 import {
   loadProductProductionConsultationSourceV2,
+  loadProductProductionWorldSourceCatalogV2,
   type ProductProductionConsultationSourceV2,
 } from './world-source'
 import {
@@ -134,7 +142,8 @@ function normalizeAuthorSelection(input: {
   for (const field of AUTHOR_SELECTION_FIELDS) {
     const submitted = input.authorSelection[field]
     if (!Array.isArray(submitted)) throw new Error(`[product-production] 冻结素材选择缺少 ${field}`)
-    if (submitted.some(value => typeof value !== 'string' || !value.startsWith('world-release:'))) {
+    if (submitted.some(value => typeof value !== 'string' || (input.source.worldReference.version === 2
+      ? !/^world-narrative:[a-f0-9]{64}$/.test(value) : !value.startsWith('world-release:')))) {
       throw new Error(`[product-production] 冻结素材选择 ${field} 包含非法世界资源 key`)
     }
     if (new Set(submitted).size !== submitted.length) {
@@ -156,7 +165,12 @@ function mediaProfile(input: {
   aiTown?: Pick<AiTownBriefSettingsV1,
     'residentTarget' | 'majorLocationTarget' | 'portraits' | 'expressions' | 'locationCards' | 'ambientAudio'>
   qualityProfile: ProductProductionBriefV3['qualityProfile']
+  characterChat?: ChatAuthoringSettings
 }): ProductProductionMediaProfileV1 {
+  if (input.productType === 'character-interaction') {
+    const visual = chatVisualMediaProfileV1(input.characterChat, input.visualLevel)
+    return {...visual, visualLevel: visual.imageCount ? 'key-scenes' : 'none', audioLevel: 'none', musicTrackCount: 0, sfxCount: 0, voiceLineCount: 0}
+  }
   // Each presentation product owns its own count/profile while sharing the
   // content-addressed media transport and release integrity primitives.
   const presentationEnabled = ['avg', 'ttrpg', 'ai-town', 'text-adventure', 'text-open-world'].includes(input.productType)
@@ -223,11 +237,12 @@ async function capabilityRequirement(input: {
 export async function suggestProductStartingPoints(input: {
   scope: WorkspaceScope
   worldReleaseId: number
+  productType?: string
 }): Promise<ProductConsultationSuggestionSetV1> {
   const scope = await resolveScope({ scope: input.scope })
   let source: ConsultationSourceV1
   try {
-    source = await loadProductProductionConsultationSourceV2({ scope, worldReleaseId: input.worldReleaseId })
+    source = await loadProductProductionConsultationSourceV2({ scope, worldReleaseId: input.worldReleaseId, productType: input.productType })
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause)
     throw new Error(`[product-production] WorldRelease 已被篡改、不属于当前作用域或不符合纯语义契约：${detail}`)
@@ -285,6 +300,9 @@ export async function suggestProductStartingPoints(input: {
     risks: ['需要补齐主角、起点、规模、必守事实和内容边界后才能开始制作。'],
   }))
   const suggestions = result.slice(0, 6)
+  if (source.worldReference.version === 2) for (const item of suggestions) {
+    item.recommendedProductTypes = item.recommendedProductTypes.filter(type => type === 'character-interaction' || type === 'avg')
+  }
   const selectionDefaults = Object.fromEntries(suggestions.map(item => [
     item.suggestionKey,
     editableSelection(selectionForStartingPoint(source, item)),
@@ -305,7 +323,7 @@ export async function suggestProductStartingPoints(input: {
  * deterministic form compiler: it makes no model/provider call and does not
  * authorize production.
  */
-export async function draftProductProductionBriefV3(input: {
+export interface ProductProductionBriefDraftInputV3 {
   scope: WorkspaceScope
   worldReleaseId: number
   suggestionKey: string
@@ -324,39 +342,60 @@ export async function draftProductProductionBriefV3(input: {
   confirmTtrpgDefaultMappings?: boolean
   ttrpg?: TtrpgProductionBriefDraftInputV2
   aiTown?: AiTownBriefSettingsV1
-  characterChat?: ChatAuthoringSettingsV1
+  characterChat?: ChatAuthoringSettings
   avg?: AvgAuthoringSettingsV1
   textAdventure?: TextAdventureProductionBriefDraftV1
   sourceSelection?: ProductProductionSourceSelectionV1
-}): Promise<ProductProductionBriefV3> {
+}
+
+export async function draftProductProductionBriefV3(input: ProductProductionBriefDraftInputV3): Promise<ProductProductionBriefV3> {
+  return parseProductProductionBriefV3(await draftProductProductionBriefValueV3(input, false))
+}
+
+/** In-memory S2 draft only; the open product must add its validated content before any save/start. */
+export async function draftTtrpgOpenProductionCommonBriefV3(
+  input: Omit<ProductProductionBriefDraftInputV3, 'productType' | 'ttrpg' | 'aiTown' | 'avg' | 'characterChat' | 'textAdventure'>,
+): Promise<Omit<ProductProductionBriefV3, 'ttrpg' | 'ttrpgOpen'>> {
+  return draftProductProductionBriefValueV3({ ...input, productType: 'ttrpg' }, true)
+}
+
+async function draftProductProductionBriefValueV3(
+  input: ProductProductionBriefDraftInputV3, openMode: boolean,
+): Promise<ProductProductionBriefV3> {
   const scope = await resolveScope({ scope: input.scope })
-  const suggestions = await suggestProductStartingPoints({ scope, worldReleaseId: input.worldReleaseId })
+  const suggestions = await suggestProductStartingPoints({ scope, worldReleaseId: input.worldReleaseId, productType: input.productType })
   const selected = suggestions.suggestions.find(item => item.suggestionKey === input.suggestionKey)
   if (!selected) throw new Error('[product-production] 起点建议不属于当前冻结 WorldRelease')
   const source = await loadProductProductionConsultationSourceV2({
     scope,
     worldReleaseId: input.worldReleaseId,
+    productType: input.productType,
   })
   if (source.release.contentHash !== suggestions.worldContentHash) {
     throw new Error('[product-production] 会谈期间 WorldRelease 来源发生变化')
   }
   const selectedScale = input.scale ?? selected.scale
   const qualityProfile = input.qualityProfile ?? 'prototype'
-  const characterChat = input.characterChat ? parseChatAuthoringSettingsV1(input.characterChat) : undefined
+  const characterChat = input.characterChat ? parseChatAuthoringSettings(input.characterChat) : undefined
+  const characterChatProfiles = characterChat && characterChat.version !== 1 ? await readChatRoleProfilesV1(scope) : undefined
+  const characterChatSourceUnits = characterChat?.version === 3 ? await readChatSourceUnitSetV1(scope) : undefined
   if(characterChat && input.productType !== 'character-interaction') throw new Error('角色聊天方案不能用于其他产品')
   const avg = input.avg ? parseAvgAuthoringSettingsV1(input.avg) : undefined
   if (avg && input.productType !== 'avg') throw new Error('AVG 方案不能用于其他产品')
   const scale = { scope: selectedScale, ...SCALE_DEFAULTS[selectedScale], ...(avg ? { targetPlayMinutes: avg.targetPlayMinutes, targetEndingCount: avg.targetEndingCount } : {}), ...(characterChat ? {targetPlayMinutes: characterChat.targetPlayMinutes} : {}) }
+  if (openMode) scale.targetEndingCount = 0
   const selectedCatalog = normalizeAuthorSelection({
     source, selected, authorSelection: input.sourceSelection,
   })
   if (characterChat) {
     const keys = characterChat.characters.map(c => c.sourceKey)
-    if (!keys.length || (characterChat.mode === 'single' && keys.length !== 1)) {
+    const castCount = keys.length + (characterChat.version === 3 ? characterChat.privateCharacters?.length ?? 0 : 0)
+    if (!castCount || (characterChat.mode === 'single' && castCount !== 1)) {
       throw new Error('请在角色与场景中选择参与者；单角色模式需要恰好一名角色。')
     }
     const available = new Set(source.selectionOptions.characters.map(c => c.resourceKey))
     if (keys.some(key => !available.has(key))) throw new Error('角色设置包含当前世界版本中不存在的人物，请重新选择。')
+    if (characterChat.version === 3 && characterChat.narrative.playerCharacterKey && !available.has(characterChat.narrative.playerCharacterKey)) throw new Error('玩家人物不属于当前冻结世界，请重新选择。')
     selectedCatalog.characterResourceKeys = keys
   }
   if (input.productType === 'ai-town') {
@@ -375,7 +414,8 @@ export async function draftProductProductionBriefV3(input: {
   }
   const media = mediaProfile({
     productType: input.productType,
-    visualLevel: input.visualLevel ?? 'key-scenes',
+    visualLevel: input.visualLevel ?? (input.productType === 'character-interaction' ? 'none' : 'key-scenes'),
+    characterChat: characterChat ?? undefined,
     audioLevel: input.audioLevel ?? 'none',
     aiTown: input.productType === 'ai-town' ? {
       residentTarget: selectedCatalog.characterResourceKeys.length,
@@ -388,14 +428,27 @@ export async function draftProductProductionBriefV3(input: {
     qualityProfile,
   })
   const roleBindings = compileUpperProductWorldRoleBindingsV1(input.productType, selectedCatalog)
-  const selection: ProductWorldSourceSelectionV1 = {
-    schema: 'storyforge.product-world-source-selection', version: 1,
+  const backgroundKeys = characterChat && characterChat.version !== 1 ? characterChat.backgroundResourceKeys ?? [] : []
+  if (backgroundKeys.length) roleBindings.chatBackground = [...backgroundKeys]
+  const playerKeys = characterChat?.version === 3 && characterChat.narrative.playerCharacterKey ? [characterChat.narrative.playerCharacterKey] : []
+  if (playerKeys.length) roleBindings.chatPlayer = playerKeys
+  const selection = parseProductWorldSourceSelection({
+    schema: 'storyforge.product-world-source-selection', version: source.worldReference.version,
     productType: input.productType,
     worldReferenceHash: source.worldReference.referenceHash,
-    resourceKeys: [...new Set(Object.values(selectedCatalog).flat())].sort(),
+    resourceKeys: [...new Set([...Object.values(selectedCatalog).flat(), ...backgroundKeys, ...playerKeys])].sort(),
     roleBindings,
+  })
+  if (characterChat && characterChat.version !== 1) {
+    if (!characterChat.sourceReview) throw new Error('请先检查并确认角色来源资料')
+    const catalog = await loadProductProductionWorldSourceCatalogV2({scope, worldReleaseId: input.worldReleaseId, selection, chatSourceReview: true,
+      chatPrivateCharacters: characterChat.version === 3 ? characterChat.privateCharacters : undefined})
+    if (!catalog.chatSourceProjection) throw new Error('角色来源投影未就绪')
+    readPreparedChatSourceProjectionViewV1({draft: catalog.chatSourceProjection, review: characterChat.sourceReview, viewerKey: 'player'})
+    if (characterChatProfiles) validateChatRoleProfilesForSourceV1(characterChatProfiles, catalog.chatSourceProjection, characterChat.sourceReview)
+    if (characterChatSourceUnits) validateChatSourceUnitSetForProjectionV1(characterChatSourceUnits, catalog.chatSourceProjection, characterChat.sourceReview)
   }
-  const ttrpg = input.productType === 'ttrpg' ? await compileTtrpgProductionBriefV2({
+  const ttrpg = input.productType === 'ttrpg' && !openMode ? await compileTtrpgProductionBriefV2({
     scope, selection, worldContentHash: source.release.contentHash,
     title: input.ttrpg?.campaign?.title ?? selected.title,
     premise: input.openingSituation?.trim() || selected.openingConflict,
@@ -405,7 +458,7 @@ export async function draftProductProductionBriefV3(input: {
     confirmDefaultMappings: input.confirmTtrpgDefaultMappings === true,
     draft: input.ttrpg,
   }) : null
-  const aiTown = input.productType === 'ai-town' ? await (async () => {
+  const aiTown = input.productType === 'ai-town' ? await (async (): Promise<AiTownProductionBriefV1> => {
     const settings = input.aiTown
     const townCatalog = await loadAiTownWorldSourceCatalogV1({ scope, worldReleaseId: input.worldReleaseId })
     const sourceSelection = await freezeAiTownWorldSourceSelectionV1({
@@ -423,7 +476,7 @@ export async function draftProductProductionBriefV3(input: {
       player: { role: settings?.playerRole ?? 'new-resident' as const, name: settings?.playerName.trim() || input.playerRole?.trim() || '新居民', homeConcept: settings?.homeConcept.trim() || '一间靠近公共空间、可安全休息的小屋' },
       continuity: { mode: 'strict-post-canon' as const, elapsedDays: settings?.elapsedDays ?? 90, romance: settings?.romance ?? 'off' as const },
       town: { title: settings?.townTitle.trim() || `${selected.title} · 后日谈小镇`, premise: input.openingSituation?.trim() || '原作结束三个月后，人物在新的共同体里重新安顿生活。', majorLocationTarget: settings?.majorLocationTarget ?? 4, residentTarget: selectedCatalog.characterResourceKeys.length },
-      clock: { slots: ['morning', 'late-morning', 'noon', 'afternoon', 'evening', 'midnight'] as const, actionsPerDay: settings?.actionsPerDay ?? 3 },
+      clock: { slots: ['morning', 'late-morning', 'noon', 'afternoon', 'evening', 'midnight'], actionsPerDay: settings?.actionsPerDay ?? 3 },
       autonomy: { level: 'observational-high' as const, offlineEnabled: settings?.offlineEnabled ?? true, offlineMaximumDays: settings?.offlineMaximumDays ?? 3 },
       management: { resourceKeys: settings?.resourceKeys ?? ['materials', 'food', 'care'], startingMoney: settings?.startingMoney ?? 200, sharedProjectConcept: settings?.sharedProjectConcept.trim() || '修复一处让居民能够共同生活与相遇的公共设施' },
       safety: { boundaries: [...new Set(input.contentBoundaries?.length ? input.contentBoundaries : ['不生成未授权的露骨或仇恨内容'])], majorChangeConfirmation: true as const, privateMindPlayerAccess: 'none' as const },
@@ -438,14 +491,15 @@ export async function draftProductProductionBriefV3(input: {
     // The built-in deterministic compiler provides a no-provider vertical
     // slice. External text generation is an optional quality upgrade and may
     // never become an implicit prerequisite for an authorized local Build.
-    requirementKey: 'text.runtime-package', mediaClass: 'text', required: false,
+    requirementKey: 'text.runtime-package', mediaClass: 'text', required: openMode,
     allowedDataClasses: [
       'world-selection',
       ...(input.productType === 'text-adventure' && media.imageCount > 0 ? ['product-owned-media'] : []),
     ],
   })]
   if (media.imageCount > 0) requirements.push(await capabilityRequirement({
-    requirementKey: 'media.visual', mediaClass: 'image', required: qualityProfile === 'commercial-candidate',
+    requirementKey: 'media.visual', mediaClass: 'image', required: qualityProfile === 'commercial-candidate' || input.productType === 'character-interaction',
+    ...(input.productType === 'character-interaction' ? {allowedDataClasses: ['author-intent']} : {}),
   }))
   if (media.musicTrackCount > 0) requirements.push(await capabilityRequirement({
     requirementKey: 'media.music', mediaClass: 'music', required: qualityProfile === 'commercial-candidate',
@@ -466,7 +520,7 @@ export async function draftProductProductionBriefV3(input: {
     && !explicitOpeningSituation) {
     unresolvedDecisionKeys.push('adventure-starting-location')
   }
-  if (input.productType === 'ttrpg') {
+  if (input.productType === 'ttrpg' && !openMode) {
     // An explicit product-authored opening may introduce a campaign location
     // without requiring the author to write runtime design back into the world.
     const authoredOpening = input.ttrpg?.naturalLanguageInstruction?.trim()
@@ -557,10 +611,18 @@ export async function draftProductProductionBriefV3(input: {
         maximumDurationMs: 3_600_000,
         maximumStorageBytes: 200_000_000,
       }
-  return parseProductProductionBriefV3({
+  if (openMode) {
+    // This is a proposed S2 envelope, never a runtime increase of an authorized budget.
+    const contextLaneCount = 4 + Number(media.imageCount > 0)
+      + Number(media.musicTrackCount + media.sfxCount + media.voiceLineCount > 0)
+    productionBudget.maximumInputTokens = Math.max(productionBudget.maximumInputTokens, contextLaneCount * 48_000)
+  }
+  const value: ProductProductionBriefV3 = {
     schema: 'storyforge.product-production-brief', version: 3,
     ...(avg ? { avg } : {}),
     ...(characterChat ? { characterChat } : {}),
+    ...(characterChatProfiles ? {characterChatProfiles} : {}),
+    ...(characterChatSourceUnits ? {characterChatSourceUnits} : {}),
     source: {
       worldReleaseId: input.worldReleaseId, worldContentHash: source.release.contentHash, selection,
       startingPoint: {
@@ -590,7 +652,7 @@ export async function draftProductProductionBriefV3(input: {
     qualityProfile,
     capabilityRequirements: requirements,
     externalDataPolicy: {
-      allowedDataClasses: ['world-selection'], forbiddenDataClasses: ['api-key', 'private-note'],
+      allowedDataClasses: ['world-selection', ...(input.productType === 'character-interaction' && media.imageCount > 0 ? ['author-intent'] : [])], forbiddenDataClasses: ['api-key', 'private-note'],
       allowReferenceImages: false, allowVoiceScripts: false,
     },
     fallbackPolicy: {
@@ -639,8 +701,9 @@ export async function draftProductProductionBriefV3(input: {
     ...(ttrpg ? { ttrpg } : {}),
     ...(aiTown ? { aiTown } : {}),
     ...(textAdventure ? { textAdventure } : {}),
-    ...(input.productType === 'ttrpg' ? {
+    ...(input.productType === 'ttrpg' && !openMode ? {
       authorConfirmations: { ttrpgDefaultRuleMappings: input.confirmTtrpgDefaultMappings === true },
     } : {}),
-  })
+  }
+  return value
 }

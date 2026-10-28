@@ -1,3 +1,4 @@
+import type { NarrativeDomainMetadataV1, NarrativeDomainFieldsV1 } from './narrative-domain'
 /**
  * 全局故事线 — Phase B
  * 给全书一条从开篇到结局的主线剧情锚点
@@ -20,7 +21,9 @@ export interface StoryStage {
 }
 
 /** 故事线 */
-export interface StoryArc {
+type StoryArcNarrativeFieldsV1 = NarrativeDomainMetadataV1 & Pick<NarrativeDomainFieldsV1, 'narrativeDevelopmentsV1'>
+
+export interface StoryArc extends StoryArcNarrativeFieldsV1 {
   id?: number
   projectId: number
   /** 多世界作用域；null 表示单世界/默认主世界。 */
@@ -45,14 +48,51 @@ export interface StoryArc {
 
 // ── 工具函数 ──
 
-export function parseStages(stagesJson: string): StoryStage[] {
+export type StoryStagesInspection =
+  | { valid: true; stages: StoryStage[] }
+  | { valid: false; error: string }
+
+/** Validate stored data without coercing, filtering or rewriting author fields. */
+export function inspectStages(stagesJson: string): StoryStagesInspection {
   try {
-    const parsed = JSON.parse(stagesJson)
-    if (Array.isArray(parsed)) return parsed
-    return []
+    const parsed: unknown = JSON.parse(stagesJson)
+    if (!Array.isArray(parsed)) return { valid: false, error: '阶段数据必须是 JSON 数组。' }
+    const ids = new Set<string>()
+    for (const [index, stage] of parsed.entries()) {
+      const prefix = `阶段 ${index + 1}`
+      if (stage == null || typeof stage !== 'object' || Array.isArray(stage)) {
+        return { valid: false, error: `${prefix}必须是对象。` }
+      }
+      if (typeof stage.id !== 'string' || !stage.id.trim() || ids.has(stage.id)) {
+        return { valid: false, error: `${prefix}的 ID 必须是非空且不重复的文本。` }
+      }
+      ids.add(stage.id)
+      if (typeof stage.title !== 'string' || typeof stage.description !== 'string') {
+        return { valid: false, error: `${prefix}的标题和描述必须是文本。` }
+      }
+      if (!Array.isArray(stage.keyEvents) || !stage.keyEvents.every((event: unknown) => typeof event === 'string')) {
+        return { valid: false, error: `${prefix}的关键事件必须是文本数组；没有事件时请填写 []。` }
+      }
+      if (stage.turningPoint !== undefined && typeof stage.turningPoint !== 'string') {
+        return { valid: false, error: `${prefix}的转折点必须是文本或省略该字段。` }
+      }
+      for (const field of ['startVolume', 'endVolume'] as const) {
+        if (stage[field] !== undefined && (typeof stage[field] !== 'number' || !Number.isFinite(stage[field]))) {
+          return { valid: false, error: `${prefix}的卷范围必须是数字或省略该字段。` }
+        }
+      }
+    }
+    // Retain IDs and unknown extension fields. This is a read boundary, not a migration.
+    return { valid: true, stages: parsed }
   } catch {
-    return []
+    return { valid: false, error: '阶段数据不是有效 JSON。' }
   }
+}
+
+/** Safe projection for consumers; editing/recovery must distinguish invalid data via inspectStages. */
+export function parseStages(stagesJson: string): StoryStage[] {
+  const result = inspectStages(stagesJson)
+  return result.valid ? result.stages : []
 }
 
 export function stringifyStages(stages: StoryStage[]): string {

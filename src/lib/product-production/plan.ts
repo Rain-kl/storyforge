@@ -1,12 +1,26 @@
+import {CHAT_OPENING_DEVELOPMENT_GATE_V3} from '../character-interaction/opening-development'
+import {CHAT_OPENING_AGENCY_GATE_V2} from '../character-interaction/opening-agency'
+import {CHAT_OPENING_REPAIR_GATE_V2} from '../character-interaction/opening-repair-patch'
+import {CHAT_OPENING_FACT_CATALOG_KEY, CHAT_OPENING_REFERENCE_GATE_V1, CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1} from '../character-interaction/opening-source-references'
+import {CHAT_OPENING_OPTION_REPAIR_GATE_V1} from '../character-interaction/opening-option-repair'
 import type {
   ProductProductionBriefV3,
   ProductProductionPlanTaskV3,
   ProductProductionPlanV3,
   ProductTaskBudgetReservationV1,
 } from '../types'
+import { buildAvgNativeAssemblyPlan } from '../avg/assembly-plan'
+import { AVG_VISUAL_REQUIREMENTS_ARTIFACT_V4, buildAvgVisualPlanningPlanV4 } from '../avg/visual-planning-plan'
+import { buildAvgVisualPlanningPlanV5 } from '../avg/visual-planning-plan-v5'
+import { buildAvgSoundProductionPlan } from '../avg/sound-production-plan'
+import { assertAvgAudioProcessingTaskShapeV1 } from '../avg/audio-production-topology'
 import { PRODUCTION_PRODUCT_KINDS_V1 } from '../types'
 import { parseTextAdventureContentRevisionV1, parseProductProductionBriefV3 } from './contracts'
-import { hashProductProductionValueV2, isSha256Hash } from './hash'
+import { buildTtrpgOpenProductionPlanV3 } from '../ttrpg/open-production-plan'
+import { TTRPG_OPEN_PRODUCTION_SKILL_IDS_V1, type TtrpgOpenProductionTaskKeyV2 } from '../ttrpg/open-production-bindings'
+import { createCommonProductMediaBundleTasksV3 } from './media-plan-tasks'
+import { validateTtrpgProductionBriefContentV3 } from '../ttrpg/production-brief-v3'
+import { canonicalProductProductionJsonV2, hashProductProductionValueV2, isSha256Hash } from './hash'
 import { textAdventureSceneScriptPartSceneKeysV1 } from '../adventure/scene-script'
 import {
   TEXT_ADVENTURE_QUALITY_REVIEW_SCOPES_V1,
@@ -213,6 +227,7 @@ function parseTask(value: unknown, index: number): ProductProductionPlanTaskV3 {
     'concurrencyGroup', 'subjectLockKeys', 'priority', 'budgetReservation', 'maxAttempts',
     'timeoutMs', 'failurePolicy', 'fallbackTaskKey', 'acceptanceGateIds', 'reuse',
     ...(Object.prototype.hasOwnProperty.call(row, 'authorRevision') ? ['authorRevision'] : []),
+    ...(Object.prototype.hasOwnProperty.call(row, 'contextProfile') ? ['contextProfile'] : []),
   ], label)
   if (!Array.isArray(row.requiredReceipts) || row.requiredReceipts.length > 1_000) fail(`${label}.requiredReceipts 无效`)
   const requiredReceipts = row.requiredReceipts.map((value, receiptIndex) => {
@@ -278,6 +293,8 @@ function parseTask(value: unknown, index: number): ProductProductionPlanTaskV3 {
     acceptanceGateIds: keys(row.acceptanceGateIds, `${label}.acceptanceGateIds`),
     reuse,
     ...(authorRevision ? { authorRevision } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'contextProfile')
+      ? { contextProfile: enumValue(row.contextProfile, ['avg-task-v1', 'avg-visual-planning-v4','avg-visual-planning-v5','avg-sound-planning-v1'] as const, `${label}.contextProfile`) } : {}),
   }
 }
 
@@ -338,6 +355,53 @@ export function parseProductProductionPlanV3(
     if (task.failurePolicy !== 'fallback' && task.fallbackTaskKey !== null) fail(`${task.taskKey} 非 fallback 任务声明 fallbackTaskKey`)
     if (task.executionMode === 'model' && task.skillId === null) fail(`${task.taskKey} 模型任务缺少 skillId`)
     if (task.executionMode === 'deterministic' && task.skillId !== null) fail(`${task.taskKey} 确定性任务不应绑定 skillId`)
+    if (task.contextProfile === 'avg-task-v1' && (productType !== 'avg' || task.executionMode !== 'deterministic'
+      || !['avg-assembly-integrate', 'avg-assembly-verify', 'avg-media-image-process', 'avg-media-image-reuse', 'avg-media-voice-reuse', 'avg-audio-process'].includes(task.kind))) {
+      fail(`${task.taskKey} 上下文投影只用于准确 AVG 确定性任务`)
+    }
+    if (task.contextProfile === 'avg-sound-planning-v1' && (productType !== 'avg' || task.executionMode !== 'deterministic'
+      || !['avg-sound-requirements-compile', 'avg-sound-library-import', 'avg-sound-requirements-reuse', 'avg-sound-raw-reuse', 'avg-assembly-integrate', 'avg-assembly-verify', 'avg-audio-process'].includes(task.kind))) {
+      fail(`${task.taskKey} 声音投影只允许准确声音合同的确定性任务`)
+    }
+    if (task.kind === 'avg-audio-process') assertAvgAudioProcessingTaskShapeV1(task, tasks, productType)
+    if(task.contextProfile==='avg-visual-planning-v5'&&(productType!=='avg'||task.executionMode!=='deterministic'
+      ||!['avg-v5-visual-requirements-compile','avg-v5-visual-proposal-reuse','avg-media-image-reuse','avg-media-image-process'].includes(task.kind)))fail(`${task.taskKey} V5 投影只用于准确新需求编译、方案复用、原图复验或加工`)
+    if (task.contextProfile === 'avg-visual-planning-v4' && (productType !== 'avg' || task.executionMode !== 'deterministic'
+      || !['avg-v4-visual-requirements-compile','avg-v4-visual-proposal-reuse','avg-media-image-reuse','avg-media-image-process'].includes(task.kind))) fail(`${task.taskKey} V4 投影只用于准确需求编译、复验或加工任务`)
+    if (task.kind === 'avg-v4-visual-proposal-reuse' && (productType !== 'avg' || task.executionMode !== 'deterministic'
+      || task.contextProfile !== 'avg-visual-planning-v4' || task.skillId !== null || task.capabilityRequirementKeys.length !== 0
+      || task.budgetReservation.modelCalls !== 0 || task.budgetReservation.mediaCalls !== 0 || task.budgetReservation.maximumCostUsd !== 0
+      || task.maxAttempts !== 1 || task.reuse !== null)) fail(`${task.taskKey} 方案复验必须为单次零调用任务，不能借用供应商或通用沿用权限`)
+    if(task.kind==='avg-v5-visual-proposal-reuse'&&(productType!=='avg'||task.executionMode!=='deterministic'
+      ||task.contextProfile!=='avg-visual-planning-v5'||task.skillId!==null||task.capabilityRequirementKeys.length!==0
+      ||task.budgetReservation.modelCalls!==0||task.budgetReservation.mediaCalls!==0||task.budgetReservation.maximumCostUsd!==0
+      ||task.maxAttempts!==1||task.reuse!==null||!task.taskKey.startsWith('avg.visual.propose.')||task.outputArtifactKeys.length!==1
+      ||!task.outputArtifactKeys[0].startsWith('avg.proposal.')))fail(`${task.taskKey} V5 历史方案复用必须为单次零调用专业任务`)
+    if (task.kind === 'avg-media-image-reuse' && task.contextProfile === 'avg-visual-planning-v4') {
+      const requirementKey = task.taskKey.startsWith('avg.media.generate.') ? task.taskKey.slice('avg.media.generate.'.length) : ''
+      const compiler = tasks.find(owner => owner.outputArtifactKeys.includes(AVG_VISUAL_REQUIREMENTS_ARTIFACT_V4))
+      if (!requirementKey || task.skillId !== null || task.capabilityRequirementKeys.length !== 0
+        || task.budgetReservation.modelCalls !== 0 || task.budgetReservation.mediaCalls !== 0 || task.budgetReservation.maximumCostUsd !== 0
+        || task.maxAttempts !== 1 || task.reuse !== null || task.outputArtifactKeys.length !== 1
+        || task.outputArtifactKeys[0] !== `avg.media.raw.${requirementKey}`
+        || !task.inputArtifactKeys.includes(AVG_VISUAL_REQUIREMENTS_ARTIFACT_V4)
+        || compiler?.kind !== 'avg-v4-visual-requirements-compile' || !task.dependsOn.includes(compiler.taskKey)) {
+        fail(`${task.taskKey} 原图复验必须依赖准确需求编译，且为单次零调用任务`)
+      }
+    }
+    if(task.kind==='avg-media-image-process'&&['avg-visual-planning-v4','avg-visual-planning-v5'].includes(task.contextProfile??'')){
+      const requirementKey=task.taskKey.startsWith('avg.media.process.')?task.taskKey.slice('avg.media.process.'.length):''
+      const compiler=tasks.find(owner=>owner.outputArtifactKeys.includes(AVG_VISUAL_REQUIREMENTS_ARTIFACT_V4))
+      const raw=tasks.find(owner=>owner.outputArtifactKeys.includes(`avg.media.raw.${requirementKey}`))
+      if(!requirementKey||task.skillId!==null||task.capabilityRequirementKeys.length!==0||task.reuse!==null||task.maxAttempts!==1
+        ||task.budgetReservation.modelCalls!==0||task.budgetReservation.mediaCalls!==0||task.budgetReservation.maximumCostUsd!==0
+        ||task.outputArtifactKeys.length!==1||task.outputArtifactKeys[0]!==`avg.media.processed.${requirementKey}`
+        ||!task.inputArtifactKeys.includes(AVG_VISUAL_REQUIREMENTS_ARTIFACT_V4)||!task.inputArtifactKeys.includes(`avg.media.raw.${requirementKey}`)
+        ||compiler?.kind!==(task.contextProfile==='avg-visual-planning-v5'?'avg-v5-visual-requirements-compile':'avg-v4-visual-requirements-compile')||!task.dependsOn.includes(compiler.taskKey)
+        ||!raw||!['avg-media-image-generate','avg-media-image-reuse'].includes(raw.kind)||!task.dependsOn.includes(raw.taskKey)){
+        fail(`${task.taskKey} 本地加工必须依赖准确需求编译与原图，且为单次零调用任务`)
+      }
+    }
   }
   const visiting = new Set<string>(); const visited = new Set<string>()
   const visit = (taskKey: string) => {
@@ -366,6 +430,25 @@ export function parseProductProductionPlanV3(
     requirement.required && !tasks.some(task => task.capabilityRequirementKeys.includes(requirement.requirementKey))
   ))) fail('必需 capability 未覆盖')
   if (brief) {
+    if (brief.ttrpgOpen) {
+      const expected = buildTtrpgOpenProductionPlanV3({ brief, briefHash: row.briefHash as string,
+        buildNumber: Number(row.buildNumber), controlEpoch: Number(row.controlEpoch) })
+      // Reuse is separately authorized against the exact parent proof. It must
+      // not change the product's task graph, budgets or execution contracts.
+      const previous = buildTtrpgOpenProductionPlanV3({ brief, briefHash: row.briefHash as string,
+        buildNumber: Number(row.buildNumber), controlEpoch: Number(row.controlEpoch), profileVersion: 2 })
+      const legacyTasks = previous.tasks.map(task => ({ ...task,
+        skillId: Object.prototype.hasOwnProperty.call(TTRPG_OPEN_PRODUCTION_SKILL_IDS_V1, task.taskKey)
+          ? TTRPG_OPEN_PRODUCTION_SKILL_IDS_V1[task.taskKey as TtrpgOpenProductionTaskKeyV2] : task.skillId,
+      }))
+      const actualTasks = JSON.stringify(tasks.map(task => ({ ...task, reuse: null })))
+      // Compare entire closed generations, without rewriting the parsed Plan.
+      // Old queued/unknown Runs cannot acquire a new prompt on application update.
+      if (![expected.tasks, previous.tasks, legacyTasks].some(generation => JSON.stringify(generation) === actualTasks) || terminalTaskKey !== expected.terminalTaskKey
+        || JSON.stringify(parsedConcurrency) !== JSON.stringify(expected.concurrency)) {
+        fail('open 跑团计划必须绑定专属任务、真实依赖与授权预算，不能偷换 scripted DAG')
+      }
+    }
     const totals = tasks.reduce((sum, task) => ({
       modelCalls: sum.modelCalls + task.budgetReservation.modelCalls,
       inputTokens: sum.inputTokens + task.budgetReservation.inputTokens,
@@ -396,11 +479,14 @@ export function parseProductProductionPlanV3(
       fail('Plan 预算预留超过 Brief 授权')
     }
     const canonicalInputBudget = Math.floor(
-      Math.min(budget.maximumInputTokens, 180_000) / 5,
+      Math.min(budget.maximumInputTokens, 180_000) / (productType === 'character-interaction' && taskByKey.has('media.chat-design') ? 8 : productType === 'character-interaction' && taskByKey.has('media.chat-review') ? 7 : productType === 'character-interaction' && taskByKey.has('content.chat-opening-review') ? 6 : 5),
     )
     const canonicalInputTasks = [
       'content.design', 'content.narrative', 'content.product-module',
       'media.requirements', 'integration.package',
+      ...(productType === 'character-interaction' && taskByKey.has('media.chat-review') ? ['media.chat-review'] : []),
+      ...(productType === 'character-interaction' && taskByKey.has('media.chat-design') ? ['media.chat-design'] : []),
+      ...(productType === 'character-interaction' && taskByKey.has('content.chat-opening-review') ? ['content.chat-opening-review'] : []),
     ]
     const isCanonicalProductionPlan = !['text-adventure', 'text-open-world'].includes(productType)
       && (canonicalInputTasks.some(taskKey => taskByKey.has(taskKey)) || taskByKey.has('qa.release'))
@@ -411,12 +497,25 @@ export function parseProductProductionPlanV3(
       fail('Plan 输入预算切片不是当前生产协议')
     }
   }
-  return {
+  const parsed: ProductProductionPlanV3 = {
     schema: 'storyforge.product-production-plan', version: 3,
     buildNumber: integer(row.buildNumber, 'buildNumber'), productType,
     briefHash: row.briefHash, controlEpoch: integer(row.controlEpoch, 'controlEpoch'),
     concurrency: parsedConcurrency, tasks, terminalTaskKey,
   }
+  if (brief?.avgSoundPlanning && canonicalProductProductionJsonV2(parsed) !== canonicalProductProductionJsonV2(buildAvgSoundProductionPlan({
+    brief, briefHash: parsed.briefHash, buildNumber: parsed.buildNumber, controlEpoch: parsed.controlEpoch,
+  }))) fail('AVG 声音 Plan 必须等于准确候选、采用、真实音频与审听的固定拓扑')
+  if (brief?.avgVisualPlanning?.version===5 && canonicalProductProductionJsonV2(parsed)!==canonicalProductProductionJsonV2(buildAvgVisualPlanningPlanV5({
+    brief:{...brief,avgVisualPlanning:brief.avgVisualPlanning},briefHash:parsed.briefHash,buildNumber:parsed.buildNumber,controlEpoch:parsed.controlEpoch,
+  })))fail('AVG V5 专业视觉 Plan 必须等于本次冻结的新岗位与需求消费拓扑')
+  if (brief?.avgVisualPlanning?.version===4 && canonicalProductProductionJsonV2(parsed) !== canonicalProductProductionJsonV2(buildAvgVisualPlanningPlanV4({
+    brief: { ...brief, avgVisualPlanning: brief.avgVisualPlanning }, briefHash: parsed.briefHash, buildNumber: parsed.buildNumber, controlEpoch: parsed.controlEpoch,
+  }))) fail('AVG 专业视觉 Plan 必须等于冻结的候选/作者采用/需求消费拓扑')
+  if (brief?.avgAssembly && canonicalProductProductionJsonV2(parsed) !== canonicalProductProductionJsonV2(buildAvgNativeAssemblyPlan({
+    brief, briefHash: parsed.briefHash, buildNumber: parsed.buildNumber, controlEpoch: parsed.controlEpoch,
+  }))) fail('AVG 组装 Plan 不得替换冻结的作者输入、任务或写域')
+  return parsed
 }
 
 function reservation(input: Partial<ProductTaskBudgetReservationV1>): ProductTaskBudgetReservationV1 {
@@ -446,6 +545,7 @@ export async function createProductProductionPlanV3(input: {
   controlEpoch?: number
   briefHash: string
   brief: ProductProductionBriefV3 | string
+  ttrpgOpenExecutionProfile?: 2 | 3
 }): Promise<ProductProductionPlanV3> {
   const brief = parseProductProductionBriefV3(input.brief)
   if (!Number.isInteger(input.buildNumber) || input.buildNumber < 1) fail('buildNumber 无效')
@@ -453,6 +553,16 @@ export async function createProductProductionPlanV3(input: {
   if (await hashProductProductionValueV2(brief) !== input.briefHash) fail('briefHash 与 Brief 内容不一致')
   const controlEpoch = input.controlEpoch ?? 0
   if (!Number.isInteger(controlEpoch) || controlEpoch < 0) fail('controlEpoch 无效')
+  if (brief.ttrpgOpen) {
+    await validateTtrpgProductionBriefContentV3(brief.ttrpgOpen)
+    return parseProductProductionPlanV3(buildTtrpgOpenProductionPlanV3({ brief, briefHash: input.briefHash,
+      buildNumber: input.buildNumber, controlEpoch, profileVersion: input.ttrpgOpenExecutionProfile }), brief, input.briefHash)
+  }
+
+  if (brief.avgSoundPlanning) return parseProductProductionPlanV3(buildAvgSoundProductionPlan({ ...input, brief, controlEpoch }), brief, input.briefHash)
+  if (brief.avgVisualPlanning?.version===5)return parseProductProductionPlanV3(buildAvgVisualPlanningPlanV5({...input,brief:{...brief,avgVisualPlanning:brief.avgVisualPlanning},controlEpoch}),brief,input.briefHash)
+  if (brief.avgVisualPlanning?.version===4) return parseProductProductionPlanV3(buildAvgVisualPlanningPlanV4({ ...input, brief: { ...brief, avgVisualPlanning: brief.avgVisualPlanning }, controlEpoch }), brief, input.briefHash)
+  if (brief.avgAssembly) return parseProductProductionPlanV3(buildAvgNativeAssemblyPlan({ ...input, brief, controlEpoch }), brief, input.briefHash)
 
   const capabilityKeys = (classes: Array<ProductProductionBriefV3['capabilityRequirements'][number]['mediaClass']>) => (
     brief.capabilityRequirements
@@ -476,6 +586,10 @@ export async function createProductProductionPlanV3(input: {
     (_, index) => `media.audio.${String(index + 1).padStart(3, '0')}`,
   )
   const textAdventure = brief.intent.productType === 'text-adventure'
+  const narrativeChat = brief.intent.productType === 'character-interaction' && brief.characterChat?.version === 3
+  const chatVisual = narrativeChat && activeVisual
+  const chatDesignedVisual = chatVisual && brief.characterChat?.version === 3 && brief.characterChat.visuals?.version === 2
+  const chatStoryInputs = ['design.game', 'content.chat-candidates', 'content.chat-selection', 'quality.chat-openings', 'content.narrative']
   const visualReviewBatches = textAdventure && activeVisual
     ? textAdventureVisualReviewArtifactBatchesV1(visualArtifactKeys)
         .map((batchVisualArtifactKeys, index) => {
@@ -673,7 +787,7 @@ export async function createProductProductionPlanV3(input: {
   const perInput = Math.floor(
     (textAdventure
       ? brief.productionBudget.maximumInputTokens / (modelTaskCount + retryReserveSlots)
-      : Math.min(brief.productionBudget.maximumInputTokens, 180_000) / 5),
+      : Math.min(brief.productionBudget.maximumInputTokens, 180_000) / (chatDesignedVisual ? 8 : chatVisual ? 7 : narrativeChat ? 6 : 5)),
   )
   const perOutput = Math.floor(
     (textAdventure
@@ -688,9 +802,9 @@ export async function createProductProductionPlanV3(input: {
   const perDuration = Math.floor(
     (textAdventure
       ? brief.productionBudget.maximumDurationMs / Math.max(1, durationSlots + retryReserveSlots)
-      : Math.min(brief.productionBudget.maximumDurationMs, 3_600_000) / 8),
+      : Math.min(brief.productionBudget.maximumDurationMs, 3_600_000) / (narrativeChat ? 8 + activeMediaLaneCount + (chatVisual ? 2 : 0) + (chatDesignedVisual ? 3 : 0) : 8)),
   )
-  const costTaskCount = modelTaskCount + activeMediaTaskCount
+  const costTaskCount = modelTaskCount + activeMediaTaskCount + Number(chatDesignedVisual)
   const perCost = brief.productionBudget.maximumCostUsd == null
     ? null
     : brief.productionBudget.maximumCostUsd / Math.max(1, costTaskCount + retryReserveSlots)
@@ -810,15 +924,15 @@ export async function createProductProductionPlanV3(input: {
   }))
   tasks.push(productionTask({
     taskKey: 'content.design', lane: 'content', kind: 'product-design',
-    skillId: textAdventure ? 'text-adventure.creative-direction.v1' : 'product-production.content.v1',
-    executionMode: 'model', dependsOn: textAdventure ? ['source.author-gate', 'production.supervision'] : [],
+    skillId: narrativeChat ? null : textAdventure ? 'text-adventure.creative-direction.v1' : 'product-production.content.v1',
+    executionMode: narrativeChat ? 'deterministic' : 'model', dependsOn: textAdventure ? ['source.author-gate', 'production.supervision'] : [],
     inputArtifactKeys: textAdventure
       ? ['production.supervision', 'content.source-sufficiency', 'content.source-decision'] : [],
-    outputArtifactKeys: ['design.game'], requirementKeys: [],
-    capabilityRequirementKeys: textCapabilities, concurrencyGroup: 'text-provider',
-    subjectLockKeys: ['design.game'], priority: 100, budgetReservation: modelBudget('content.design'),
+    outputArtifactKeys: ['design.game', ...(narrativeChat ? [CHAT_OPENING_FACT_CATALOG_KEY] : [])], requirementKeys: [],
+    capabilityRequirementKeys: narrativeChat ? [] : textCapabilities, concurrencyGroup: narrativeChat ? 'deterministic' : 'text-provider',
+    subjectLockKeys: ['design.game', ...(narrativeChat ? [CHAT_OPENING_FACT_CATALOG_KEY] : [])], priority: 100, budgetReservation: narrativeChat ? reservation({inputTokens: perInput, durationMs: perDuration}) : modelBudget('content.design'),
     maxAttempts: 2, timeoutMs: 180_000, failurePolicy: 'pause', fallbackTaskKey: null,
-    acceptanceGateIds: ['artifact.protocol', 'design.source-anchors'],
+    acceptanceGateIds: ['artifact.protocol', ...(narrativeChat ? [CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1] : []), 'design.source-anchors'],
   }))
   if (textAdventure) tasks.push(
     productionTask({
@@ -941,7 +1055,47 @@ export async function createProductProductionPlanV3(input: {
       acceptanceGateIds: ['artifact.protocol', 'adventure.main-quest-plan'],
     }),
   )
-  if (!textAdventure) tasks.push(
+  if (narrativeChat) tasks.push(
+    productionTask({
+      taskKey: 'content.product-module', lane: 'content', kind: 'product-module',
+      skillId: 'character.chat-situation-production', executionMode: 'model', dependsOn: ['content.design'],
+      inputArtifactKeys: ['design.game', CHAT_OPENING_FACT_CATALOG_KEY], outputArtifactKeys: ['content.chat-candidates'], requirementKeys: [],
+      capabilityRequirementKeys: textCapabilities, concurrencyGroup: 'text-provider',
+      subjectLockKeys: ['content.chat-candidates'], priority: 90, budgetReservation: {...modelBudget('content.product-module'), modelCalls: 2},
+      maxAttempts: 2, timeoutMs: 240_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, CHAT_OPENING_OPTION_REPAIR_GATE_V1, CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1, CHAT_OPENING_REFERENCE_GATE_V1, CHAT_OPENING_REPAIR_GATE_V2, 'chat.situation-candidates'],
+    }),
+    productionTask({
+      taskKey: 'content.chat-opening-review', lane: 'content', kind: 'product-module',
+      skillId: 'character.chat-opening-review', executionMode: 'model', dependsOn: ['content.product-module'],
+      inputArtifactKeys: ['design.game', 'content.chat-candidates'], outputArtifactKeys: ['quality.chat-openings'], requirementKeys: [],
+      capabilityRequirementKeys: textCapabilities, concurrencyGroup: 'text-provider',
+      subjectLockKeys: ['quality.chat-openings'], priority: 89, budgetReservation: modelBudget('content.product-module'),
+      maxAttempts: 1, timeoutMs: 240_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, 'chat.opening-review'],
+    }),
+    productionTask({
+      taskKey: 'content.chat-author-gate', lane: 'content', kind: 'product-module',
+      skillId: null, executionMode: 'deterministic', dependsOn: ['content.chat-opening-review'],
+      inputArtifactKeys: ['design.game', 'content.chat-candidates', 'quality.chat-openings'], outputArtifactKeys: ['content.chat-selection', 'content.product-module'], requirementKeys: [],
+      capabilityRequirementKeys: [], concurrencyGroup: 'deterministic',
+      subjectLockKeys: ['content.chat-selection', 'content.product-module'], priority: 89,
+      budgetReservation: reservation({durationMs: perDuration}),
+      maxAttempts: 1, timeoutMs: 30_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1, 'chat.situation-author-selected'],
+    }),
+    productionTask({
+      taskKey: 'content.narrative', lane: 'content', kind: 'narrative',
+      skillId: null, executionMode: 'deterministic', dependsOn: ['content.chat-author-gate'],
+      inputArtifactKeys: ['design.game', 'content.chat-candidates', 'content.chat-selection', 'quality.chat-openings'], outputArtifactKeys: ['content.narrative'], requirementKeys: [],
+      capabilityRequirementKeys: [], concurrencyGroup: 'deterministic',
+      subjectLockKeys: ['content.narrative'], priority: 85,
+      budgetReservation: reservation({inputTokens: perInput, durationMs: perDuration}),
+      maxAttempts: 1, timeoutMs: 30_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1, 'chat.situation-navigation'],
+    }),
+  )
+  if (!textAdventure && !narrativeChat) tasks.push(
     productionTask({
       taskKey: 'content.narrative', lane: 'content', kind: 'narrative',
       skillId: 'product-production.content.v1', executionMode: 'model', dependsOn: ['content.design'],
@@ -1183,9 +1337,36 @@ export async function createProductProductionPlanV3(input: {
       acceptanceGateIds: ['artifact.protocol', 'adventure.narrative-quality-review'],
     }))
   }
-  const mediaDependenciesForContent = textAdventure
+  if (chatDesignedVisual) tasks.push(
+    productionTask({
+      taskKey: 'system.chat-config', lane: 'planning', kind: 'chat-system-config', skillId: null, executionMode: 'deterministic',
+      dependsOn: ['content.narrative'], inputArtifactKeys: chatStoryInputs, outputArtifactKeys: ['system.chat-config'],
+      requirementKeys: [], capabilityRequirementKeys: [], concurrencyGroup: 'deterministic', subjectLockKeys: ['system.chat-config'], priority: 91,
+      budgetReservation: reservation({durationMs: perDuration}), maxAttempts: 1, timeoutMs: 30_000,
+      failurePolicy: 'pause', fallbackTaskKey: null, acceptanceGateIds: ['artifact.protocol', 'chat.system-content-bindings'],
+    }),
+    productionTask({
+      taskKey: 'media.chat-context', lane: 'planning', kind: 'chat-visual-content-handoff', skillId: null,
+      executionMode: 'deterministic', dependsOn: ['system.chat-config'], inputArtifactKeys: [...chatStoryInputs, 'system.chat-config'],
+      outputArtifactKeys: ['media.chat-context'], requirementKeys: [], capabilityRequirementKeys: [],
+      concurrencyGroup: 'deterministic', subjectLockKeys: ['media.chat-context'], priority: 90,
+      budgetReservation: reservation({durationMs: perDuration}), maxAttempts: 1, timeoutMs: 30_000,
+      failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2],
+    }),
+    productionTask({
+      taskKey: 'media.chat-design', lane: 'planning', kind: 'chat-visual-design', skillId: 'character.chat-visual-design',
+      executionMode: 'model', dependsOn: ['media.chat-context'], inputArtifactKeys: ['media.chat-context'],
+      outputArtifactKeys: ['media.chat-design'], requirementKeys: [], capabilityRequirementKeys: textCapabilities,
+      concurrencyGroup: 'text-provider', subjectLockKeys: ['media.chat-design'], priority: 89,
+      budgetReservation: modelBudget('media.chat-design'), maxAttempts: 1, timeoutMs: 180_000,
+      failurePolicy: 'pause', fallbackTaskKey: null, acceptanceGateIds: ['artifact.protocol'],
+    }),
+  )
+  const chatDesignInputs = chatDesignedVisual ? ['system.chat-config', 'media.chat-context', 'media.chat-design'] : []
+  const mediaDependenciesForContent = chatDesignedVisual ? ['media.chat-design'] : textAdventure
     ? ['content.adventure-quality-review']
-    : ['content.design']
+    : narrativeChat ? ['content.narrative'] : ['content.design']
   const mediaInputsForContent = textAdventure
     ? [
         'content.story-bible', 'content.cast-bible', 'content.adventure-architecture',
@@ -1194,22 +1375,22 @@ export async function createProductProductionPlanV3(input: {
         'content.dialogue-pass.act-1', 'content.dialogue-pass.act-2',
         'content.dialogue-pass.act-3', 'content.narrative', 'quality.adventure-review',
       ]
-    : ['design.game']
+    : chatVisual ? [...chatStoryInputs, ...chatDesignInputs] : narrativeChat ? ['content.narrative', 'content.product-module'] : ['design.game']
   tasks.push(
     productionTask({
-      taskKey: 'media.requirements', lane: 'planning', kind: 'media-requirements',
-      skillId: textAdventure ? 'text-adventure.visual-direction.v1' : 'product-production.media-requirements.v1',
-      executionMode: 'model', dependsOn: mediaDependenciesForContent,
+      taskKey: 'media.requirements', lane: 'planning', kind: chatVisual ? 'chat-media-requirements' : 'media-requirements',
+      skillId: chatVisual ? null : narrativeChat ? 'character.chat-situation-production' : textAdventure ? 'text-adventure.visual-direction.v1' : 'product-production.media-requirements.v1',
+      executionMode: chatVisual ? 'deterministic' : 'model', dependsOn: mediaDependenciesForContent,
       inputArtifactKeys: mediaInputsForContent, outputArtifactKeys: ['media.requirements'], requirementKeys: [],
-      capabilityRequirementKeys: textCapabilities, concurrencyGroup: 'text-provider',
-      subjectLockKeys: ['media.requirements'], priority: 88, budgetReservation: modelBudget('media.requirements'),
+      capabilityRequirementKeys: chatVisual ? [] : textCapabilities, concurrencyGroup: chatVisual ? 'deterministic' : 'text-provider',
+      subjectLockKeys: ['media.requirements'], priority: 88, budgetReservation: chatVisual ? reservation({inputTokens: perInput, durationMs: perDuration}) : modelBudget('media.requirements'),
       maxAttempts: 2, timeoutMs: 180_000, failurePolicy: 'pause', fallbackTaskKey: null,
-      acceptanceGateIds: ['artifact.protocol', 'media.requirements.coverage'],
+      acceptanceGateIds: ['artifact.protocol', 'media.requirements.coverage', ...(chatVisual ? [CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2] : [])],
     }),
   )
   if (textAdventure) tasks.push(productionTask({
     taskKey: 'media.visual-bible.compile', lane: 'planning', kind: 'text-adventure-visual-bible',
-    skillId: null, executionMode: 'deterministic', dependsOn: ['media.requirements'],
+    skillId: null, executionMode: 'deterministic', dependsOn: ['media.requirements', ...chatDesignInputs],
     inputArtifactKeys: ['content.cast-bible', 'content.adventure-architecture', 'media.requirements'],
     outputArtifactKeys: ['media.visual-bible'], requirementKeys: [], capabilityRequirementKeys: [],
     concurrencyGroup: 'deterministic', subjectLockKeys: ['media.visual-bible'], priority: 75,
@@ -1239,16 +1420,26 @@ export async function createProductProductionPlanV3(input: {
     acceptanceGateIds: ['artifact.protocol', 'media.character-anchors-authorized'],
   }))
   const mediaDependencies: string[] = []
-  if (activeVisual) {
+  if (!textAdventure) {
+    const mediaTasks = createCommonProductMediaBundleTasksV3({ brief, dependsOn: ['media.requirements'],
+      inputArtifactKeys: ['media.requirements', ...chatDesignInputs], visualArtifactKeys, audioArtifactKeys,
+      durationMs: perDuration, storageBytes: mediaStorage, maximumCostUsd: perCost })
+      .map(task => chatVisual && task.kind === 'image-bundle' ? productionTask({
+        ...task, dependsOn: [...task.dependsOn, ...chatDesignInputs],
+        maxAttempts: chatDesignedVisual ? 1 : task.maxAttempts, failurePolicy: 'pause',
+      }) : task)
+    tasks.push(...mediaTasks); mediaDependencies.push(...mediaTasks.map(task => task.taskKey))
+  }
+  if (textAdventure && activeVisual) {
     const taskKeys = textAdventure ? visualArtifactKeys : ['media.visual']
     mediaDependencies.push(...taskKeys)
     for (const taskKey of taskKeys) tasks.push(productionTask({
       taskKey, lane: 'visual', kind: textAdventure ? 'image-asset' : 'image-bundle',
       skillId: 'product-production.media-request.v1', executionMode: 'media-provider',
-      dependsOn: textAdventure ? ['media.anchor-author-gate'] : ['media.requirements'],
+      dependsOn: textAdventure ? ['media.anchor-author-gate'] : ['media.requirements', ...chatDesignInputs],
       inputArtifactKeys: textAdventure
         ? ['media.requirements', 'content.cast-bible', 'media.visual-bible', 'media.anchor-decision']
-        : ['media.requirements'],
+        : ['media.requirements', ...chatDesignInputs],
       outputArtifactKeys: textAdventure ? [taskKey] : visualArtifactKeys,
       requirementKeys: brief.media.requiredMediaKinds.filter(kind => !['bgm', 'sfx', 'voice'].includes(kind)),
       capabilityRequirementKeys: imageCapabilities, concurrencyGroup: 'media-provider',
@@ -1257,18 +1448,18 @@ export async function createProductProductionPlanV3(input: {
         mediaCalls: textAdventure ? 1 : brief.media.imageCount, maximumCostUsd: perCost,
         durationMs: perDuration, storageBytes: mediaStorage,
       }),
-      maxAttempts: 2, timeoutMs: 600_000,
-      failurePolicy: brief.fallbackPolicy.allowTextOnly ? 'skip-optional' : 'pause',
+      maxAttempts: chatDesignedVisual ? 1 : 2, timeoutMs: 600_000,
+      failurePolicy: !chatVisual && brief.fallbackPolicy.allowTextOnly ? 'skip-optional' : 'pause',
       fallbackTaskKey: null, acceptanceGateIds: ['media.integrity', 'media.rights'],
     }))
   }
-  if (activeAudio) {
+  if (textAdventure && activeAudio) {
     const taskKeys = textAdventure ? audioArtifactKeys : ['media.audio']
     mediaDependencies.push(...taskKeys)
     for (const taskKey of taskKeys) tasks.push(productionTask({
       taskKey, lane: 'audio', kind: textAdventure ? 'audio-asset' : 'audio-bundle',
       skillId: 'product-production.media-request.v1', executionMode: 'media-provider',
-      dependsOn: ['media.requirements'], inputArtifactKeys: ['media.requirements'],
+      dependsOn: ['media.requirements'], inputArtifactKeys: ['media.requirements', ...chatDesignInputs],
       outputArtifactKeys: textAdventure ? [taskKey] : audioArtifactKeys,
       requirementKeys: brief.media.requiredMediaKinds.filter(kind => ['bgm', 'sfx', 'voice'].includes(kind)),
       capabilityRequirementKeys: audioCapabilities, concurrencyGroup: 'media-provider',
@@ -1326,6 +1517,28 @@ export async function createProductProductionPlanV3(input: {
       acceptanceGateIds: ['artifact.protocol', 'media.visual-semantic-review-executed'],
     }))
   }
+  if (chatVisual) tasks.push(
+    productionTask({
+      taskKey: 'media.chat-review', lane: 'qa', kind: 'chat-media-review', skillId: null,
+      executionMode: 'deterministic', dependsOn: ['media.visual'],
+      inputArtifactKeys: [...chatStoryInputs, ...chatDesignInputs, 'media.requirements', ...visualArtifactKeys],
+      outputArtifactKeys: ['media.chat-review'], requirementKeys: [], capabilityRequirementKeys: [],
+      concurrencyGroup: 'deterministic', subjectLockKeys: ['media.chat-review'], priority: 59,
+      budgetReservation: reservation({inputTokens: perInput, durationMs: perDuration}), maxAttempts: 1,
+      timeoutMs: 30_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, 'media.integrity'],
+    }),
+    productionTask({
+      taskKey: 'media.chat-author-gate', lane: 'qa', kind: 'chat-media-author-decision', skillId: null,
+      executionMode: 'deterministic', dependsOn: ['media.chat-review'],
+      inputArtifactKeys: ['media.chat-review', ...visualArtifactKeys], outputArtifactKeys: ['media.chat-selection'],
+      requirementKeys: [], capabilityRequirementKeys: [], concurrencyGroup: 'deterministic',
+      subjectLockKeys: ['media.chat-selection'], priority: 58,
+      budgetReservation: reservation({durationMs: perDuration}), maxAttempts: 1,
+      timeoutMs: 30_000, failurePolicy: 'pause', fallbackTaskKey: null,
+      acceptanceGateIds: ['artifact.protocol', 'media.chat-author-confirmed'],
+    }),
+  )
   const textAdventureDependencies = textAdventure
     ? [
         'production.supervision',
@@ -1337,6 +1550,7 @@ export async function createProductProductionPlanV3(input: {
         'content.adventure-quality-review',
       ] : []
   const integrationDependencies = [
+    ...(chatVisual ? ['media.chat-author-gate'] : []),
     textAdventure ? 'integration.narrative' : 'content.narrative', 'content.product-module', ...textAdventureDependencies,
     'media.requirements', ...(textAdventure ? ['media.visual-bible.compile'] : []),
     ...(textAdventure && activeVisual ? ['media.anchor-author-gate'] : []), ...mediaDependencies,
@@ -1361,6 +1575,8 @@ export async function createProductProductionPlanV3(input: {
     skillId: null, executionMode: 'deterministic', dependsOn: integrationDependencies,
     inputArtifactKeys: [
       'content.narrative', 'content.product-module', ...textAdventureIntegrationArtifactKeys,
+      ...(chatVisual ? ['media.chat-review', 'media.chat-selection', ...chatDesignInputs] : []),
+      ...(narrativeChat ? ['design.game', 'content.chat-candidates', 'content.chat-selection', 'quality.chat-openings'] : []),
       'media.requirements', ...(textAdventure ? ['media.visual-bible'] : []),
       ...(textAdventure && activeVisual ? ['media.anchor-decision'] : []),
       ...(textAdventure && activeVisual ? ['media.audit'] : []),
@@ -1372,7 +1588,7 @@ export async function createProductProductionPlanV3(input: {
     subjectLockKeys: integrationArtifactKeys, priority: 50,
     budgetReservation: reservation({ inputTokens: perInput, durationMs: perDuration }), maxAttempts: 1,
     timeoutMs: 120_000, failurePolicy: 'pause', fallbackTaskKey: null,
-    acceptanceGateIds: ['package.protocol', 'package.graph', 'package.media-bindings'],
+    acceptanceGateIds: ['package.protocol', 'package.graph', 'package.media-bindings', ...(narrativeChat ? [CHAT_OPENING_DEVELOPMENT_GATE_V3, CHAT_OPENING_AGENCY_GATE_V2, CHAT_OPENING_SOURCE_COMPLETENESS_GATE_V1] : [])],
   }))
   if (textAdventure) tasks.push(productionTask({
     taskKey: 'qa.autoplay', lane: 'qa', kind: 'text-adventure-autoplay', skillId: null,

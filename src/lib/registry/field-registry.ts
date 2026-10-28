@@ -1,5 +1,10 @@
 /** FIELD_REGISTRY · 当前 AI/结构化采纳允许写入字段的单一事实源。 */
 import type { FieldSpec } from './types'
+import {parseChatAuthoringSettings} from '../character-interaction/authoring-contract'
+import {parseChatRoleProfileSetV1} from '../character-interaction/role-profile'
+import {parseChatSourceUnitSetV1} from '../character-interaction/source-unit-authorization'
+import { PROJECT_TABLES } from './project-tables'
+import { parseNarrativeDomainFieldV1 } from '../narrative-domain/codec'
 import { parseSystemFictionElementsV1 } from '../prose/system-fiction-contract'
 import { normalizeDetailedScenes } from '../types/detailed-outline'
 
@@ -163,6 +168,9 @@ export const STORY_CORE_GENERATABLE_FIELD_SPECS = [
 export type StoryCoreGeneratableField = typeof STORY_CORE_GENERATABLE_FIELD_SPECS[number]['field']
 
 export const FIELD_REGISTRY: FieldSpec[] = [
+  // NW-1A: ragDocumentId, semanticSubKey, IR IDs/hashes/time context and alias
+  // receipts stay system-owned. No IR projection field is an adoption target;
+  // the exact field whitelist rejects model-supplied identity metadata.
   object('extensionRecords', 'payload'),
   // MEMORY-5: author-edited workspace roots. Stable identities, owner IDs,
   // active pointers and derived counters remain outside the editable surface.
@@ -769,9 +777,17 @@ export const FIELD_REGISTRY: FieldSpec[] = [
 
   // PRODUCTPROD-1: stable CreativeArtifact output ids. These fields are adopted
   // only by the production command/artifact/package extensions, never by a component.
+  { ...json('chatAuthoringDrafts', 'settingsJson'), candidateId: 'chat.plan',
+    sanitize: value => JSON.stringify(parseChatAuthoringSettings(typeof value === 'string' ? JSON.parse(value) : value)) },
+  { ...json('chatAuthoringDrafts', 'roleProfilesJson'), candidateId: 'chat.roleProfiles',
+    sanitize: value => JSON.stringify(parseChatRoleProfileSetV1(typeof value === 'string' ? JSON.parse(value) : value)) },
+  { ...json('chatAuthoringDrafts', 'sourceUnitsJson'), candidateId: 'chat.sourceUnits',
+    sanitize: value => JSON.stringify(parseChatSourceUnitSetV1(typeof value === 'string' ? JSON.parse(value) : value)) },
   { ...longtext('productProductionBriefs', 'userIntentSummary'), candidateId: 'productProduction.startingPointSuggestions' },
   { ...json('productProductionBriefs', 'briefJson'), candidateId: 'productProduction.briefCandidate' },
   { ...json('productBuilds', 'planJson'), candidateId: 'productProduction.planCandidate' },
+  // AVG professional payloads reuse this field, with schema/key/role validation
+  // at the adoption extension. Reserved roles do not gain write authority.
   { ...json('productBuildArtifacts', 'payloadJson'), candidateId: 'productProduction.contentArtifactCandidate' },
   { ...json('productBuildArtifacts', 'metadataJson'), candidateId: 'productProduction.mediaRequirementCandidate' },
   { ...json('productBuilds', 'compatibilityJson'), candidateId: 'productProduction.evolutionImpactCandidate' },
@@ -784,6 +800,8 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   // TTRPG-2A: AI may propose inert rule/campaign JSON, but only the governed
   // authoring service may parse, hash, fixture-test and persist it.
   { ...text('ttrpgRulePacks', 'title'), candidateId: 'ttrpg.rulePackTitleCandidate' },
+  // Exact requested-section composition; the domain writePolicy grants no generic JSON update.
+  { ...json('ttrpgAuthoringDrafts', 'settingsJson'), candidateId: 'ttrpg.open.authoringDesignSettings' },
   text('ttrpgRulePacks', 'ruleSystemId'),
   text('ttrpgRulePacks', 'ruleSystemVersion'),
   { ...json('ttrpgRulePacks', 'rulePackJson'), candidateId: 'ttrpg.rulePackCandidate' },
@@ -796,6 +814,16 @@ export const FIELD_REGISTRY: FieldSpec[] = [
   num('stateCards', 'lastChapterId'),
 ]
 
+// Proposals require the domain confirmation boundary; receipts are system-owned.
+FIELD_REGISTRY.push(...PROJECT_TABLES.flatMap(spec => (spec.worldSemantic?.projector?.annotationFields ?? [])
+  .filter(field => field !== 'narrativeAuthorityV1')
+  .map((field): FieldSpec => ({
+    target: spec.name, field, adoptionPolicy: 'narrative-annotation-v1',
+    type: ['narrativeAliasesV1', 'narrativeEvidenceV1', 'narrativeDependenciesV1', 'narrativeDevelopmentsV1', 'narrativeDisclosuresV1'].includes(field)
+      ? 'array' : field === 'narrativeModalityV1' ? 'enum' : 'object',
+    ...(field === 'narrativeModalityV1' ? { enums: ['established', 'belief', 'intent'] } : {}),
+    sanitize: value => parseNarrativeDomainFieldV1(field, value),
+  }))))
 /** Author editing capabilities live beside the writable fields, not in panels. */
 const replacementFields: Record<string, Record<string, NonNullable<FieldSpec['textReplacement']>>> = {
   worldviews: {

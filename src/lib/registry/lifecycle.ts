@@ -2,13 +2,14 @@
  * 当前表生命周期派生 API。所有事务表集合从 PROJECT_TABLES 派生，
  * 禁止在 Store 或 service 中维护第二份手写清单。
  */
-import type { Table } from 'dexie'
+import type { Collection, Table } from 'dexie'
 import { db } from '../db/schema'
 import { removeCodexEntryReferences } from '../codex/references'
 import { clearCultivationSystemReferences } from '../cultivation/lifecycle'
 import { PROJECT_TABLES, REGISTRY_BY_NAME } from './project-tables'
 import { markAndSweepAgentRunArtifactsV1 } from '../memory/artifact-retention-store'
 import type { TableSpec } from './types'
+import { remapNarrativeDomainReferencesV1 } from '../narrative-domain/lifecycle'
 
 // ─────────────────────────────────────────────────────────────
 // 派生选择器
@@ -27,6 +28,11 @@ export function worldScopedTables(): TableSpec[] {
 /** 可导出表 */
 export function exportableTables(): TableSpec[] {
   return PROJECT_TABLES.filter(s => s.exportable)
+}
+
+/** Runtime side tables are selected by their declared owner, including newly registered extensions. */
+export function runtimeInstanceTablesV1(): Table[] {
+  return PROJECT_TABLES.filter(spec => spec.domainOwner?.allowed.includes('instance')).map(spec => spec.table)
 }
 
 /**
@@ -48,6 +54,7 @@ export function transactionTablesFor(
     set.add(db.outlineNodes)
     set.add(db.worldGroups)
     set.add(db.worldGroupLinks)
+    for (const spec of PROJECT_TABLES) if (spec.worldSemantic?.projector) set.add(spec.table)
     return [...set]
   }
   // 归属到主世界：所有 worldScoped 表。
@@ -67,6 +74,8 @@ export function transactionTablesForReferences(sourceTableName: string): Table[]
     const targetName = ref.target.match(/^([^[]+)\[/)?.[1]
     if (targetName) names.add(targetName)
   }
+  for (const spec of PROJECT_TABLES) if (spec.refs?.some(ref =>
+    ref.kind === 'narrative-source-refs-v1' && ref.targetTables.includes(sourceTableName))) names.add(spec.name)
   return [...names].map(name => {
     const spec = REGISTRY_BY_NAME.get(name)
     if (!spec) throw new Error(`PROJECT_TABLES 引用目标未登记: ${sourceTableName} → ${name}`)
@@ -93,12 +102,41 @@ export function transactionTablesForReferenceCascade(sourceTableName: string): T
       pending.push(target)
     }
   }
+  const sources = [...names]
+  for (const spec of PROJECT_TABLES) if (spec.refs?.some(ref =>
+    ref.kind === 'narrative-source-refs-v1' && sources.some(name => ref.targetTables.includes(name)))) names.add(spec.name)
   return [...names].map(name => REGISTRY_BY_NAME.get(name)!.table)
 }
 
 // ─────────────────────────────────────────────────────────────
 // cascadeDeleteProject - 删项目级联清理(派生自注册表)
 // ─────────────────────────────────────────────────────────────
+
+/** Called inside the existing lifecycle write transaction. Batch exact,
+ * consecutive integer keys so IndexedDB can remove each index range once.
+ * Count the complete primary-key range before deleting: an imported fractional
+ * or foreign key between two integers must never be swept into this scope. */
+async function deleteScopedRows(table: Table, rows: Collection): Promise<void> {
+  const keys = await rows.primaryKeys()
+  if (!keys.length) return
+  if (keys.some(key => typeof key !== 'number' || !Number.isSafeInteger(key))) {
+    await rows.delete()
+    return
+  }
+  const sorted = (keys as number[]).sort((left, right) => left - right)
+  for (let start = 0; start < sorted.length;) {
+    let end = start + 1
+    while (end < sorted.length && sorted[end] === sorted[end - 1] + 1) end += 1
+    if (end === start + 1) {
+      await table.delete(sorted[start])
+    } else {
+      const range = table.where(':id').between(sorted[start], sorted[end - 1], true, true)
+      if (await range.count() === end - start) await range.delete()
+      else await table.where(':id').anyOf(sorted.slice(start, end)).delete()
+    }
+    start = end
+  }
+}
 
 export async function cascadeDeleteProject(projectId: number): Promise<void> {
   // ── Step 1:事务前预收集间接归属/blob 的父键 ──
@@ -125,12 +163,12 @@ export async function cascadeDeleteProject(projectId: number): Promise<void> {
       if (spec.name === 'projects') continue // 根表最后删
 
       if (spec.owner === 'project' || spec.owner === 'transient') {
-        await spec.table.where('projectId').equals(projectId).delete()
+        await deleteScopedRows(spec.table, spec.table.where('projectId').equals(projectId))
       } else if (spec.owner === 'direct-child' || spec.owner === 'indirect') {
         const parentKeys = indirectKeys.get(spec.name) ?? []
         const linkField = resolveLinkField(spec)
         if (parentKeys.length && linkField) {
-          await (spec.table as any).where(linkField).anyOf(parentKeys).delete()
+          await deleteScopedRows(spec.table, spec.table.where(linkField).anyOf(parentKeys))
         }
       } else if (spec.owner === 'blob') {
         await deleteBlobsInTransaction(importSessionIds, blobOwnerRows)
@@ -208,7 +246,10 @@ export async function cascadeDeleteGroup(projectId: number, wgId: number): Promi
 
       const rows = await spec.table.where('projectId').equals(projectId).toArray()
       for (const row of rows as any[]) {
-        if (row[wgField] === wgId) await spec.table.delete(row.id)
+        if (row[wgField] === wgId) {
+          await remapNarrativeDomainReferencesV1({ table: spec.name, fromId: row.id })
+          await spec.table.delete(row.id)
+        }
       }
     }
 
@@ -221,6 +262,7 @@ export async function cascadeDeleteGroup(projectId: number, wgId: number): Promi
     // 世界关系链接 + 世界组本身
     await db.worldGroupLinks.where('fromGroupId').equals(wgId).delete()
     await db.worldGroupLinks.where('toGroupId').equals(wgId).delete()
+    await remapNarrativeDomainReferencesV1({ table: 'worldGroups', fromId: wgId })
     await db.worldGroups.delete(wgId)
   })
   await markAndSweepAgentRunArtifactsV1(projectId)

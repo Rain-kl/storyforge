@@ -2,6 +2,31 @@
 
 本页按用户可感知的变化整理功能更新、修复和操作改进。版本信息见[版本与兼容说明](/updates/compatibility)。
 
+
+
+## 2026-10-28 · 长篇恢复与互动制作操作更新
+
+- 正文生成与续写前可填写本章要求，取消保留输入且不发请求；故事线阶段格式异常会保留原文，提供备份、检查和明确保存修复的路径。见[正文与故事线恢复](/features/longform/writing)，依据 [#209](https://github.com/yuanbw2025/storyforge/pull/209)、[#226](https://github.com/yuanbw2025/storyforge/pull/226)。
+- 文字冒险往返制作台、作品库与存档保留工作区并隔离过期读取；手填型号保存后保留，官方服务的输出上限与流式用量按实际支持传递。见[文字冒险](/features/interactive/text-adventure)和[模型配置](/getting-started/model-config)，依据 [#208](https://github.com/yuanbw2025/storyforge/pull/208)、[#217](https://github.com/yuanbw2025/storyforge/pull/217)。
+- 开放跑团补齐试用、团局恢复与旁白试听步骤；角色聊天补齐三线制作、原图确认与存档配图恢复；AVG 补齐图片、逐句配音、本地处理与原型验收。三者仍为预览，见[跑团](/features/interactive/ttrpg)、[角色聊天](/features/interactive/character-chat)、[AVG](/features/interactive/avg)，依据 [#196](https://github.com/yuanbw2025/storyforge/pull/196)、[#172](https://github.com/yuanbw2025/storyforge/pull/172)、[#219](https://github.com/yuanbw2025/storyforge/pull/219)。
+- [备份指南](/guides/backup-restore)按主干数据库 v13、备份 v17 修正，保留严格旧格式校验；当前正式版本与发行准备见[兼容说明](/updates/compatibility)。[开发记录](/updates/development-status)重新枚举全部现存分支与工作区，区分已合并链、候选发行和长篇待修复项。
+
+## 2026-10-26 · 开放世界制作与返修整合
+
+制作工作台按游戏内容、产品系统配置、媒资生产检查进度与阻塞；逐张查看并确认图片后再过发布质量门。局部返修生成子 Build，保留旧发布版和存档；玩家可从“更多 → 读取本地体验记录”查看并主动导出本地反馈。操作见[开放世界指南](/features/interactive/open-world#三线制作、图片确认与局部返修)。依据：[PR #134](https://github.com/yuanbw2025/storyforge/pull/134)。通用生产的独立模型校准与真人双结局验收仍待完成。
+
+## 2026-10-26 · 角色候选编辑与知识库核对
+
+角色补全或状态候选的修改无效、未保存时显示原因并禁用采纳；修正后可继续原候选。原生故障上报避免把同一次历史故障反复排队，新发生的故障仍独立保留。见[角色候选编辑](/features/longform/character-driven#角色候选修改后不能采纳)与[故障排查](/guides/troubleshooting)。依据：[PR #201](https://github.com/yuanbw2025/storyforge/pull/201)。[开发记录](/updates/development-status)同步全部本地分支与工作区的状态和去重结论。
+
+## 2026-10-25 · 叙事世界工程预览
+
+本地实验预览增加叙事注释、可恢复的编译封存、按时间与角色视角查询原文，以及修改影响检查清单。增强入口默认隐藏，查询缺口与待复核项明确保留；修改影响语义质量、规模性能和真人改稿收益仍待验收。入口与操作见[世界引擎](/features/world-engine#叙事世界的本地实验预览)。依据：[PR #197](https://github.com/yuanbw2025/storyforge/pull/197)。
+
+## 2026-10-24 · 模块加载失败后的重试
+
+模块或 CSS 资源加载失败时，错误页“重试”先保存编辑再重新加载；保存失败会保留当前页面并提示处理，不直接刷新。见[恢复步骤](/guides/troubleshooting#模块加载失败时怎样重试)。依据：[PR #195](https://github.com/yuanbw2025/storyforge/pull/195)。
+
 ## 2026-10-23 · 大型运行合同的保存与恢复
 
 运行资料较多时，合法的运行合同可完整保存、修订，并在刷新或完整备份恢复后继续读取，不再被较小的事件记录限制误拒绝。超出记录容量仍会明确拒绝；不会截断上下文快照，也不改变模型调用预算、候选采纳、权限或过期检查。遇到容量错误时保留原作品与备份，不手工删除合同字段。依据：[PR #185](https://github.com/yuanbw2025/storyforge/pull/185)；操作见[备份与恢复](/guides/backup-restore)。
@@ -18,6 +43,12 @@
 - 官网与应用内反馈统一关联仓库 Issue，公开排查、修复与发行进展；私人反馈只提炼必要的脱敏技术摘要。
 
 操作见[大纲、细纲与正文](/features/longform/writing)。依据：[PR #141](https://github.com/yuanbw2025/storyforge/pull/141)、[PR #171](https://github.com/yuanbw2025/storyforge/pull/171)；问题跟进见 [Issue #183](https://github.com/yuanbw2025/storyforge/issues/183)。
+
+## 开发中：角色聊天候选流程（未发布）
+
+角色聊天开发分支正在整合角色卡转换、体验包安装/导出、兼容存档升级副本及三类原创起稿。已提交基线为 `a4f16fd9`，本次观察的后续内容尚未提交，不计为已发布功能。操作与限制见[角色聊天](/features/interactive/character-chat#开发分支中的新流程-尚未发布)，具体交付状态见[待合并开发记录](/updates/development-status#character-chat-candidate)。
+
+候选增量现还包括随发行冻结的作品署名与使用说明，并修正了先装新版导致完整备份失败的安装编号问题；完整验证仍在进行。
 
 ## 2026-10-20 · 系统文规划、全章评审与范围修订
 
@@ -87,6 +118,12 @@
 - 已签发且满足既有真人验收与候选资格的作品可“导出独立网页游戏”，生成静态 ZIP；玩家无需安装 StoryForge 或配置 AI。导出不会自动上传公开，未发布试玩不能绕过资格门。
 
 操作见[文字冒险](/features/interactive/text-adventure)、[备份与恢复](/guides/backup-restore)和[版本与兼容](/updates/compatibility)。技术用例与代码交付不代表《潮钟群岛》等具体作品已完成真人验收或公开发布。
+
+## 2026-10-13 · 文字开放世界产品化分支预览
+
+开发分支增加三线制作总览、缺件与费用定位、新版组装来源快照、逐图人工确认，以及玩家本地体验记录和分类反馈导出。详情见[功能说明](/features/interactive/open-world)和[待合并记录](/updates/development-status)。
+
+施工基线 `45c541e9`，W0 审计提交 `351bb52f`；实现提交 [614fe1ca](https://github.com/yuanbw2025/storyforge/commit/614fe1ca)、[3216158f](https://github.com/yuanbw2025/storyforge/commit/3216158f)、[ae1b3f3a](https://github.com/yuanbw2025/storyforge/commit/ae1b3f3a)、[2505ef9d](https://github.com/yuanbw2025/storyforge/commit/2505ef9d)、[404f5cf0](https://github.com/yuanbw2025/storyforge/commit/404f5cf0)。本条是分支开发记录，不代表已合并、上线或完成真实模型/真人验收。
 
 ## 2026-10-13 · v4.0.0 本地便携版
 

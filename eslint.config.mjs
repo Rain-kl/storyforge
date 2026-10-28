@@ -9,13 +9,28 @@ import reactHooks from 'eslint-plugin-react-hooks'
 export default tseslint.config(
   {
     ignores: [
-      'dist', 'dist-client-verification', 'dist-android', 'android', 'release', 'dist-showcase', 'dist-adventure-player', 'dev-dist', 'coverage', 'node_modules',
+      'dist', 'dist-client-verification', 'dist-android', 'android', 'release', 'dist-showcase', 'dist-adventure-player', 'dev-dist', 'coverage', 'node_modules', '.vite-e2e-cache',
       '**/.vitepress/cache/**', '**/.vitepress/dist/**',
+      '.vite-e2e-cache/**',
       '**/*.config.{js,ts,mjs,cjs}', 'scripts/**', 'public/**',
     ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Historical Node diagnostic sources keep their original bytes and lint
+    // rules; declare only the runtime globals those archived probes used.
+    files: [
+      'tests/acceptance/narrative-world/raw/nw2e-checkpoint-20261015-v6/nw2e-record-hash-probe.mjs',
+      'tests/acceptance/narrative-world/raw/nw2e-checkpoint-20261015-v7/run.mjs',
+    ],
+    languageOptions: {
+      globals: {
+        performance: 'readonly', process: 'readonly', console: 'readonly',
+        TextEncoder: 'readonly', URL: 'readonly',
+      },
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },

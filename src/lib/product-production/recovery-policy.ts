@@ -1,8 +1,53 @@
 import type {
+  ProductBuildRecordV1,
   ProductProductionPlanTaskV3,
   ProductionProductKindV1,
 } from '../types'
 import { parseProductProductionPlanV3 } from './plan'
+import { isTtrpgOpenProductionTaskV2, isTtrpgOpenProductionTaskV3 } from '../ttrpg/open-production-bindings'
+
+/** These signed, input-bound system artifacts must retain their hash when
+ * all upstream tasks and execution contracts survive an epoch recovery. */
+export function isTextOpenWorldEpochReusableDeterministicTaskV1(
+  task: Pick<ProductProductionPlanTaskV3, 'taskKey' | 'kind' | 'executionMode'>,
+): boolean {
+  return task.executionMode === 'deterministic'
+    && (task.taskKey === 'p0.source-lock' || task.taskKey === 'v1.deterministic-preflight')
+    && task.kind === `text-open-world.${task.taskKey}`
+}
+
+/** Compatibility path for Builds made before deterministic assembly failures became recoverable blockers. */
+export function isRepairRetryableFailedProductBuildV1(
+  build: Pick<ProductBuildRecordV1, 'status' | 'failureJson'>
+    & Partial<Pick<ProductBuildRecordV1, 'planJson' | 'releasedProductReleaseId'>>,
+): boolean {
+  if (build.status !== 'failed') return false
+  try {
+    const failure = JSON.parse(build.failureJson) as {
+      taskKey?: unknown; code?: unknown; detail?: unknown; failureProvenance?: unknown
+    }
+    if (failure.taskKey === 'v3.runtime-package') {
+      const importedMediaReceiptFailure = failure.code === 'task-executor-nonretryable'
+        && typeof failure.detail === 'string'
+        && failure.detail.startsWith('[text-open-world-media-quality] 导入媒资来源、权利声明或物理校验回执不闭合:')
+      if (!build.planJson || build.releasedProductReleaseId !== null || !failure.failureProvenance
+        || (!['task-executor-failed', 'task-timeout'].includes(String(failure.code))
+          && !importedMediaReceiptFailure)) return false
+      const plan = parseProductProductionPlanV3(build.planJson)
+      const task = plan.tasks.find(candidate => candidate.taskKey === failure.taskKey)
+      return plan.productType === 'text-open-world' && task?.executionMode === 'deterministic'
+        && task.skillId === null && task.outputArtifactKeys.length === 2
+        && (!importedMediaReceiptFailure || task.kind === 'text-open-world.v3.runtime-package'
+          && task.capabilityRequirementKeys.length === 0 && task.budgetReservation.modelCalls === 0
+          && task.budgetReservation.mediaCalls === 0 && task.budgetReservation.inputTokens === 0
+          && task.budgetReservation.outputTokens === 0)
+        && task.outputArtifactKeys.includes('text-open-world.runtime-package')
+        && task.outputArtifactKeys.includes('text-open-world.integration-report')
+    }
+    return (failure.taskKey === 'integration.package' || failure.taskKey === 'qa.release')
+      && (failure.code === 'task-executor-failed' || failure.code === 'task-timeout')
+  } catch { return false }
+}
 
 const STABLE_TASK_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/
 
@@ -11,6 +56,13 @@ const GENERIC_AUTHOR_REPAIR_TASKS = new Map<string, string>([
   ['content.narrative', 'product-production.content.v1'],
   ['content.product-module', 'product-production.content.v1'],
   ['media.requirements', 'product-production.media-requirements.v1'],
+])
+
+const TTRPG_OPEN_AUTHOR_REPAIR_TASKS = new Map<string, string>([
+  ['ttrpg.open.source-facts', 'product-production.ttrpg-open-source-facts.v1'],
+  ['ttrpg.open.rule-system', 'product-production.ttrpg-open-rule-system.v1'],
+  ['ttrpg.open.situation-layer', 'product-production.ttrpg-open-situation-layer.v1'],
+  ['ttrpg.open.media-plan', 'product-production.media-requirements.v1'],
 ])
 
 const TEXT_ADVENTURE_AUTHOR_REPAIR_TASKS = new Map<string, string>([
@@ -90,6 +142,8 @@ function supportsGenericAuthorRepair(
 ): boolean {
   if (productType === 'text-open-world' || task.executionMode !== 'model' || task.failurePolicy !== 'pause') return false
   return GENERIC_AUTHOR_REPAIR_TASKS.get(task.taskKey) === task.skillId
+    || (productType === 'ttrpg' && (TTRPG_OPEN_AUTHOR_REPAIR_TASKS.get(task.taskKey) === task.skillId
+      || isTtrpgOpenProductionTaskV2(task) || isTtrpgOpenProductionTaskV3(task)))
     || (productType === 'text-adventure'
       && TEXT_ADVENTURE_AUTHOR_REPAIR_TASKS.get(task.taskKey) === task.skillId)
 }

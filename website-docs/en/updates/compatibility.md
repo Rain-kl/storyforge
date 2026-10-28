@@ -2,7 +2,7 @@
 
 ## Which version these docs describe
 
-This incremental review covers **October 22, 2026, main baseline 463b6473**, checking user-visible changes since successful maintenance baseline `50062745`. Product status follows each product guide.
+This incremental review covers **October 28, 2026, main baseline 46a90c0b**, checking user-visible changes since successful maintenance baseline `7b974fbf`. Product status follows each product guide.
 
 The current formal release is [**v4.0.4**](https://github.com/yuanbw2025/storyforge/releases/tag/v4.0.4), published on **October 23, 2026 at 03:17 UTC**, at fixed source `d90961a2`. It delivers the large run-contract save and recovery repair in [PR #185](https://github.com/yuanbw2025/storyforge/pull/185), with [release preparation PR #190](https://github.com/yuanbw2025/storyforge/pull/190) merged. Contracts and event snapshots share a finite 32 MiB UTF-8 record budget and retain full snapshots. Oversized records are still explicitly rejected; model budgets, candidate adoption, permissions and stale checks remain, with no database migration. The independent release passed full production/browser checks, all clients and four portable startup targets, plus upgrades from formal v4.0.3. Android retains four-stage verification including the old-package restart baseline, new-package restore and final restart. Export a complete backup before upgrading, as described below.
 
@@ -17,6 +17,14 @@ Live sites may lag deployment. [Tagged releases](https://github.com/yuanbw2025/s
 The outline candidate adoption fix in [PR #158](https://github.com/yuanbw2025/storyforge/pull/158) came after fixed v4.0.1 source `e8ce0a0d` and is included in the 4.0.2 client source. Use the release page to confirm published downloads; see [development status](/en/updates/development-status) for other pending work.
 
 Current main includes longform entry consolidation in [PR #165](https://github.com/yuanbw2025/storyforge/pull/165), continuation/outline error handling in [PR #166](https://github.com/yuanbw2025/storyforge/pull/166), and system-fiction planning/whole-chapter review in [PR #141](https://github.com/yuanbw2025/storyforge/pull/141). These increments merged as `a45cb1db`, `b344cc0b`, and `1b96e80a`, respectively. See the [longform guide](/en/features/longform/). Fixed v4.0.2 source remains `04de86d7`, listed above.
+
+## Main-branch changes after v4.0.4
+
+Module-load recovery in [PR #195](https://github.com/yuanbw2025/storyforge/pull/195), narrative-world engineering work in [PR #197](https://github.com/yuanbw2025/storyforge/pull/197), open-world production and repair in [PR #134](https://github.com/yuanbw2025/storyforge/pull/134), and character-candidate editing protection and native-failure deduplication in [PR #201](https://github.com/yuanbw2025/storyforge/pull/201) are merged into main and await a later formal installer release. The current formal release remains v4.0.4 above; no later release date is set.
+
+After narrative-index v12, [PR #196](https://github.com/yuanbw2025/storyforge/pull/196) advances main to database **v13 and complete backup format v17**, retaining a union bridge for both historical v12 databases and strict compatibility for v14/v15/v16 backups. Original world/work records remain the content source; rebuildable caches stay outside complete backups. Do not hand upgraded databases to software supporting only older schemas. Retain a v13-compatible environment and check pre-upgrade backups in an isolated copy before rollback. See [backup and recovery](/en/guides/backup-restore).
+
+Newly reviewed text-adventure navigation [#208](https://github.com/yuanbw2025/storyforge/pull/208), chapter instructions/themes [#209](https://github.com/yuanbw2025/storyforge/pull/209), model configuration [#217](https://github.com/yuanbw2025/storyforge/pull/217), TTRPG [#196](https://github.com/yuanbw2025/storyforge/pull/196), character chat [#172](https://github.com/yuanbw2025/storyforge/pull/172), story-stage recovery [#226](https://github.com/yuanbw2025/storyforge/pull/226), and AVG [#219](https://github.com/yuanbw2025/storyforge/pull/219) are merged into main. Formal downloads remain v4.0.4. The v4.0.5 [preparation PR #228](https://github.com/yuanbw2025/storyforge/pull/228) is unmerged and unpublished; its date and final inclusion await actual release verification. Candidate inputs are not delivered installers.
 
 ## Before upgrading
 

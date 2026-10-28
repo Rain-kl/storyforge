@@ -1,3 +1,10 @@
+import { createAvgReadingStateV1 } from '../avg/reading-runtime'
+import { cloneTtrpgRuntimePreservedExtensionsV1 } from '../ttrpg/runtime-branch'
+import { runtimeInstanceTablesV1, transactionTablesForReferenceCascade } from '../registry/lifecycle'
+import { buildTtrpgOpenReleaseContinuationV1, isTtrpgOpenContinuationRequestV1, type TtrpgOpenContinuationRequestV1 } from '../ttrpg/open-release-continuation'
+import { parseTtrpgRuntimeStateV2 } from '../ttrpg/open-runtime-contract'
+import { assertTtrpgOpenAuthorizationCurrentV1 } from '../ttrpg/open-authorization'
+import { readTtrpgSessionParticipantsV2 } from '../ttrpg/participants'
 import { db } from '../db/schema'
 import {
   applyProductRuntimeEvent,
@@ -17,15 +24,21 @@ import {
   EMPTY_PRODUCT_RUNTIME_STATE,
   type FrozenNarrativeBeat,
   type FrozenNarrativeChoice,
-  type ProductRuntimePackageV1,
+  type AnyProductRuntimePackage,
   type ProductRuntimeSourceV1,
   type ProductNarrativeRuntimeNodeSnapshot,
   type ProductNarrativeRuntimeState,
   type ProductRuntimeState,
   type ProductRuntimeSession,
+  type ProductRuntimeEvent,
   type ProductRuntimeKind,
   type WorkspaceScope,
 } from '../types'
+import {
+  isTtrpgRuntimeContentV1,
+  isTtrpgRuntimeContentV2,
+  type ProductRuntimePackageWithTtrpgV2,
+} from '../ttrpg/content-version'
 import { createInitialInteractionState } from '../character-interaction/runtime'
 import { createInitialAdventureState } from '../adventure/runtime'
 import {
@@ -37,10 +50,15 @@ import {
 import { evaluateNarrativeChoices } from './narrative-content'
 import { assertProductReleaseUnchanged } from './releases'
 import { createInitialAvgPresentationState } from '../avg/runtime'
+import { avgExecutableModule, avgRuntimeStage } from '../avg/executable-module'
+import { previewAvgSystemEffectsV1 } from '../avg/system-state'
 import { createInitialOpenWorldEvolutionState } from '../open-world/evolution-runtime'
 import { createInitialOpenWorldState } from '../open-world/runtime'
 import { createInitialTextOpenWorldSessionProjectionV1 } from '../open-world/session-projection'
-import { createInitialTtrpgProductStateV1 } from '../ttrpg/runtime'
+import {
+  createInitialTtrpgOpenProductStateV1,
+  createInitialTtrpgProductStateV1,
+} from '../ttrpg/runtime'
 import { createInitialAiTownStateV1 } from '../ai-town/runtime'
 import { verifyProductRuntimeSource } from '../product-production/preview-source'
 import {
@@ -48,12 +66,23 @@ import {
   installInitialTtrpgParticipantsV2,
 } from '../ttrpg/participants'
 import { parseRulePackV1 } from '../ttrpg/rule-pack'
+import {
+  parseRulePackV2,
+  projectTtrpgRulePackMechanicalCoreV1,
+} from '../ttrpg/rule-pack-v2'
 import { parseTtrpgCampaignContentV1 } from '../ttrpg/campaign'
 import {
   buildTtrpgContinuationStateV2,
   type TtrpgContinuationRequestV2,
 } from '../ttrpg/continuity-state'
 import { resolveScope, scopeTransactionTables } from '../workspace/scope'
+import {createChatReleaseUpgradeInitialStateV1} from '../character-interaction/release-upgrade-branch'
+import {
+  prepareChatReleaseUpgradeV1,
+  assertChatReleaseUpgradeUnchangedV1,
+  readCompletedChatReleaseUpgradeV1,
+  type ChatReleaseUpgradeRequestV1,
+} from '../character-interaction/release-upgrade-plan'
 
 /**
  * Sole upper-product runtime entry.
@@ -68,12 +97,13 @@ export interface CreateProductRuntimeInstanceInput {
   productSource: ProductRuntimeSourceV1
   worldGroupId?: number | null
   seed?: string
-  ttrpgContinuation?: TtrpgContinuationRequestV2
+  ttrpgContinuation?: TtrpgContinuationRequestV2 | TtrpgOpenContinuationRequestV1
+  chatReleaseUpgrade?: ChatReleaseUpgradeRequestV1
 }
 
 interface FrozenNarrativeDefinition {
   version: 2
-  moduleKind: ProductRuntimePackageV1['narrative']['moduleKind']
+  moduleKind: AnyProductRuntimePackage['narrative']['moduleKind']
   moduleTitle: string
   entryNodeKey: string
   nodes: ProductNarrativeRuntimeNodeSnapshot[]
@@ -86,7 +116,7 @@ interface FrozenNarrativeDefinition {
 
 function productReleaseNarrativeDefinition(
   runtimeSourceHash: string,
-  runtimePackage: ProductRuntimePackageV1,
+  runtimePackage: AnyProductRuntimePackage,
 ): FrozenNarrativeDefinition {
   return {
     version: 2,
@@ -103,7 +133,7 @@ function productReleaseNarrativeDefinition(
 }
 
 function sessionKindForProduct(
-  productType: ProductRuntimePackageV1['productType'],
+  productType: AnyProductRuntimePackage['productType'],
 ): ProductRuntimeKind {
   return productType
 }
@@ -153,12 +183,13 @@ function initialNarrativeState(
 }
 
 export function createProductRuntimeCanonSnapshotV1(input: {
-  runtimePackage: ProductRuntimePackageV1
+  runtimePackage: AnyProductRuntimePackage
   runtimeSourceHash: string
 }): Record<string, unknown> {
   return {
     schema: 'storyforge.product-runtime-source',
     version: 1,
+    ...(input.runtimePackage.version === 2 ? { packageVersion: 2 } : {}),
     productType: input.runtimePackage.productType,
     runtimeSourceHash: input.runtimeSourceHash,
     sourceWorldContentHash: input.runtimePackage.sourceWorld.contentHash,
@@ -166,8 +197,9 @@ export function createProductRuntimeCanonSnapshotV1(input: {
 }
 
 export function createProductInitialStateV1(input: {
-  runtimePackage: ProductRuntimePackageV1
+  runtimePackage: AnyProductRuntimePackage
   runtimeSourceHash: string
+  ttrpgSessionKey?: string
 }): ProductRuntimeState {
   const runtimePackage = input.runtimePackage
   let state = structuredClone(EMPTY_PRODUCT_RUNTIME_STATE)
@@ -182,6 +214,8 @@ export function createProductInitialStateV1(input: {
       playerKey: runtimePackage.interaction!.playerKey,
       profiles: runtimePackage.interaction!.profiles,
       sceneTemplates: runtimePackage.interaction!.sceneTemplates,
+      chatSource: runtimePackage.interaction!.chatSource,
+      chatNarrative: runtimePackage.interaction!.chatNarrative,
     })
   }
   if (runtimePackage.productType === 'ai-town') {
@@ -205,10 +239,17 @@ export function createProductInitialStateV1(input: {
     state = withAdventureNarrativeProjectionV1(state)
   }
   if (runtimePackage.productType === 'avg') {
+    const module = avgExecutableModule(runtimePackage)
+    if (module) {
+      state.avgRules = { schema: 'storyforge.avg.rules-state', version: 1, systemPlan: structuredClone(module.systemPlan) }
+      if (module.reading) state.avgReading = createAvgReadingStateV1(module)
+      const entry = module.systemPlan.scenes.find(scene => scene.key === module.systemPlan.entrySceneKey)!
+      previewAvgSystemEffectsV1(module.systemPlan, runtimePackage.definition.initialVariables, entry.onEnter)
+    }
     state.presentation = createInitialAvgPresentationState({
       contentHash: input.runtimeSourceHash,
-      assets: runtimePackage.presentation!.assets,
-      content: runtimePackage.presentation!,
+      assets: avgRuntimeStage(runtimePackage)!.assets,
+      content: avgRuntimeStage(runtimePackage)!,
       entryNodeKey: runtimePackage.narrative.entryNodeKey,
     })
   }
@@ -240,10 +281,21 @@ export function createProductInitialStateV1(input: {
     }
   }
   if (runtimePackage.productType === 'ttrpg') {
-    state = createInitialTtrpgProductStateV1({
-      initialState: state,
-      content: runtimePackage.ttrpg!,
-    })
+    if (!runtimePackage.ttrpg) throw new Error('[instance] TTRPG runtime content 缺失')
+    if (isTtrpgRuntimeContentV2(runtimePackage.ttrpg)) {
+      const rulePack = parseRulePackV2(runtimePackage.ttrpg.rulePack.content)
+      state = createInitialTtrpgOpenProductStateV1({
+        initialState: state,
+        content: runtimePackage.ttrpg,
+        mechanicalRulePack: projectTtrpgRulePackMechanicalCoreV1(rulePack),
+        sessionKey: input.ttrpgSessionKey ?? `ttrpg.${crypto.randomUUID()}`,
+      })
+    } else if (isTtrpgRuntimeContentV1(runtimePackage.ttrpg)) {
+      state = createInitialTtrpgProductStateV1({
+        initialState: state,
+        content: runtimePackage.ttrpg,
+      })
+    }
   }
   return state
 }
@@ -253,9 +305,11 @@ async function addInitialNarrativeEvents(input: {
   worldGroupId: number | null
   session: ProductRuntimeSession
   state: ProductRuntimeState
-}): Promise<void> {
+}): Promise<{ lastSequence: number; projectedState: ProductRuntimeState }> {
   const narrative = input.state.narrative
-  if (narrative?.version !== 2) return
+  if (narrative?.version !== 2) {
+    return { lastSequence: input.state.lastSequence, projectedState: input.state }
+  }
   const entryNodeKey = narrative.currentNodeKey
   if (!entryNodeKey) throw new Error('[instance] 产品叙事初始节点缺失')
   let projected = structuredClone(input.state)
@@ -306,12 +360,15 @@ async function addInitialNarrativeEvents(input: {
       createdAt: input.session.createdAt,
     }
     await db.productRuntimeEvents.add(ending)
+    projected = applyProductRuntimeEvent(projected, ending)
   }
+  return { lastSequence: projected.lastSequence, projectedState: projected }
 }
 
 export async function createProductRuntimeInstance(
   input: CreateProductRuntimeInstanceInput,
 ): Promise<ProductRuntimeSession> {
+  input = structuredClone(input)
   const scope = await resolveScope({ scope: input.scope })
   if (!input.productSource || (input.productSource.kind !== 'release' && input.productSource.kind !== 'build')) {
     throw new Error('[instance] 正式产品实例必须且只能绑定一个 Product Release/Build')
@@ -319,28 +376,50 @@ export async function createProductRuntimeInstance(
   const playable = await verifyProductRuntimeSource({
     scope,
     source: input.productSource,
+    ttrpgProtocol: input.kind === 'ttrpg' ? 2 : undefined,
   })
-  const runtimePackage = playable.runtimePackage
+  const runtimePackage = playable.runtimePackage as ProductRuntimePackageWithTtrpgV2
   const expectedKind = sessionKindForProduct(runtimePackage.productType)
   if (input.kind !== expectedKind) {
     throw new Error(`[instance] ${runtimePackage.productType} 必须创建 ${expectedKind} 会话`)
   }
 
   const productRelease = input.productSource.kind === 'release'
-    ? await assertProductReleaseUnchanged(input.productSource.productReleaseId)
+    ? await assertProductReleaseUnchanged(input.productSource.productReleaseId, input.kind === 'ttrpg' ? { ttrpgProtocol: 2 } : undefined)
     : null
   const productBuild = input.productSource.kind === 'build'
     ? await db.productBuilds.get(input.productSource.productBuildId)
     : null
   if (input.productSource.kind === 'build' && !productBuild) throw new Error('[instance] 产品 Build 不存在')
 
+  const chatRequest = input.chatReleaseUpgrade
+  if (chatRequest && (input.kind !== 'character-interaction' || input.productSource.kind !== 'release'
+    || chatRequest.targetReleaseId !== productRelease?.id || input.ttrpgContinuation
+    || !/^[a-zA-Z0-9._:-]{1,200}$/.test(chatRequest.commandId) || !/^[a-f0-9]{64}$/.test(chatRequest.expectedPlanHash))) {
+    throw new Error('[instance] 角色聊天升级请求与目标版本不一致')
+  }
+  if (chatRequest) {
+    const completed = await readCompletedChatReleaseUpgradeV1(scope, chatRequest)
+    if (completed) return assertInstanceBinding(completed.id!, scope)
+  }
+  const chatUpgrade = chatRequest ? await prepareChatReleaseUpgradeV1({scope,
+    parentSessionId: chatRequest.parentSessionId, targetReleaseId: chatRequest.targetReleaseId}) : null
+  if (chatUpgrade && (!chatUpgrade.plan.canCopy || chatUpgrade.plan.planHash !== chatRequest!.expectedPlanHash
+    || chatUpgrade.plan.compatibility.targetPackageHash !== playable.runtimeSourceHash)) {
+    throw new Error('[instance] 存档升级条件或预览已变化，请重新预览')
+  }
+
   const continuation = input.ttrpgContinuation ?? null
+  const openContinuation = isTtrpgOpenContinuationRequestV1(continuation) ? continuation : null
   if (continuation && (
     input.kind !== 'ttrpg'
     || input.productSource.kind !== 'release'
     || runtimePackage.productType !== 'ttrpg'
   )) {
     throw new Error('[instance] 跨发布续团只能创建绑定正式产品发布的 TTRPG Instance')
+  }
+  if (continuation && !openContinuation && runtimePackage.ttrpg && isTtrpgRuntimeContentV2(runtimePackage.ttrpg)) {
+    throw new Error('[instance] open 跑团续团尚未进入 protocol-2 迁移路径')
   }
   const continuationParent = continuation
     ? await db.productRuntimeSessions.get(continuation.parentSessionId) ?? null
@@ -373,11 +452,18 @@ export async function createProductRuntimeInstance(
     ? await verifyProductRuntimeSource({
         scope,
         source: { kind: 'release', productReleaseId: continuationParent.productReleaseId! },
+        ttrpgProtocol: 2,
       })
     : null
   if (continuationParentPlayable
     && continuationParentPlayable.runtimePackage.productType !== 'ttrpg') {
     throw new Error('[instance] 跨发布续团父产品发布不是 TTRPG')
+  }
+  if (
+    !openContinuation && continuationParentPlayable?.runtimePackage.ttrpg
+    && isTtrpgRuntimeContentV2(continuationParentPlayable.runtimePackage.ttrpg)
+  ) {
+    throw new Error('[instance] open 跑团父 Instance 不能进入 scripted 续团路径')
   }
 
   let initialState = createProductInitialStateV1({
@@ -386,9 +472,13 @@ export async function createProductRuntimeInstance(
   })
   if (
     continuation
+    && !openContinuation
     && continuationParent
     && continuationParentState
-    && continuationParentPlayable?.runtimePackage.ttrpg
+      && continuationParentPlayable?.runtimePackage.ttrpg
+      && isTtrpgRuntimeContentV1(continuationParentPlayable.runtimePackage.ttrpg)
+      && runtimePackage.ttrpg
+      && isTtrpgRuntimeContentV1(runtimePackage.ttrpg)
   ) {
     const parentRulePack = parseRulePackV1(
       continuationParentPlayable.runtimePackage.ttrpg.rulePack.content,
@@ -422,13 +512,34 @@ export async function createProductRuntimeInstance(
     }
     initialState = continued.state
   }
+  if (chatUpgrade) {
+    initialState = createChatReleaseUpgradeInitialStateV1(chatUpgrade.state, playable.runtimeSourceHash)
+  }
+
+  if (openContinuation) {
+    if (openContinuation.compatibility !== 'compatible') throw new Error('[instance] 开放续团必须使用明确兼容计划');
+    const parentContent = continuationParentPlayable?.runtimePackage.ttrpg, targetContent = runtimePackage.ttrpg;
+    if (!continuationParent || !continuationParentState || !parentContent || !targetContent
+      || !isTtrpgRuntimeContentV2(parentContent) || !isTtrpgRuntimeContentV2(targetContent)) throw new Error('[instance] 开放续团必须同时绑定两个协议 2 发布');
+    const authorization = parseTtrpgRuntimeStateV2(continuationParentState.ttrpg)?.authorization;
+    if (!authorization) throw new Error('[instance] 原团局尚无当前真人授权');
+    assertTtrpgOpenAuthorizationCurrentV1({ authorization, participants: await readTtrpgSessionParticipantsV2(continuationParent.id!), viewerKey: openContinuation.approvedBy });
+    if (input.seed !== undefined && input.seed !== continuationParent.seed) throw new Error('[instance] 续团必须保留原随机种子');
+    const continued = await buildTtrpgOpenReleaseContinuationV1({ parent: continuationParent, parentState: continuationParentState,
+      parentStateHash: continuationParentStateHash!, events: await db.productRuntimeEvents.where('sessionId').equals(continuationParent.id!).sortBy('sequence'),
+      parentContent, targetContent, targetRuntimeSourceHash: playable.runtimeSourceHash, targetInitialState: initialState,
+      transitionKey: openContinuation.transitionKey, approvedBy: openContinuation.approvedBy,
+      reason: openContinuation.reason, openingTemplateKeys: openContinuation.openingTemplateKeys });
+    if (continued.plan.planHash !== openContinuation.expectedPlanHash) throw new Error('[instance] 续团预览已变化，请重新核对并明确确认');
+    initialState = continued.state;
+  }
 
   const sessionInput: CreateProductRuntimeSessionInput = {
     projectId: scope.projectId,
-    worldGroupId: input.worldGroupId ?? null,
+    worldGroupId: chatUpgrade ? chatUpgrade.saved.parent.worldGroupId ?? null : input.worldGroupId ?? (openContinuation ? continuationParent!.worldGroupId ?? null : null),
     kind: input.kind,
     title: input.title,
-    seed: input.seed,
+    seed: openContinuation ? continuationParent!.seed : input.seed,
     canonSnapshot: createProductRuntimeCanonSnapshotV1({
       runtimePackage: runtimePackage,
       runtimeSourceHash: playable.runtimeSourceHash,
@@ -444,7 +555,7 @@ export async function createProductRuntimeInstance(
         worldId: scope.worldId,
         workId: scope.workId,
         productReleaseId: productRelease.id!,
-        origin: continuation ? 'branch' : 'release',
+        origin: continuation || chatUpgrade ? 'branch' : 'release',
       })
     : input.productSource.kind === 'build' && productBuild
       ? await preparePreviewProductRuntimeSessionRecordV1({
@@ -458,7 +569,27 @@ export async function createProductRuntimeInstance(
         })
       : (() => { throw new Error('[instance] 不支持的产品来源') })()
 
+  // Precompute the new session's first receipt and projection before opening
+  // the transaction. This event does not replay opening effects or dialogue.
+  let upgradeEvent: Omit<ProductRuntimeEvent, 'sessionId'> | null = null
+  let upgradeHead: Pick<ProductRuntimeSession, 'status' | 'runtimeHeadSequence' | 'runtimeHeadStateJson' | 'runtimeHeadStateHash'> | null = null
+  if (chatUpgrade) {
+    const {plan} = chatUpgrade, {compatibility} = plan
+    const envelope = {commandId: chatRequest!.commandId, baseSequence: 0, baseStateHash: await hashProductRuntimeStateV1(initialState)}
+    upgradeEvent = {projectId: scope.projectId, worldGroupId: preparedSession.worldGroupId,
+      type: 'interaction.release.upgraded', sequence: 1, ...envelope,
+      createdAt: preparedSession.createdAt, payloadJson: JSON.stringify({version: 1, policy: 'copy-preserving-story-v1',
+        planHash: plan.planHash, compatibilityHash: compatibility.compatibilityHash,
+        sourceReleaseHash: compatibility.sourceReleaseHash, targetReleaseHash: compatibility.targetReleaseHash,
+        sourcePackageHash: compatibility.sourcePackageHash, targetPackageHash: compatibility.targetPackageHash,
+        sourceStateHash: plan.sourceStateHash, sourceSequence: plan.sourceSequence, ...envelope})}
+    const projected = applyProductRuntimeEvent(initialState, {...upgradeEvent, sessionId: 0})
+    upgradeHead = {status: chatUpgrade.saved.parent.status, runtimeHeadSequence: 1,
+      runtimeHeadStateJson: JSON.stringify(projected), runtimeHeadStateHash: await hashProductRuntimeStateV1(projected)}
+  }
+
   return db.transaction('rw', scopeTransactionTables(
+    ...(openContinuation ? [...runtimeInstanceTablesV1(), ...transactionTablesForReferenceCascade('productRuntimeSessions'), ...transactionTablesForReferenceCascade('mediaBlobObjects')] : []),
     db.productRuntimeSessions,
     db.ttrpgSessionParticipants,
     db.productReleases,
@@ -466,8 +597,14 @@ export async function createProductRuntimeInstance(
     db.productProductionBriefs,
     db.productBuilds,
     db.productRuntimeEvents,
+    ...(chatUpgrade ? [db.agentRuns] : []),
   ), async () => {
     const currentScope = await resolveScope({ scope })
+    if (chatUpgrade) {
+      const completed = await readCompletedChatReleaseUpgradeV1(currentScope, chatRequest!)
+      if (completed) return completed
+      await assertChatReleaseUpgradeUnchangedV1(chatUpgrade)
+    }
     if (continuation && continuationParent) {
       const currentParent = await db.productRuntimeSessions.get(continuationParent.id!)
       const parentEvents = await db.productRuntimeEvents
@@ -481,6 +618,16 @@ export async function createProductRuntimeInstance(
         || currentSequence !== continuation.expectedParentSequence
       ) {
         throw new Error('[instance] 父战役在续团创建期间发生变化')
+      }
+    }
+    if (openContinuation && continuationParent && continuationParentState) {
+      const authorization = parseTtrpgRuntimeStateV2(continuationParentState.ttrpg)!.authorization!;
+      assertTtrpgOpenAuthorizationCurrentV1({ authorization, participants: await db.ttrpgSessionParticipants.where('sessionId').equals(continuationParent.id!).toArray(), viewerKey: openContinuation.approvedBy });
+      const existing = await db.productRuntimeSessions.where('parentSessionId').equals(continuationParent.id!).toArray();
+      const duplicate = existing.find(row => JSON.parse(row.initialStateJson).ttrpg?.openRun?.releaseContinuation?.plan.planHash === openContinuation.expectedPlanHash);
+      if (duplicate) {
+        if (duplicate.productReleaseId !== productRelease!.id) throw new Error('[instance] 此续团确认已绑定另一个发布，请重新预览');
+        return duplicate;
       }
     }
     if (productRelease) {
@@ -503,21 +650,26 @@ export async function createProductRuntimeInstance(
     const session = await insertPreparedProductRuntimeSessionV1(preparedSession)
 
     const binding = {
-      parentSessionId: continuationParent?.id ?? null,
-      parentThroughSequence: continuation?.expectedParentSequence ?? null,
+      parentSessionId: chatUpgrade?.saved.parent.id ?? continuationParent?.id ?? null,
+      parentThroughSequence: chatUpgrade?.plan.sourceSequence ?? continuation?.expectedParentSequence ?? null,
+      // Keep the verified prepared record intact until insertion. Apply the
+      // precomputed upgrade projection atomically with its first event below.
+      ...upgradeHead,
     }
     await db.productRuntimeSessions.update(session.id!, binding)
     const boundSession = { ...session, ...binding }
-    await addInitialNarrativeEvents({
+    if (upgradeEvent) await db.productRuntimeEvents.add({...upgradeEvent, sessionId: boundSession.id!})
+    else await addInitialNarrativeEvents({
       scope: currentScope,
       worldGroupId: input.worldGroupId ?? null,
       session: boundSession,
       state: initialState,
     })
     if (runtimePackage.productType === 'ttrpg') {
+      if (!runtimePackage.ttrpg) throw new Error('[instance] TTRPG 发布缺少冻结运行内容')
       await installInitialTtrpgParticipantsV2({
         session: boundSession,
-        campaign: runtimePackage.ttrpg!.campaign,
+        campaign: runtimePackage.ttrpg.campaign,
       })
       if (continuationParent) {
         await carryTtrpgContinuationParticipantsV2({
@@ -527,6 +679,9 @@ export async function createProductRuntimeInstance(
         })
       }
     }
+    if (openContinuation && continuationParent) await cloneTtrpgRuntimePreservedExtensionsV1({ parent: continuationParent, child: boundSession,
+      throughSequence: openContinuation.expectedParentSequence, state: initialState,
+      events: await db.productRuntimeEvents.where('sessionId').equals(continuationParent.id!).sortBy('sequence') })
     return boundSession
   })
 }
@@ -542,6 +697,7 @@ export async function createProductRuntimeInstanceFromSource(input: {
   const playable = await verifyProductRuntimeSource({
     scope: input.scope,
     source: input.source,
+    ttrpgProtocol: 2,
   })
   return createProductRuntimeInstance({
     scope: input.scope,
@@ -656,6 +812,7 @@ export async function assertInstanceBinding(
     const verified = await verifyProductRuntimeSource({
       scope: resolved,
       source: { kind: 'release', productReleaseId: session.productReleaseId },
+      ttrpgProtocol: session.kind === 'ttrpg' ? 2 : undefined,
     })
     if (verified.runtimeSourceHash !== session.runtimeSourceHash
       || initialState.narrative?.version !== 2
@@ -675,6 +832,7 @@ export async function assertInstanceBinding(
         productBuildId: build.id!,
         expectedPreviewHash: build.previewHash,
       },
+      ttrpgProtocol: session.kind === 'ttrpg' ? 2 : undefined,
     })
     if (verified.runtimeSourceHash !== session.runtimeSourceHash
       || initialState.narrative?.version !== 2

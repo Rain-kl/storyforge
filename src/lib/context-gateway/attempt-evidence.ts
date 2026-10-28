@@ -1,3 +1,4 @@
+import { lookupContextResourceMetadataV1 } from './resource-metadata'
 import { estimateTokens } from '../ai/context-budget'
 import { sha256Text } from '../ai/chapter-memory/text-normalization'
 import {
@@ -370,6 +371,31 @@ async function readAndVerifyArtifactBodyV1(
   return body
 }
 
+/** Read only the original pre-dispatch request and packet of the currently
+ * running attempt. It grants no candidate/adoption or World read authority.
+ * Consumers can compare fresh registered inputs through the existing
+ * scheduler composition without dropping the Gateway contribution. */
+export async function readRunningContextGatewayRequestV1(input: {
+  scope: WorkspaceScope; runId: number; stepId: string; attempt: number
+}) {
+  const snapshot = await readEvidenceRunV1(input.scope, input.runId), step = snapshot.projection.steps[input.stepId]
+  if (!step || step.status !== 'running' || step.attempt !== input.attempt) fail('running-request', '只读预检必须属于当前running step/attempt')
+  const exact = async (kind: 'rendered-request' | 'context-packet') => {
+    const matches = snapshot.events.filter(e => e.type === 'evidence.artifact.recorded' && e.payload.stepId === input.stepId
+      && e.payload.attempt === input.attempt && e.payload.artifactKind === kind)
+    if (matches.length !== 1 || matches[0].type !== 'evidence.artifact.recorded') fail('running-request', `原${kind}事件缺失或不唯一`)
+    const event = matches[0], body = await readAndVerifyArtifactBodyV1(input.scope.projectId,
+      { role: kind, artifactKind: kind, contentHash: event.payload.contentHash, byteLength: event.payload.byteLength })
+    if (await sha256Text(body) !== event.payload.contentHash) fail('running-request', '原预检字节hash不一致')
+    return { body, contentHash: event.payload.contentHash }
+  }
+  const request = await exact('rendered-request'), packet = await exact('context-packet')
+  const current = await readEvidenceRunV1(input.scope, input.runId)
+  if (current.projection.lastSequence !== snapshot.projection.lastSequence) fail('running-request', '原预检读取期间Run已推进')
+  return { renderedRequestJson: request.body, renderedRequestHash: request.contentHash,
+    contextPacket: JSON.parse(packet.body) as ContextPacketV1, contextPacketArtifactHash: packet.contentHash }
+}
+
 async function assertGatewayEvidenceCoherence(input: {
   preflight: ContextGatewayPreflightEvidenceV1
   selector: ContextSelectorResultV1
@@ -429,6 +455,43 @@ async function assertGatewayEvidenceCoherence(input: {
       || (isAgentRead && ref.role === 'tool-result' && ref.resourceKey === decision.resourceKey)
     ))) fail('resource-artifact', `${decision.resourceKey} 没有可逐字回读且 SourceRef 一致的 source/tool artifact`)
   }
+}
+
+/** Verify the exact preflight before an external send; final V3 evidence still requires a response. */
+export async function verifyContextGatewayPreflightEvidenceV1(input: {
+  scope: WorkspaceScope
+  runId: number
+  stepId: string
+  attempt: number
+  preflight: ContextGatewayPreflightEvidenceV1
+  selector: ContextSelectorResultV1
+  sufficiency: ContextSufficiencyReportV1
+  retrievalTrace: RetrievalTraceV1
+  gatewayVersionHash: string
+  policyHash: string
+}): Promise<Record<string, string>> {
+  await assertPreflightIntegrity(input.preflight)
+  await assertSelectorIntegrity(input.selector)
+  const { reportHash, ...report } = input.sufficiency
+  const { traceHash, ...trace } = input.retrievalTrace
+  if (await hashCanonicalValue(report) !== reportHash || await hashCanonicalValue(trace) !== traceHash) {
+    fail('preflight-hash', '充分性报告或真实读取轨迹 hash 不一致')
+  }
+  await assertGatewayEvidenceCoherence(input)
+  if (input.preflight.runId !== input.runId || input.preflight.stepId !== input.stepId
+    || input.preflight.attempt !== input.attempt) fail('attempt-scope', 'preflight 不属于此 Run/step/attempt')
+  const snapshot = await readEvidenceRunV1(input.scope, input.runId)
+  const artifactBodies: Record<string, string> = {}
+  for (const ref of input.preflight.artifacts) {
+    if (!snapshot.events.some(event => event.type === 'evidence.artifact.recorded'
+      && event.payload.artifactKind === ref.artifactKind && event.payload.contentHash === ref.contentHash
+      && event.payload.byteLength === ref.byteLength
+      && event.payload.stepId === input.stepId && event.payload.attempt === input.attempt)) {
+      fail('preflight-artifact', `${ref.role} 缺少同一 attempt 的真实字节回执`)
+    }
+    artifactBodies[ref.contentHash] = await readAndVerifyArtifactBodyV1(input.scope.projectId, ref)
+  }
+  return artifactBodies
 }
 
 export async function finalizeContextGatewayAttemptEvidenceV1(input: {
@@ -674,6 +737,7 @@ export async function inspectContextGatewayManifestFreshnessV1(input: {
   if (input.manifest.gateway.scopeFingerprint !== input.session.scopeFingerprint) reasonCodes.add('scope-fingerprint-stale')
   if (input.manifest.gateway.policyHash !== input.session.policyHash) reasonCodes.add('policy-binding-stale')
   const unique = new Map(retrievalDecisions(input.manifest.gateway.retrievalTrace).map(item => [item.resourceKey, item]))
+  const metadata = new Map<string, ReturnType<typeof lookupContextResourceMetadataV1>>()
   for (const decision of [...unique.values()].sort((left, right) => left.resourceKey.localeCompare(right.resourceKey))) {
     const binding = input.session.providers.find(item => item.source.key === decision.sourceKey)
     if (!binding) {
@@ -682,19 +746,24 @@ export async function inspectContextGatewayManifestFreshnessV1(input: {
       continue
     }
     try {
-      const current = await binding.provider.read({
-        scope: input.session.scope,
-        resourceKey: decision.resourceKey,
-        depth: 'index',
-        maxTokens: 1,
-      })
-      const status = current.descriptor.contentHash !== decision.contentHash
-        || current.descriptor.contentRevision !== decision.revision
+      let lookup = metadata.get(decision.sourceKey)
+      if (!lookup) {
+        lookup = lookupContextResourceMetadataV1({
+          provider: binding.provider,
+          scope: input.session.scope,
+          resourceKeys: [...unique.values()].filter(item => item.sourceKey === decision.sourceKey).map(item => item.resourceKey),
+        })
+        metadata.set(decision.sourceKey, lookup)
+      }
+      const descriptor = (await lookup).get(decision.resourceKey)
+      if (!descriptor) throw new Error('资源元数据不可用')
+      const status = descriptor.contentHash !== decision.contentHash
+        || descriptor.contentRevision !== decision.revision
         ? 'content-stale' as const
-        : current.descriptor.policyHash !== decision.policyHash
-          || current.descriptor.policyRevision !== decision.policyRevision
+        : descriptor.policyHash !== decision.policyHash
+          || descriptor.policyRevision !== decision.policyRevision
           ? 'policy-stale' as const
-          : decision.sourceRefs.some(ref => !current.descriptor.sourceRefs.some(item => sameSourceRef(item, ref)))
+          : decision.sourceRefs.some(ref => !descriptor.sourceRefs.some(item => sameSourceRef(item, ref)))
             ? 'source-ref-stale' as const
             : 'fresh' as const
       resources.push({ resourceKey: decision.resourceKey, sourceKey: decision.sourceKey, status })

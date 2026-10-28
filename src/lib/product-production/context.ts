@@ -1,5 +1,7 @@
+import {chatSettingsForAIContextV1} from '../character-interaction/experience-info'
+import {readChatOpeningAutomaticRepairFeedbackV1} from '../character-interaction/opening-repair-evidence'
 import { db } from '../db/schema'
-import type { TtrpgProductionBriefV2, WorkspaceScope } from '../types'
+import type { ProductBuildRecordV1, TtrpgProductionBriefV2, WorkspaceScope } from '../types'
 import type { AssembleContextInput, ContextSourceTransformer } from '../registry/types'
 import { sha256Text } from '../ai/chapter-memory/text-normalization'
 import { assertRecordInScope } from '../workspace/scope'
@@ -13,8 +15,13 @@ import {
 import { TEXT_ADVENTURE_QUALITY_REVIEW_SCORE_KEYS_BY_SCOPE_V1 } from '../adventure/production-artifacts'
 import { textAdventureDecisionEchoPresentationV1 } from '../adventure/production-compiler'
 import { isSha256Hash, canonicalProductProductionJsonV2, hashProductProductionValueV2 } from './hash'
-import { parseProductProductionCommandV1 } from './contracts'
-import { textAdventureQualityReviewScopeFromTaskKeyV1 } from './plan'
+import { parseProductProductionCommandV1, parseProductProductionBriefV3 } from './contracts'
+import { textAdventureQualityReviewScopeFromTaskKeyV1, parseProductProductionPlanV3 } from './plan'
+import { isTtrpgOpenProductionTaskV3 } from '../ttrpg/open-production-bindings'
+import { resolveProductProductionTaskRecoveryPolicyV1 } from './recovery-policy'
+import { projectTtrpgOpenProductionTaskBriefV1 } from '../ttrpg/open-production-task-brief'
+import { ttrpgOpenProductionMediaContextV1 } from '../ttrpg/open-production-media'
+import { readVerifiedOrphanRecoveryProvenanceV1 } from './orphan-recovery-evidence'
 import {
   textAdventureQualityArcRepairTaskKeysV1,
   textAdventureQualityChoiceCopyOnlyRepairV1,
@@ -44,6 +51,7 @@ export interface ValidatedProductProductionRecoveryDirectiveV1 {
   previousFailure: Record<string, unknown> | null
   snapshot: AgentRunSnapshotV1 | null
   failedAttempt: number | null
+  recoveredFailureProvenance?: boolean
 }
 
 /** Structured production contracts must remain exact JSON, including secrets
@@ -95,13 +103,59 @@ async function productionAndBuild(input: AssembleContextInput) {
   return { scope, production, build }
 }
 
+/** A failure can cross only complete, durable pause/resume pairs which restore
+ * the same blocked Build. No retry, content revision, foreign Build or missing
+ * receipt may make an older failed Run current again. */
+export async function assertProductProductionRecoveryControlChainV1(input: {
+  scope: WorkspaceScope
+  build: ProductBuildRecordV1
+  failedControlEpoch: number
+  targetControlEpoch: number
+  /** Only the formal Resume command may validate its final, still-paused epoch. */
+  allowTrailingPause?: boolean
+}): Promise<void> {
+  const { scope, build, failedControlEpoch, targetControlEpoch } = input
+  if (failedControlEpoch === targetControlEpoch) return
+  const invalid = () => new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 修复来源暂停/恢复命令链不闭合')
+  if (targetControlEpoch < failedControlEpoch
+    || (targetControlEpoch - failedControlEpoch) % 2 !== (input.allowTrailingPause ? 1 : 0)) throw invalid()
+  const receipts = await db.productProductionCommands.where('productionId').equals(build.productionId).toArray()
+  const byEpoch = new Map<number, typeof receipts>()
+  for (const receipt of receipts) {
+    if (receipt.status !== 'succeeded') continue
+    let result: Record<string, unknown>
+    try { result = JSON.parse(receipt.resultJson) } catch { throw invalid() }
+    const epoch = result?.controlEpoch
+    if (typeof epoch !== 'number' || epoch <= failedControlEpoch || epoch > targetControlEpoch) continue
+    if (result.buildNumber !== build.buildNumber
+      || !await assertRecordInScope(scope, 'productProductionCommands', receipt, { owner: 'work' })) throw invalid()
+    byEpoch.set(epoch, [...(byEpoch.get(epoch) ?? []), receipt])
+  }
+  if (byEpoch.size !== targetControlEpoch - failedControlEpoch) throw invalid()
+  let pausedRevision: number | null = null
+  for (let epoch = failedControlEpoch + 1; epoch <= targetControlEpoch; epoch += 1) {
+    const rows = byEpoch.get(epoch)
+    if (rows?.length !== 1) throw invalid()
+    const receipt = rows[0]
+    const result = JSON.parse(receipt.resultJson) as Record<string, unknown>
+    const pause = (epoch - failedControlEpoch) % 2 === 1
+    if (receipt.type !== (pause ? 'pause' : 'resume')
+      || result[pause ? 'resumeState' : 'restored'] !== 'recovery-required'
+      || result.revisionAuthorization != null
+      || !Number.isSafeInteger(receipt.expectedStateRevision)
+      || (!pause && receipt.expectedStateRevision !== pausedRevision! + 1)) throw invalid()
+    if (pause) pausedRevision = receipt.expectedStateRevision
+  }
+}
+
 /**
  * Validate one recovery directive against the exact failed task Run. Callers
  * use `blocked` before accepting a command and `resolved` immediately before
  * execution, so a persisted directive cannot bypass either boundary.
  *
- * Legacy failures without provenance may retain ordinary retry compatibility,
- * but can never authorize a complete author JSON or a capability change.
+ * Legacy failures retain ordinary retry compatibility. A complete author JSON
+ * requires native provenance or an exact orphan Run/ledger witness; an
+ * unverified legacy failure can never authorize it or a capability change.
  */
 export async function validateProductProductionRecoveryDirectiveV1(input: {
   scope: WorkspaceScope
@@ -148,18 +202,29 @@ export async function validateProductProductionRecoveryDirectiveV1(input: {
     throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 已解决 blocker 缺少合法恢复动作')
   }
   const action = resolvedDirective ? resolvedAction : input.requestedAction ?? null
+  if (failureState.code === 'author-revised-content' && production.productType === 'text-open-world') {
+    if (input.expectedState === 'blocked' || action !== 'author-edit') {
+      throw new ProductProductionRecoveryDirectiveErrorV1('开放世界内容修订必须来自已签收的恢复命令')
+    }
+    const { validateTextOpenWorldContentRevisionAuthorityV1 } = await import('../open-world/production-content-revision')
+    await validateTextOpenWorldContentRevisionAuthorityV1({ scope, production, build, failure: failureState, taskKey: input.productProductionTaskKey })
+    return { resolvedDirective: true, resolution, previousFailure: null, snapshot: null, failedAttempt: null }
+  }
   if (failureState.code === 'author-revised-content') {
     const command = parseProductProductionCommandV1(failureState.revisionCommand)
-    if (production.productType !== 'text-adventure' || input.expectedState === 'blocked'
-      || action !== 'author-edit' || !['content.product-module', 'content.story-bible', 'content.cast-bible', 'content.adventure-architecture', 'content.narrative-arc-scenes', 'content.narrative-decision-plan', 'content.ending-route-plan', 'content.main-quest-plan', 'content.adventure-side-quests', 'content.adventure-ambient-events', 'content.scene-script.act-1.part-1', 'content.scene-script.act-1.part-2', 'content.scene-script.act-2.part-1', 'content.scene-script.act-2.part-2', 'content.scene-script.act-3.part-1', 'content.scene-script.act-3.part-2', 'content.dialogue-pass.act-1', 'content.dialogue-pass.act-2', 'content.dialogue-pass.act-3', 'content.quest-script.main.act-1.single', 'content.quest-script.main.act-1.multi', 'content.quest-script.main.act-2.single', 'content.quest-script.main.act-2.multi', 'content.quest-script.main.act-3.single', 'content.quest-script.main.act-3.multi', 'content.quest-script.supplemental'].includes(input.productProductionTaskKey)
-      || command.type !== 'resume' || !command.contentRevision || command.contentRevision.artifactKey !== input.productProductionTaskKey
+    const ttrpgRevision = command.type === 'resume' && command.ttrpgContentRevision
+    const revision = command.type === 'resume' ? command.ttrpgContentRevision ?? command.contentRevision : undefined
+    const isTtrpgRevision = production.productType === 'ttrpg' && ttrpgRevision != null
+    if ((production.productType !== 'text-adventure' && !isTtrpgRevision) || input.expectedState === 'blocked'
+      || action !== 'author-edit' || (!isTtrpgRevision && !['content.product-module', 'content.story-bible', 'content.cast-bible', 'content.adventure-architecture', 'content.narrative-arc-scenes', 'content.narrative-decision-plan', 'content.ending-route-plan', 'content.main-quest-plan', 'content.adventure-side-quests', 'content.adventure-ambient-events', 'content.scene-script.act-1.part-1', 'content.scene-script.act-1.part-2', 'content.scene-script.act-2.part-1', 'content.scene-script.act-2.part-2', 'content.scene-script.act-3.part-1', 'content.scene-script.act-3.part-2', 'content.dialogue-pass.act-1', 'content.dialogue-pass.act-2', 'content.dialogue-pass.act-3', 'content.quest-script.main.act-1.single', 'content.quest-script.main.act-1.multi', 'content.quest-script.main.act-2.single', 'content.quest-script.main.act-2.multi', 'content.quest-script.main.act-3.single', 'content.quest-script.main.act-3.multi', 'content.quest-script.supplemental'].includes(input.productProductionTaskKey))
+      || command.type !== 'resume' || !revision || revision.artifactKey !== input.productProductionTaskKey
+      || (ttrpgRevision != null && !isTtrpgRevision)
       || command.commandId !== failureState.commandId) {
       throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 内容修订缺少准确的恢复命令')
     }
     const receipt = await db.productProductionCommands.where('[productionId+commandId]')
       .equals([production.id!, command.commandId]).first()
     const result = receipt ? JSON.parse(receipt.resultJson) : null
-    const revision = command.contentRevision
     const expectedResolution = { action: 'author-edit', note: revision.note, authorDraftJson: revision.authorDraftJson }
     const expectedSource = { artifactKey: revision.artifactKey, version: revision.expectedArtifactVersion, contentHash: revision.expectedArtifactHash }
     if (!receipt || !await assertRecordInScope(scope, 'productProductionCommands', receipt, { owner: 'work' })
@@ -178,18 +243,47 @@ export async function validateProductProductionRecoveryDirectiveV1(input: {
       || await hashProductProductionValueV2(JSON.parse(baseline.payloadJson)) !== baseline.contentHash) {
       throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 内容修订原稿证据已变化')
     }
+    if (isTtrpgRevision) {
+      const plan = parseProductProductionPlanV3(build.planJson)
+      const task = plan.tasks.find(task => task.taskKey === revision.artifactKey)
+      if (!task || !resolveProductProductionTaskRecoveryPolicyV1({ productType: 'ttrpg', task }).authorDraftAllowed
+        || !ttrpgRevision || ttrpgRevision.expectedControlEpoch + 1 !== build.controlEpoch
+        || failureState.resumedFromControlEpoch !== ttrpgRevision.expectedControlEpoch
+        || result.revisionSourceProofHash !== failureState.revisionSourceProofHash) {
+        throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 跑团修订岗位或原稿证明不一致')
+      }
+      const source = await (await import('./artifact-store')).prepareTtrpgOpenContentRevisionSourceV1({
+        scope, build: { ...build, id: build.id! }, artifactKey: revision.artifactKey,
+        version: revision.expectedArtifactVersion, contentHash: revision.expectedArtifactHash, historical: true,
+      })
+      if (source.proofHash !== result.revisionSourceProofHash) {
+        throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 跑团修订原稿生产者证明已变化')
+      }
+    }
     return { resolvedDirective: true, resolution, previousFailure: null, snapshot: null, failedAttempt: null }
   }
   const previousFailureValue = resolvedDirective ? failureState.previousFailure : failureState
-  const previousFailure = previousFailureValue && typeof previousFailureValue === 'object'
+  let previousFailure = previousFailureValue && typeof previousFailureValue === 'object'
     && !Array.isArray(previousFailureValue)
     ? previousFailureValue as Record<string, unknown>
     : null
-  const provenance = previousFailure?.failureProvenance
+  let provenance = previousFailure?.failureProvenance
     && typeof previousFailure.failureProvenance === 'object'
     && !Array.isArray(previousFailure.failureProvenance)
     ? previousFailure.failureProvenance as Record<string, unknown>
     : null
+  let recoveredFailureProvenance = false
+  if (!provenance && previousFailure && !('failureProvenance' in previousFailure)
+    && !resolvedDirective && input.expectedState === 'blocked' && action === 'author-edit') {
+    provenance = await readVerifiedOrphanRecoveryProvenanceV1({
+      scope, build: build as typeof build & { id: number },
+      taskKey: input.productProductionTaskKey, failure: previousFailure,
+    })
+    if (provenance) {
+      previousFailure = { ...previousFailure, failureProvenance: provenance }
+      recoveredFailureProvenance = true
+    }
+  }
   if (!provenance) {
     const legacyInspection = input.expectedState === 'either' && !resolvedDirective && action == null
     if (legacyInspection || (input.allowLegacyRetry === true && action === 'retry')) {
@@ -213,17 +307,19 @@ export async function validateProductProductionRecoveryDirectiveV1(input: {
     || typeof rootRunId !== 'number' || !Number.isInteger(rootRunId) || rootRunId < 1
     || typeof failedControlEpoch !== 'number' || !Number.isInteger(failedControlEpoch) || failedControlEpoch < 0
     || typeof failedPlanHash !== 'string' || !/^[a-f0-9]{64}$/.test(failedPlanHash)
-    || typeof failedAttempt !== 'number' || !Number.isInteger(failedAttempt) || failedAttempt < 1
-    || (resolvedDirective
-      ? failedControlEpoch + 1 !== build.controlEpoch
-      : failedControlEpoch !== build.controlEpoch)) {
+    || typeof failedAttempt !== 'number' || !Number.isInteger(failedAttempt) || failedAttempt < 1) {
     throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 修复来源谱系无效')
   }
+  await assertProductProductionRecoveryControlChainV1({ scope, build, failedControlEpoch,
+    targetControlEpoch: build.controlEpoch - (resolvedDirective ? 1 : 0) })
   const run = await db.agentRuns.get(runId)
   if (!run || run.productBuildId !== build.id || run.status !== 'failed'
     || run.parentRunId !== rootRunId
     || run.parentRelation !== `task:${input.productProductionTaskKey}`) {
-    throw new ProductProductionRecoveryDirectiveErrorV1('[product-production-context] 修复来源 Run 不存在或越过 Build/task')
+    const reason = !run ? 'Run缺失' : run.productBuildId !== build.id ? 'Build不匹配'
+      : run.status !== 'failed' ? `Run状态为${run.status}` : run.parentRunId !== rootRunId
+        ? '根Run不匹配' : '任务关系不匹配'
+    throw new ProductProductionRecoveryDirectiveErrorV1(`[product-production-context] 修复来源 Run 不存在或越过 Build/task：${reason}`)
   }
   const snapshot = await readAgentRunV1(scope, runId)
   const boundary = snapshot.contract.scope.productProduction
@@ -243,6 +339,7 @@ export async function validateProductProductionRecoveryDirectiveV1(input: {
     previousFailure,
     snapshot,
     failedAttempt,
+    ...(recoveredFailureProvenance ? { recoveredFailureProvenance: true } : {}),
   }
 }
 
@@ -253,6 +350,9 @@ export async function readProductProductionBriefContext(input: AssembleContextIn
     .where('[productionId+revision]').equals([production.id!, production.currentBriefRevision]).first()
   if (!brief || brief.status !== 'authorized') throw new Error('[product-production-context] 当前 Brief 未授权')
   const content = JSON.parse(brief.briefJson)
+  if (content.intent?.productType === 'character-interaction' && content.characterChat) {
+    content.characterChat = chatSettingsForAIContextV1(content.characterChat)
+  }
   const ttrpgRules = content.intent?.productType === 'ttrpg' && content.ttrpg
     ? await (await import('../ttrpg/production-brief')).resolveTtrpgProductionRulePackV2({ scope, brief: content.ttrpg as TtrpgProductionBriefV2 })
     : null
@@ -262,8 +362,55 @@ export async function readProductProductionBriefContext(input: AssembleContextIn
     schema: 'storyforge.product-production.brief-context', version: 1,
     productionKey: production.productionKey, briefRevision: brief.revision, briefHash: brief.briefHash,
     sourceWorldContentHash: brief.sourceWorldContentHash, userIntentSummary: brief.userIntentSummary,
-    estimate: JSON.parse(brief.estimateJson), brief: JSON.parse(brief.briefJson),
+    estimate: JSON.parse(brief.estimateJson), brief: content,
   })
+}
+
+async function ttrpgOpenTaskProjectionInputV3(input: AssembleContextInput) {
+  const { production, scope, build } = await productionAndBuild(input)
+  if (input.projectId !== scope.projectId) throw new Error('[ttrpg-task-brief] projectId 与原作用域不一致')
+  if (!build || !production.currentBriefRevision || !input.productProductionTaskKey) throw new Error('[ttrpg-task-brief] 缺少原 Build/任务')
+  const row = await db.productProductionBriefs.where('[productionId+revision]')
+    .equals([production.id!, production.currentBriefRevision]).first()
+  if (!row || row.status !== 'authorized' || row.briefHash !== build.briefHash) throw new Error('[ttrpg-task-brief] 原 Brief 未授权或已变更')
+  const brief = parseProductProductionBriefV3(row.briefJson)
+  if (await hashProductProductionValueV2(brief) !== row.briefHash) throw new Error('[ttrpg-task-brief] 原 Brief hash 不一致')
+  if (!brief.ttrpgOpen || production.productType !== 'ttrpg') throw new Error('[ttrpg-task-brief] 不是原开放跑团')
+  const plan = parseProductProductionPlanV3(build.planJson, brief, row.briefHash)
+  const task = plan.tasks.find(task => task.taskKey === input.productProductionTaskKey)
+  if (!task || !isTtrpgOpenProductionTaskV3(task) || plan.controlEpoch !== build.controlEpoch
+    || await hashProductProductionValueV2(plan) !== build.planHash) throw new Error('[ttrpg-task-brief] 只接受原 V3 闭合计划的准确任务')
+  return { scope, production, build, row, brief, task }
+}
+
+/** Disabled for unrelated products and retained generations, even when an
+ * old caller asks for the default source set. Direct reads remain strict. */
+export async function canReadTtrpgOpenProductionTaskProjectionV3(input: AssembleContextInput): Promise<boolean> {
+  if (!Number.isSafeInteger(input.productProductionId) || !Number.isSafeInteger(input.productBuildId)
+    || !input.productProductionTaskKey?.startsWith('ttrpg.open.')) return false
+  try { await ttrpgOpenTaskProjectionInputV3(input); return true } catch { return false }
+}
+
+export async function readTtrpgOpenProductionTaskBriefContextV3(input: AssembleContextInput): Promise<string> {
+  const { production, row, brief, task } = await ttrpgOpenTaskProjectionInputV3(input)
+  return JSON.stringify(await projectTtrpgOpenProductionTaskBriefV1({ brief, briefHash: row.briefHash,
+    briefRevision: row.revision, productionKey: production.productionKey, taskKey: task.taskKey }))
+}
+
+export async function readTtrpgOpenProductionMediaInputsV3(input: AssembleContextInput): Promise<string> {
+  const { brief, task } = await ttrpgOpenTaskProjectionInputV3(input)
+  if (task.taskKey !== 'ttrpg.open.media-plan' || JSON.stringify([...(input.productArtifactKeys ?? [])].sort())
+    !== JSON.stringify([...task.inputArtifactKeys].sort())) throw new Error('[ttrpg-media-inputs] 任务依赖未闭合')
+  const original = JSON.parse(await readProductProductionArtifactInputs(input)) as {
+    buildNumber: number; artifacts: Array<{ artifactKey: string; version: number; contentHash: string; producerReceiptHash: string; payload: unknown }>
+  }
+  const payload = (key: string) => original.artifacts.find(row => row.artifactKey === key)?.payload
+  const media = ttrpgOpenProductionMediaContextV1({ ruleSystem: payload('ttrpg.open.rule-system'),
+    situationLayer: payload('ttrpg.open.situation-layer'), rulePack: brief.ttrpgOpen!.rulePack })
+  return JSON.stringify({ schema: 'storyforge.ttrpg-open-production-media-inputs', version: 1,
+    buildNumber: original.buildNumber,
+    sources: original.artifacts.map(({ artifactKey, version, contentHash, producerReceiptHash }) => ({ artifactKey, version, contentHash, producerReceiptHash })),
+    visualBible: media.visualBible, mediaManifest: media.mediaManifest, characterAnchors: media.characterAnchors })
 }
 
 export async function readProductProductionArtifactInputs(input: AssembleContextInput): Promise<string> {
@@ -2076,8 +2223,16 @@ export async function readProductProductionQualityFeedback(input: AssembleContex
 export async function readProductProductionRepairFeedback(input: AssembleContextInput): Promise<string> {
   const { scope, production, build } = await productionAndBuild(input)
   if (!build || !input.productProductionTaskKey) throw new Error('[product-production-context] 修复反馈需要 Build 与 task key')
+  if (production.productType === 'character-interaction') {
+    const automatic = await readChatOpeningAutomaticRepairFeedbackV1({scope, build, taskKey: input.productProductionTaskKey})
+    if (automatic) return JSON.stringify(automatic)
+  }
   if (production.productType !== 'text-open-world') {
-    const resolution = JSON.parse(build.failureJson).resolution
+    const failure = JSON.parse(build.failureJson)
+    // A resolved sibling blocker is history, not this task's author input.
+    // Keep its complete record without sending private drafts to another lane.
+    const target = typeof failure.blockerKey === 'string' ? failure.blockerKey : failure.taskKey
+    const resolution = target === input.productProductionTaskKey ? failure.resolution : null
     const authorRepairNote = typeof resolution?.note === 'string' ? resolution.note : null
     const authorDraftJson = resolution?.action === 'author-edit'
       && typeof resolution.authorDraftJson === 'string' ? resolution.authorDraftJson : null

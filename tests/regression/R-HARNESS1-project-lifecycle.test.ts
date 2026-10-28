@@ -185,7 +185,7 @@ describe('R-HARNESS1-project-lifecycle · run 全生命周期', () => {
       ['worldGroups', new Map([[1, 0]])],
       ['outlineNodes', new Map([[1, 0]])],
     ])
-    await portableizeAgentRunLedgerExportV1(exported, idMaps)
+    await portableizeAgentRunLedgerExportV1(exported, idMaps, { freezeContextEvidence: false })
     expect(keyReads).toBeLessThanOrEqual(2 * (eventOrder.length + checkpointOrder.length))
     eventOrder.forEach((row, index) => expect(exported.agentRunEvents[index]).toBe(row))
     checkpointOrder.forEach((row, index) => expect(exported.agentRunCheckpoints[index]).toBe(row))
@@ -193,9 +193,12 @@ describe('R-HARNESS1-project-lifecycle · run 全生命周期', () => {
     for (const table of ['agentRunEvents', 'agentRunCheckpoints'] as const) {
       const corrupt = structuredClone(exported)
       corrupt[table][0]._worldGroupExportId = 99
-      await expect(portableizeAgentRunLedgerExportV1(corrupt, idMaps))
+      await expect(portableizeAgentRunLedgerExportV1(corrupt, idMaps, { freezeContextEvidence: false }))
         .rejects.toThrow('世界组与运行不一致')
     }
+    // Materializing new owner proof still requires real original Run identity.
+    await expect(portableizeAgentRunLedgerExportV1(structuredClone(exported), idMaps, { freezeContextEvidence: true }))
+      .rejects.toThrow('原始导出映射')
 
     const importedProjectId = await importProjectJSON(exported)
     const scope = await importedScope(importedProjectId)
@@ -253,7 +256,7 @@ describe('R-HARNESS1-project-lifecycle · run 全生命周期', () => {
     expect(await db.agentRunCheckpoints.where('projectId').equals(projectDeleteProjectId).count()).toBe(0)
   })
 
-  it('导入 completed run 后追加 receipt stale 证据，不沿用来源完成态', async () => {
+  it.each(['portable', 'nonportable', 'mismatched-receipt'] as const)('重复导入 completed 历史只接受匹配的失效前缀（%s）', async kind => {
     const fixture = await createSmallWorkspace()
     let snapshot = await createAgentRunV1({
       scope: fixture.scope,
@@ -282,6 +285,7 @@ describe('R-HARNESS1-project-lifecycle · run 全生命周期', () => {
       type: 'step.succeeded',
       payload: { stepId: 'outline.generate', attempt: 1, outputHash: 'a'.repeat(64) },
     })
+    if (kind !== 'portable') await createAgentRunCheckpointV1({scope: fixture.scope, runId: snapshot.run.id, resumePayload: {portable: false, reason: 'test-local-candidate'}})
     snapshot = await appendAgentRunEventV1({
       scope: fixture.scope,
       runId: snapshot.run.id,
@@ -310,6 +314,36 @@ describe('R-HARNESS1-project-lifecycle · run 全生命周期', () => {
         reason: 'project-import-scope-rebound',
       },
     })
+    if (kind === 'mismatched-receipt') {
+      const last = await db.agentRunEvents.where('runId').equals(run!.id!).sortBy('sequence')
+      const event = last.at(-1)!, payload = JSON.parse(event.payloadJson)
+      await db.agentRunEvents.update(event.id!, {payloadJson: JSON.stringify({...payload, previousReceiptHash: 'c'.repeat(64)})})
+      await expect(exportProjectJSON(importedProjectId)).rejects.toThrow('previousReceiptHash 不匹配')
+      return
+    }
+    let previousProjectId = importedProjectId
+    for (let count = 0; count < 2; count++) {
+      const nextProjectId = await importProjectJSON(await exportProjectJSON(previousProjectId))
+      const nextRun = await db.agentRuns.where('projectId').equals(nextProjectId).first()
+      const next = await readAgentRunV1(await importedScope(nextProjectId), nextRun!.id!)
+      expect(next.projection.state).toBe('running')
+      expect(next.projection.terminalReceiptHash).toBeUndefined()
+      expect(next.events.filter(e => e.type === 'verification.staled')).toHaveLength(1)
+      expect(next.events.some(e => e.type === 'run.cancelled')).toBe(false)
+      expect(next.events.at(-1)).toMatchObject({type: 'verification.staled', payload: {previousReceiptHash: 'b'.repeat(64)}})
+      previousProjectId = nextProjectId
+    }
+  })
+
+  it('未完成且含不可移植检查点的调用仍在导入时取消', async () => {
+    const f = await createSmallWorkspace(), created = await createAgentRunV1({scope: f.scope, worldGroupId: f.worldGroupId,
+      contract: runContract({projectId: f.scope.projectId, worldGroupId: f.worldGroupId, outlineNodeId: f.outlineNodeId})})
+    await createAgentRunCheckpointV1({scope: f.scope, runId: created.run.id, resumePayload: {portable: false}})
+    const projectId = await importProjectJSON(await exportProjectJSON(f.scope.projectId))
+    const run = await db.agentRuns.where('projectId').equals(projectId).first()
+    const imported = await readAgentRunV1(await importedScope(projectId), run!.id!)
+    expect(imported.projection.state).toBe('cancelled')
+    expect(imported.events.at(-1)).toMatchObject({type: 'run.cancelled', payload: {reason: 'project-import-nonportable-checkpoint'}})
   })
 
   it('多代契约与前代检查点一并重映射，但前代检查点不能恢复新代运行', async () => {

@@ -2,6 +2,7 @@ import { defineConfig, type ViteDevServer, type PreviewServer } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { localCodexPlugin } from './scripts/local-codex/bridge.mjs'
+import { localTtsPlugin } from './scripts/ttrpg-local-tts/product-bridge.mjs'
 import { execSync } from 'node:child_process'
 import { providerProxies } from './scripts/distribution/proxies.mjs'
 
@@ -14,6 +15,52 @@ function resolveBuildSha(): string {
     return 'local'
   }
 }
+
+// Actual static replay dependency groups: mechanics -> state -> open -> adapters.
+// Keep adapters separate from their prerequisites to avoid circular chunk loading.
+const TTRPG_REPLAY_CHUNK_MODULES = {
+  mechanics: [
+    'ability-ledger', 'action-economy', 'action-feedback', 'action-requirement',
+    'advancement', 'dice', 'world-time', 'open-narrative-envelope',
+  ],
+  state: [
+    'campaign', 'campaign-v2', 'character-sheet',
+    'content-version', 'director-model', 'effect-plan',
+    'effect-runtime', 'frozen-facts', 'frozen-content-cache', 'item-ledger', 'media-contract',
+    'open-authorization', 'open-chaos', 'open-content-authoring', 'open-content-common',
+    'open-content-predicates', 'open-content-references', 'open-content-situations', 'open-content-templates',
+    'open-contract', 'open-contract-parse', 'context-trigger-contract', 'open-context-policy', 'open-model-purpose-contract', 'open-memory-contract', 'open-memory-receipt', 'open-model-memory-contract', 'open-brief-contract', 'open-memory-event-digest', 'open-memory-prefix-proof', 'open-private-choice-contract', 'open-coordination',
+    'open-fact-authority', 'open-fact-ledger', 'open-fact-runtime-references', 'open-gates', 'open-intent', 'open-intent-method', 'open-intent-clarification-contract', 'open-rule-request-contract',
+    'open-knowledge', 'open-knowledge-share', 'open-identity-knowledge-contract', 'open-kp-binding', 'open-kp-narration',
+    'open-kp-receipt', 'open-model-calls', 'open-model-purpose', 'open-oracle-contract',
+    'open-interaction', 'oracle', 'participants', 'predicate', 'pressure-runtime',
+    'private-guidance-model', 'resolution', 'rule-action-mechanical', 'rule-pack',
+    'rule-pack-v2', 'run-format', 'runtime-state', 'session-facts',
+    'situation-engine', 'open-session-situation-contract', 'open-session-situation-catalog',
+    'character-mechanical-initialization', 'open-public-situation-authorization-contract', 'open-public-situation-request',
+    'open-entity-contract', 'open-entity-model-contract', 'open-entity-model-origin-contract', 'open-entity-mechanics', 'open-entity-catalog', 'open-entity-window', 'open-runtime-entity-references', 'open-common-oracle-request', 'open-common-oracle-archive-contract', 'open-oracle-runtime-delivery',
+    'open-voice-completion-contract', 'open-voice-timeline-contract',
+  ],
+  open: [
+    'open-audio-runtime', 'open-audio-scope', 'open-audio-contract', 'open-voice-script-contract', 'open-voice-request-contract',
+    'open-audio-receipt', 'open-generated-audio-contract',
+    'open-voice-confirmed-reading-contract', 'open-voice-reading-contract', 'open-identity-knowledge',
+    'open-branch-contract', 'open-release-continuation-contract', 'open-release-compatibility', 'open-release-continuation-proof', 'open-release-continuation-start', 'open-branch-recovery', 'open-companion-preauthorization', 'open-handoff', 'open-hosting-delegation',
+    'open-gate-recovery', 'open-knowledge-discovery', 'open-discovery-effect-templates', 'open-operation', 'open-oracle-review', 'open-pressure-cycle',
+    'open-pressure-effect', 'open-table-conversation', 'open-table-conversation-reducer', 'open-turn-settlement', 'open-manual-action', 'open-manual-catalog', 'open-private-choice', 'open-table-risk', 'open-rule-plan', 'open-runtime-contract', 'open-situation-cycle',
+    'open-situation-runtime', 'open-stage-opening-contract', 'open-stage-opening-plan', 'open-stage-close', 'open-terminal-gates', 'open-memory-proof', 'open-memory-reducer',
+    'open-effect-binding', 'open-entity-admission', 'open-entity-operation-basis', 'open-entity-journal',
+  ],
+  adapters: [
+    'open-branch-reducer', 'open-gate-recovery-reducer', 'open-fact-reducer', 'open-knowledge-settlement', 'open-knowledge-share-reducer', 'open-identity-knowledge-reducer',
+    'open-kp-reducer', 'open-private-choice-reducer', 'open-model-call-reducer', 'open-operation-reducer', 'open-oracle-reducer',
+    'open-oracle-review-reducer', 'open-pressure-effect-reducer', 'open-pressure-reducer', 'open-situation-cycle-reducer',
+    'open-situation-work-reducer', 'open-stage-opening-reducer', 'open-stage-close-reducer', 'open-terminal-gates-reducer', 'runtime',
+    'runtime-branch', 'runtime-event-reducer', 'open-session-situation-reducer',
+    'open-entity-reducer',
+    'open-audio-reducer', 'open-voice-request-reducer', 'open-audio-media',
+  ],
+} as const
 
 function manualChunkFor(moduleId: string): string | undefined {
   const id = moduleId.replaceAll('\\', '/')
@@ -37,6 +84,19 @@ function manualChunkFor(moduleId: string): string | undefined {
 
   if (id.endsWith('/src/lib/ai/context-builder.ts')) return 'ai-context'
   if (id.endsWith('/src/lib/context-gateway/selector.ts')) return 'context-selector'
+  // Passive codecs and policy data have no dependency back into the shared
+  // store/adoption or runtime/backup cycles. Keep those leaves cacheable when
+  // AVG and character-chat production are present in the same application.
+  if (id.endsWith('/src/lib/world-engine/semantic-registry-v4.json')) return 'world-semantic-registry-v4'
+  if (id.endsWith('/src/lib/world-engine/narrative-index.ts')) return 'world-narrative-index'
+  if (/\/src\/lib\/world-engine\/(?:narrative-release-v4|release-codec)\.ts$/.test(id)) return 'world-release-codecs'
+  if (/\/src\/lib\/character-interaction\/(?:action-output-contract|action-choice-contract|narrative-action-prompt|inquiry-prompt|narrative-replanning|action-instructions|visual-design)\.ts$/.test(id)) {
+    return 'character-chat-passive-contracts'
+  }
+  if (/\/src\/lib\/(?:ai-town\/contracts|avg\/settings-v2|ttrpg\/authoring-settings|character-interaction\/opening-reference-prompt|product-production\/(?:task-evidence|browser-performance|media-quality-policy|first-interactive-resources))\.ts$/.test(id)) {
+    return 'product-production-evidence-policies'
+  }
+  if (/\/src\/lib\/ttrpg\/(?:production-compiler|scenario-authoring|continuity-state)\.ts$/.test(id)) return 'ttrpg-production-compilers'
   // The governed text-adventure production contracts are shared by the
   // scheduler, executor and player-facing package verifier. Keep their large
   // parsers/assemblers in one cacheable async chunk instead of folding them
@@ -53,13 +113,19 @@ function manualChunkFor(moduleId: string): string | undefined {
   if (id.endsWith('/src/lib/product-production/compatibility.ts')) {
     return 'product-production-quality'
   }
-  // The product-neutral runtime delegates deterministic rule reduction to
-  // product-owned adapters. Keep the sizeable TTRPG rule reducer separate so
-  // text/AVG/open-world players do not parse an unrelated ruleset up front.
-  // Files that call back into runtime-core (commands/context readers) are
-  // intentionally excluded to preserve an acyclic chunk graph.
-  if (/\/src\/lib\/ttrpg\/(?:runtime-state|runtime-event-reducer|runtime|runtime-branch|campaign|action-feedback|effect-runtime|participants|item-ledger|character-sheet|media-contract|effect-plan|action-economy|advancement|director-model|private-guidance-model)\.ts$/.test(id)) {
-    return 'runtime-domain-ttrpg'
+  // These passive product parsers have no dependency back into the shared
+  // contract/proof cycle. Split that leaf group without changing its logic
+  // or moving the mutually dependent store/adoption modules across chunks.
+  if (/\/src\/lib\/(?:ttrpg\/(?:production-brief|campaign-proposal)|avg\/(?:artifact-contract|sound-production-plan)|open-world\/creator-media-contract)\.ts$/.test(id)) {
+    return 'product-production-plans'
+  }
+  // All groups retain the standard scriptChunk size budget. AI/context and
+  // author-production modules stay outside this deterministic replay closure.
+  const ttrpgModule = id.match(/\/src\/lib\/ttrpg\/([^/]+)\.ts$/)?.[1]
+  if (ttrpgModule) {
+    for (const [group, names] of Object.entries(TTRPG_REPLAY_CHUNK_MODULES)) {
+      if ((names as readonly string[]).includes(ttrpgModule)) return `runtime-domain-ttrpg-${group}`
+    }
   }
   // The retired four-module open-world reducer is loaded only for immutable
   // legacy Releases. Do not make every vNext player parse that compatibility
@@ -99,6 +165,7 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [
     ...(!showcase ? [localCodexPlugin()] : []),
+    ...(!showcase ? [localTtsPlugin()] : []),
     ...(showcase ? [{
       name: 'storyforge-showcase-html',
       transformIndexHtml: {
@@ -177,6 +244,11 @@ export default defineConfig(({ mode }) => {
     // 实际打开的却是被旧进程占用的 1111（错误服务 / 重定向循环）。
     strictPort: true,
     open: '/storyforge/',
+    // Parallel verification emits portable-player HTML into these directories.
+    // Generated files must not reload an author's live production session.
+    watch: {
+      ignored: ['**/dist/**', '**/dist-adventure-player/**', '**/dist-showcase/**', '**/dist-android/**'],
+    },
     proxy: showcase ? {} : providerProxies,
   },
   build: {
